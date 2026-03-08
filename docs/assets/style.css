@@ -93,7 +93,7 @@ a:hover {
   color: var(--coral);
 }
 
-:where(main, header, footer, section, nav) {
+:where(.site-header, .page-frame, footer, .site-footer, [data-site-footer]) {
   width: min(calc(100% - 32px), var(--max-width));
   margin-inline: auto;
 }
@@ -102,6 +102,10 @@ body > header,
 header.site-header,
 .site-header,
 [data-site-header] {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) minmax(260px, 320px);
+  align-items: center;
+  gap: 16px;
   position: sticky;
   top: 0;
   z-index: 20;
@@ -114,7 +118,6 @@ header.site-header,
   box-shadow: var(--shadow-soft);
 }
 
-:where(body > header, header.site-header, .site-header, [data-site-header]) nav,
 :where(body > header, header.site-header, .site-header, [data-site-header]) .nav-row,
 :where(body > header, header.site-header, .site-header, [data-site-header]) .header-row {
   display: flex;
@@ -136,6 +139,17 @@ header.site-header,
   text-decoration: none;
 }
 
+:where(.brand-kicker) {
+  display: block;
+  margin-bottom: 2px;
+  color: var(--ink-faint);
+  font-family: var(--font-body);
+  font-size: 0.74rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
 :where(.brand-badge, [data-brand-badge]) {
   display: inline-grid;
   place-items: center;
@@ -154,13 +168,15 @@ header.site-header,
   gap: 10px;
 }
 
-:where(.header-links a, [data-header-links] a, nav a) {
+:where(.header-links a, [data-header-links] a, .top-nav a) {
   display: inline-flex;
+  flex: 0 0 auto;
   align-items: center;
   gap: 8px;
   padding: 8px 14px;
   border-radius: 999px;
   color: var(--ink-soft);
+  white-space: nowrap;
   text-decoration: none;
   transition:
     transform 180ms ease,
@@ -168,8 +184,8 @@ header.site-header,
     color 180ms ease;
 }
 
-:where(.header-links a, [data-header-links] a, nav a):hover,
-:where(.header-links a, [data-header-links] a, nav a).is-active {
+:where(.header-links a, [data-header-links] a, .top-nav a):hover,
+:where(.header-links a, [data-header-links] a, .top-nav a).is-active {
   transform: translateY(-1px);
   background: rgba(15, 118, 110, 0.1);
   color: var(--ink);
@@ -179,7 +195,16 @@ main {
   padding-block: 28px 72px;
 }
 
+:where(.page-frame) {
+  display: grid;
+  gap: 24px;
+}
+
 :where(.hero, .page-hero, [data-hero]) {
+  display: grid;
+  grid-template-columns: minmax(0, 1.45fr) minmax(280px, 0.92fr);
+  align-items: end;
+  gap: 24px;
   position: relative;
   overflow: clip;
   margin-top: 12px;
@@ -212,6 +237,10 @@ main {
   border-radius: 50%;
   background: radial-gradient(circle, rgba(217, 119, 6, 0.16), transparent 72%);
   content: "";
+}
+
+:where(.hero-copy, .page-main, .page-sidebar) {
+  min-width: 0;
 }
 
 :where(.hero-grid, [data-hero-grid]) {
@@ -266,6 +295,10 @@ p {
   max-width: 64ch;
 }
 
+:where(.hero-summary) {
+  margin-bottom: 0;
+}
+
 :where(.hero-stats, .meta-grid, .stat-grid, [data-stat-grid]) {
   display: grid;
   gap: 14px;
@@ -296,6 +329,24 @@ p {
   margin: 36px 0 18px;
 }
 
+:where(.page-layout) {
+  display: grid;
+  align-items: start;
+  gap: 28px;
+  grid-template-columns: minmax(0, 1fr) minmax(260px, var(--toc-width));
+}
+
+:where(.page-main) {
+  display: grid;
+  gap: 24px;
+}
+
+:where(.page-sidebar) {
+  display: grid;
+  gap: 18px;
+  align-content: start;
+}
+
 :where(.surface, .card, article.card, [data-surface], .module-card, .chapter-card, .lesson-card) {
   position: relative;
   overflow: clip;
@@ -322,8 +373,17 @@ p {
   grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
 }
 
+:where(.content-panel) {
+  padding: clamp(20px, 2vw, 28px);
+}
+
 :where(.card, .module-card, .chapter-card, .lesson-card, [data-search-card]) {
+  display: grid;
+  align-content: start;
   padding: 22px;
+  min-height: 100%;
+  color: inherit;
+  text-decoration: none;
 }
 
 :where(.card h3, .module-card h3, .chapter-card h3, .lesson-card h3, [data-search-card] h3) {
@@ -334,10 +394,47 @@ p {
   margin-bottom: 12px;
 }
 
+:where(.chapter-module, .module-index) {
+  display: inline-flex;
+  align-items: center;
+  width: fit-content;
+  margin-bottom: 12px;
+  padding: 6px 10px;
+  border-radius: 999px;
+  background: rgba(15, 118, 110, 0.1);
+  color: var(--teal-deep);
+  font-size: 0.82rem;
+  font-weight: 700;
+}
+
+:where(.module-index) {
+  min-width: 42px;
+  justify-content: center;
+  font-family: var(--font-display);
+}
+
+:where(.chapter-card-meta, .module-card-meta) {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: auto;
+  padding-top: 10px;
+  color: var(--ink-faint);
+  font-size: 0.9rem;
+}
+
 :where(.pill-row, .tag-row, .meta-pills, [data-pill-row]) {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
+}
+
+:where(.top-nav) {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
 }
 
 :where(.pill, .tag, .meta-pill, [data-pill]) {
@@ -356,15 +453,22 @@ p {
 :where(.search-shell, .search-panel, [data-search-shell]) {
   display: grid;
   gap: 12px;
-  padding: 18px;
+  width: 100%;
+  min-width: 0;
+  padding: 12px;
   border: 1px solid rgba(15, 118, 110, 0.12);
   border-radius: var(--radius-lg);
   background: rgba(255, 250, 242, 0.78);
   box-shadow: var(--shadow-soft);
 }
 
+:where(.search-results) {
+  display: none;
+}
+
 :where(input[type="search"], [data-search-input]) {
   width: 100%;
+  min-width: 0;
   padding: 15px 18px;
   border: 1px solid rgba(19, 38, 31, 0.14);
   border-radius: 999px;
@@ -394,13 +498,6 @@ p {
 
 :where(.search-empty.is-visible, [data-search-empty].is-visible) {
   display: block;
-}
-
-:where(.chapter-layout, .page-layout, [data-page-layout]) {
-  display: grid;
-  align-items: start;
-  gap: 28px;
-  grid-template-columns: minmax(0, 1fr) minmax(240px, var(--toc-width));
 }
 
 :where(.content-shell, .article-shell, .prose-shell, [data-content-shell]) {
@@ -449,8 +546,14 @@ p {
   transform: translateX(2px);
 }
 
+:where(.toc-link.sub) {
+  margin-left: 12px;
+  font-size: 0.93rem;
+}
+
 :where(.prose, .article-content, article, [data-prose]) {
   color: var(--ink-soft);
+  min-width: 0;
 }
 
 :where(.prose h2, .article-content h2, article h2, [data-prose] h2),
@@ -510,6 +613,11 @@ p {
   background: #10221c;
   color: #ecf7f3;
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06);
+}
+
+:where(.table-wrap) {
+  overflow-x: auto;
+  margin: 1.5rem 0;
 }
 
 :where(.prose pre code, .article-content pre code, article pre code, [data-prose] pre code) {
@@ -715,9 +823,49 @@ footer,
   color: var(--ink-faint);
 }
 
+:where(.pager) {
+  display: grid;
+  gap: 16px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+:where(.pager-link) {
+  display: grid;
+  gap: 6px;
+  padding: 18px 20px;
+  border: 1px solid rgba(255, 255, 255, 0.56);
+  border-radius: var(--radius-lg);
+  background: var(--bg-elevated);
+  box-shadow: var(--shadow-soft);
+  color: inherit;
+  text-decoration: none;
+}
+
+:where(.pager-link span) {
+  color: var(--ink-faint);
+  font-size: 0.86rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+:where(.pager-link strong) {
+  color: var(--ink);
+  font-size: 1rem;
+}
+
+:where(.pager-link.is-empty) {
+  visibility: hidden;
+}
+
 @media (max-width: 1024px) {
+  :where(.site-header) {
+    grid-template-columns: 1fr;
+  }
+
+  :where(.hero, .page-hero, [data-hero]),
   :where(.hero-grid, [data-hero-grid]),
-  :where(.chapter-layout, .page-layout, [data-page-layout]) {
+  :where(.page-layout, [data-page-layout]) {
     grid-template-columns: 1fr;
   }
 
@@ -725,10 +873,14 @@ footer,
     position: static;
     order: -1;
   }
+
+  :where(.top-nav) {
+    order: 3;
+  }
 }
 
 @media (max-width: 720px) {
-  :where(main, header, footer, section, nav) {
+  :where(.site-header, .page-frame, footer, .site-footer, [data-site-footer]) {
     width: min(calc(100% - 22px), var(--max-width));
   }
 
@@ -746,12 +898,41 @@ footer,
     border-radius: 24px;
   }
 
+  :where(.hero-stats) {
+    grid-template-columns: 1fr;
+  }
+
+  :where(.top-nav) {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    width: 100%;
+    padding-bottom: 4px;
+    scrollbar-width: thin;
+  }
+
+  :where(.search-shell) {
+    display: none;
+  }
+
   :where(.card-grid, .module-grid, .chapter-grid, .lesson-grid, .overview-grid, [data-card-grid]) {
     grid-template-columns: 1fr;
   }
 
+  :where(.section-heading, [data-section-heading]) {
+    align-items: start;
+    flex-direction: column;
+  }
+
+  :where(.content-panel) {
+    padding: 18px;
+  }
+
   :where(.toc, .chapter-toc, aside nav[data-toc], [data-toc]) {
     padding: 14px;
+  }
+
+  :where(.pager) {
+    grid-template-columns: 1fr;
   }
 
   :where(button, .button, .progress-toggle, [data-progress-toggle], [data-mark-complete]) {
