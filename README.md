@@ -18,8 +18,7 @@ python3 scripts/build_github_pages.py
 ## GitHub Pages 배포
 1. 저장소를 GitHub에 푸시한다.
 2. GitHub 저장소 설정에서 `Pages`를 연다.
-3. Source를 `Deploy from a branch`로 선택한다.
-4. Branch는 `main`, 폴더는 `/docs`를 선택한다.
+3. Source를 `GitHub Actions`로 선택한다.
+4. `main`에 푸시하면 `.github/workflows/deploy-pages.yml`이 `docs/`를 다시 빌드하고 배포한다.
 
-이후 `main` 브랜치에 `docs/` 변경이 반영되면 GitHub Pages로 정적 학습 페이지를 서빙할 수 있다.
-
+브랜치 기반 배포를 선호하면 `Deploy from a branch` + `main` / `/docs`로 바꿔도 동작한다.
