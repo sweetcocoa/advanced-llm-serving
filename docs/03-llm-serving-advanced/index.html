@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>고급 Serving 패턴 | LLM Serving + NPU</title>
+  <meta name="description" content="reuse, speculative execution, disaggregation, MoE와 같이 2026년 실무에서 중요한 고급 serving 패턴을 다룬다.">
+  <meta name="theme-color" content="#10182a">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+KR:wght@400;500;600;700&family=Space+Grotesk:wght@500;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../assets/style.css">
+</head>
+<body class="page-module" data-page-kind="module" data-page-id="03-llm-serving-advanced" data-root-prefix="../">
+  <div class="reading-progress" data-reading-progress></div>
+  <header class="site-header">
+    <a class="brand" href="../">
+      <span class="brand-kicker">GitHub Pages Study</span>
+      <strong>LLM Serving + NPU</strong>
+    </a>
+    <nav class="top-nav"><a class="top-nav-link" href="../01-foundations/">기초와 성능 직관</a><a class="top-nav-link" href="../02-llm-serving-core/">LLM Serving 핵심</a><a class="top-nav-link is-active" href="./">고급 Serving 패턴</a><a class="top-nav-link" href="../04-serving-systems/">Serving 시스템 설계</a><a class="top-nav-link" href="../05-npu-stack/">NPU 소프트웨어 스택</a><a class="top-nav-link" href="../06-runtime-and-compiler/">런타임과 컴파일러</a><a class="top-nav-link" href="../07-synthesis/">종합 정리와 최신 흐름</a></nav>
+    <div class="search-shell">
+      <input type="search" placeholder="챕터, 모듈, 키워드 검색" aria-label="검색" data-global-search>
+      <div class="search-results" data-search-results hidden></div>
+    </div>
+  </header>
+  <main class="page-frame">
+    
+    <section class="hero">
+      <div class="hero-copy">
+        <p class="eyebrow">Module</p>
+        <h1>고급 Serving 패턴</h1>
+        <p class="hero-summary">reuse, speculative execution, disaggregation, MoE와 같이 2026년 실무에서 중요한 고급 serving 패턴을 다룬다.</p>
+      </div>
+      <div class="hero-stats">
+        <div class="stat-card"><strong>6</strong><span>chapters</span></div>
+      </div>
+    </section>
+    
+    <div class="page-layout">
+      <section class="page-main content-shell">
+        
+    <article class="content-panel surface prose">
+      <h1 id="고급-serving-패턴">고급 Serving 패턴</h1>
+<p>reuse, speculative execution, disaggregation, MoE와 같이 2026년 실무에서 중요한 고급 serving 패턴을 다룬다.</p>
+<h2 id="이-모듈을-마치면-설명할-수-있어야-하는-것">이 모듈을 마치면 설명할 수 있어야 하는 것</h2>
+<ul><li>prefix caching과 KV cache reuse 차이를 설명할 수 있다.</li><li>speculative decoding이 왜 latency를 줄이는지 수식으로 설명할 수 있다.</li><li>MoE, long context, structured output이 serving에 추가하는 제약을 설명할 수 있다.</li></ul>
+<h2 id="챕터-순서">챕터 순서</h2>
+<ul><li><a href="./01-prefix-caching/">Prefix Caching</a>: 같은 system prompt와 context를 재사용하는 prefix cache 전략을 본다.</li><li><a href="./02-speculative-decoding/">Speculative Decoding</a>: draft model과 target model의 협업으로 decode latency를 줄이는 원리를 본다.</li><li><a href="./03-disaggregated-prefill-decode/">Disaggregated Prefill/Decode</a>: prefill과 decode를 다른 자원에 분리하는 시스템 설계를 정리한다.</li><li><a href="./04-moe-and-expert-parallelism/">MoE and Expert Parallelism</a>: MoE 모델의 활성 파라미터와 expert routing을 serving 관점에서 본다.</li><li><a href="./05-structured-outputs-and-tool-calling/">Structured Outputs and Tool Calling</a>: structured output과 tool calling이 decoding 제약과 latency에 미치는 영향을 본다.</li><li><a href="./06-long-context-and-memory-pressure/">Long Context and Memory Pressure</a>: 긴 입력이 prefill 자원 사용과 KV 이동 비용을 어떻게 키우는지 다룬다.</li></ul>
+<h2 id="선행-관계">선행 관계</h2>
+<ul><li>같은 모듈에서는 위 순서를 따르는 것이 좋다.</li><li>다음 모듈로 넘어가기 전에 각 챕터 퀴즈를 먼저 풀어 본다.</li></ul>
+    </article>
+    <section class="content-panel surface">
+      <div class="section-heading">
+        <div>
+          <p class="eyebrow">Chapters</p>
+          <h2>고급 Serving 패턴 안의 학습 단위</h2>
+        </div>
+        <input type="search" placeholder="챕터 필터" aria-label="챕터 필터" data-card-filter>
+      </div>
+      <div class="chapter-grid" data-card-container>
+        <a class="chapter-card" data-card-search="prefix caching 이 챕터의 질문은 단순합니다. &quot;매 요청마다 똑같이 읽는 앞부분을 왜 계속 다시 prefill하나?&quot; prefix caching은 같은 system prompt, 공통 정책 문서, 고정된 rag 상단 문맥처럼 변하지 않는 입력 앞부분을 재사용해서 prefill 비용을 줄이려는 전략입니다. 이때 핵심 tradeoff는 캐시 hit율과 invalidation 비용입니다. hit율이 높으면 prefill이 거의 사라지지만, 프롬프트 안에 날짜, 사용자별 정책, 자주 바뀌는 tool 목록을 섞어 두면 캐시가 쉽게 깨집니다. [s1][s2][s3][s5][s6] 고급 serving 패턴" data-progress-id="study/llm-serving-npu-roadmap/03-llm-serving-advanced/01-prefix-caching" href="01-prefix-caching/"><span class="chapter-module">고급 Serving 패턴</span><h3>Prefix Caching</h3><p>이 챕터의 질문은 단순합니다. &quot;매 요청마다 똑같이 읽는 앞부분을 왜 계속 다시 prefill하나?&quot; Prefix caching은 같은 system prompt, 공통 정책 문서, 고정된 RAG 상단 문맥처럼 변하지 않는 입력 앞부분을 재사용해서 prefill 비용을 줄이려는 전략입니다. 이때 핵심 tradeoff는 캐시 hit율과 invalidation 비용입니다. hit율이 높으면 pr…</p><div class="chapter-card-meta"><span>35-50 min</span><span>2026-03-08</span><span class="chapter-progress-state">미완료</span></div></a><a class="chapter-card" data-card-search="speculative decoding 이 챕터는 &quot;더 작은 모델이 먼저 몇 토큰을 써 보고, 큰 모델이 그 묶음을 한 번에 검사한다&quot;는 speculative decoding의 운영 관점을 다룬다. 핵심 질문은 알고리즘 자체보다 단순하다. draft model을 한 번 더 돌리는 비용 보다 target model 호출 횟수를 줄여 얻는 이익 이 더 큰가, 그리고 그 차이를 좌우하는 승인율이 workload마다 어떻게 달라지는가다 [s4]. 2026년 기준 serving 엔진은 speculative decoding을 별도 backend 기능으로 드러내는 흐름이며, 동시에 structured outputs와 tool calling 같은 제약된 decoding 경로와 함께 운영해야 한다 [s4][s5][s6]. 그래서 이 주제는 &quot;속도 꼼수&quot;가 아니라 route별 정책 설계 문제다. 고급 serving 패턴" data-progress-id="study/llm-serving-npu-roadmap/03-llm-serving-advanced/02-speculative-decoding" href="02-speculative-decoding/"><span class="chapter-module">고급 Serving 패턴</span><h3>Speculative Decoding</h3><p>이 챕터는 &quot;더 작은 모델이 먼저 몇 토큰을 써 보고, 큰 모델이 그 묶음을 한 번에 검사한다&quot;는 speculative decoding의 운영 관점을 다룬다. 핵심 질문은 알고리즘 자체보다 단순하다. draft model을 한 번 더 돌리는 비용 보다 target model 호출 횟수를 줄여 얻는 이익 이 더 큰가, 그리고 그 차이를 좌우하는 승인율이 workload마다 어떻게 달라지는가다…</p><div class="chapter-card-meta"><span>35-50 min</span><span>2026-03-08</span><span class="chapter-progress-state">미완료</span></div></a><a class="chapter-card" data-card-search="disaggregated prefill/decode 이 챕터는 llm 추론을 한 덩어리로 보지 않고, 입력을 한 번에 읽어 kv를 만드는 prefill 과 토큰을 순차적으로 내보내는 decode 를 서로 다른 자원으로 떼어내는 설계를 다룬다. 핵심 질문은 단순하다. 긴 입력이 몰릴 때 같은 gpu 풀에 prefill과 decode를 같이 태우는 편이 나은가, 아니면 prefill 전용 자원과 decode 전용 자원으로 나눠서 큐를 분리하는 편이 나은가 [s1][s2]. 고급 serving 패턴" data-progress-id="study/llm-serving-npu-roadmap/03-llm-serving-advanced/03-disaggregated-prefill-decode" href="03-disaggregated-prefill-decode/"><span class="chapter-module">고급 Serving 패턴</span><h3>Disaggregated Prefill/Decode</h3><p>이 챕터는 LLM 추론을 한 덩어리로 보지 않고, 입력을 한 번에 읽어 KV를 만드는 prefill 과 토큰을 순차적으로 내보내는 decode 를 서로 다른 자원으로 떼어내는 설계를 다룬다. 핵심 질문은 단순하다. 긴 입력이 몰릴 때 같은 GPU 풀에 prefill과 decode를 같이 태우는 편이 나은가, 아니면 prefill 전용 자원과 decode 전용 자원으로 나눠서 큐를 분리하는…</p><div class="chapter-card-meta"><span>35-50 min</span><span>2026-03-08</span><span class="chapter-progress-state">미완료</span></div></a><a class="chapter-card" data-card-search="moe and expert parallelism 이번 장은 moe를 큰 모델을 싸게 돌리는 요령 이 아니라 토큰을 expert로 라우팅하는 분산 시스템 으로 읽는다. sparsely gated moe는 토큰별로 일부 expert만 활성화하는 conditional computation 구조를 제시했고 [s1], gshard는 top 2 gating과 expert capacity, 자동 sharding을 대규모 분산 관점에서 구체화했다 [s2]. switch transformer는 top 1 routing과 capacity/overflow 처리의 단순화를 통해 라우팅 정책이 시스템 비용까지 바꾼다는 점을 더 분명히 보여 준다 [s3]. 따라서 serving 관점의 핵심 질문은 활성 파라미터가 얼마나 적은가 보다 어느 expert가 병목이 되는가 , overflow를 어떻게 흡수하는가 , expert를 어디에 두면 all to all tail을 줄일 수 있는가 다 [s1][s2][s3]. 고급 serving 패턴" data-progress-id="study/llm-serving-npu-roadmap/03-llm-serving-advanced/04-moe-and-expert-parallelism" href="04-moe-and-expert-parallelism/"><span class="chapter-module">고급 Serving 패턴</span><h3>MoE and Expert Parallelism</h3><p>이번 장은 MoE를 큰 모델을 싸게 돌리는 요령 이 아니라 토큰을 expert로 라우팅하는 분산 시스템 으로 읽는다. Sparsely Gated MoE는 토큰별로 일부 expert만 활성화하는 conditional computation 구조를 제시했고 [S1], GShard는 top 2 gating과 expert capacity, 자동 sharding을 대규모 분산 관점에서 구체화했다 [S…</p><div class="chapter-card-meta"><span>35-50 min</span><span>2026-03-08</span><span class="chapter-progress-state">미완료</span></div></a><a class="chapter-card" data-card-search="structured outputs and tool calling 이 챕터는 structured output과 tool calling을 &quot;출력 포맷 옵션&quot;이 아니라 decode 경로와 세션 구조를 바꾸는 serving 기능으로 다룬다. vllm은 structured outputs 와 tool calling 을 독립 기능으로 문서화하고 있고 [s5][s6], 같은 시기 serving 엔진 문서들은 prefill/decode 분리, kv cache 재사용, speculative decoding을 별도 최적화 축으로 설명한다 [s1][s2][s3][s4]. 이 둘을 같이 보면 질문이 달라진다. &quot;json이 잘 나오나?&quot;가 아니라 &quot;형식 보장을 위해 decode 자유도를 얼마나 줄일 것인가, 그리고 tool round가 늘어날 때 세션 latency를 어디서 줄일 것인가?&quot;가 핵심이다. 고급 serving 패턴" data-progress-id="study/llm-serving-npu-roadmap/03-llm-serving-advanced/05-structured-outputs-and-tool-calling" href="05-structured-outputs-and-tool-calling/"><span class="chapter-module">고급 Serving 패턴</span><h3>Structured Outputs and Tool Calling</h3><p>이 챕터는 structured output과 tool calling을 &quot;출력 포맷 옵션&quot;이 아니라 decode 경로와 세션 구조를 바꾸는 serving 기능으로 다룬다. vLLM은 Structured Outputs 와 Tool Calling 을 독립 기능으로 문서화하고 있고 [S5][S6], 같은 시기 serving 엔진 문서들은 prefill/decode 분리, KV cache 재사용,…</p><div class="chapter-card-meta"><span>35-50 min</span><span>2026-03-08</span><span class="chapter-progress-state">미완료</span></div></a><a class="chapter-card" data-card-search="long context and memory pressure 이 챕터는 긴 입력을 하나의 막연한 &quot;메모리 문제&quot;로 다루지 않습니다. 긴 context가 먼저 prefill 계산 자원을 오래 붙잡는지, 아니면 계산이 끝난 뒤 kv cache 를 재사용하거나 다른 위치로 옮기는 경로에서 비용이 커지는지 분리해서 읽습니다. [s1][s2][s4][s5] 고급 serving 패턴" data-progress-id="study/llm-serving-npu-roadmap/03-llm-serving-advanced/06-long-context-and-memory-pressure" href="06-long-context-and-memory-pressure/"><span class="chapter-module">고급 Serving 패턴</span><h3>Long Context and Memory Pressure</h3><p>이 챕터는 긴 입력을 하나의 막연한 &quot;메모리 문제&quot;로 다루지 않습니다. 긴 context가 먼저 prefill 계산 자원을 오래 붙잡는지, 아니면 계산이 끝난 뒤 KV cache 를 재사용하거나 다른 위치로 옮기는 경로에서 비용이 커지는지 분리해서 읽습니다. [S1][S2][S4][S5]</p><div class="chapter-card-meta"><span>35-50 min</span><span>2026-03-08</span><span class="chapter-progress-state">미완료</span></div></a>
+      </div>
+    </section>
+    
+      </section>
+      <aside class="page-sidebar">
+    <div class="sidebar-panel surface">
+      <p class="eyebrow">Progress</p>
+      <h3>진행 방식</h3>
+      <p>챕터 페이지의 완료 버튼은 브라우저 로컬 저장소에 기록됩니다.</p>
+    </div>
+    </aside>
+    </div>
+  </main>
+  <script type="module" src="../assets/app.js"></script>
+  <script type="module">
+    import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs';
+    mermaid.initialize({ startOnLoad: true, theme: 'neutral', securityLevel: 'loose' });
+  </script>
+  <script>
+    window.MathJax = {
+      tex: { inlineMath: [['$', '$'], ['\\(', '\\)']], displayMath: [['$$', '$$'], ['\\[', '\\]']] },
+      svg: { fontCache: 'global' }
+    };
+  </script>
+  <script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-svg.js" async></script>
+</body>
+</html>

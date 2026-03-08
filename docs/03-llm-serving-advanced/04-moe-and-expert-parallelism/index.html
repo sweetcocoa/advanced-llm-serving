@@ -1,0 +1,225 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>MoE and Expert Parallelism | 고급 Serving 패턴</title>
+  <meta name="description" content="이번 장은 MoE를 큰 모델을 싸게 돌리는 요령 이 아니라 토큰을 expert로 라우팅하는 분산 시스템 으로 읽는다. Sparsely Gated MoE는 토큰별로 일부 expert만 활성화하는 conditional computation 구조를 제시했고 [S1], GShard는 top 2 gating과 expert capacity, 자동 sharding을 대규모 분산 관점에서 구체화했다 [S2]. Switch Transformer는 top 1 routing과 capacity/overflow 처리의 단순화를 통해 라우팅 정책이 시스템 비용까지 바꾼다는 점을 더 분명히 보여 준다 [S3]. 따라서 serving 관점의 핵심 질문은 활성 파라미터가 얼마나 적은가 보다 어느 expert가 병목이 되는가 , overflow를 어떻게 흡수하는가 , expert를 어디에 두면 all to all tail을 줄일 수 있는가 다 [S1][S2][S3].">
+  <meta name="theme-color" content="#10182a">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+KR:wght@400;500;600;700&family=Space+Grotesk:wght@500;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../../assets/style.css">
+</head>
+<body class="page-chapter" data-page-kind="chapter" data-page-id="study/llm-serving-npu-roadmap/03-llm-serving-advanced/04-moe-and-expert-parallelism" data-root-prefix="../../">
+  <div class="reading-progress" data-reading-progress></div>
+  <header class="site-header">
+    <a class="brand" href="../../">
+      <span class="brand-kicker">GitHub Pages Study</span>
+      <strong>LLM Serving + NPU</strong>
+    </a>
+    <nav class="top-nav"><a class="top-nav-link" href="../../01-foundations/">기초와 성능 직관</a><a class="top-nav-link" href="../../02-llm-serving-core/">LLM Serving 핵심</a><a class="top-nav-link is-active" href="../">고급 Serving 패턴</a><a class="top-nav-link" href="../../04-serving-systems/">Serving 시스템 설계</a><a class="top-nav-link" href="../../05-npu-stack/">NPU 소프트웨어 스택</a><a class="top-nav-link" href="../../06-runtime-and-compiler/">런타임과 컴파일러</a><a class="top-nav-link" href="../../07-synthesis/">종합 정리와 최신 흐름</a></nav>
+    <div class="search-shell">
+      <input type="search" placeholder="챕터, 모듈, 키워드 검색" aria-label="검색" data-global-search>
+      <div class="search-results" data-search-results hidden></div>
+    </div>
+  </header>
+  <main class="page-frame">
+    
+    <section class="hero">
+      <div class="hero-copy">
+        <p class="eyebrow">고급 Serving 패턴</p>
+        <h1>MoE and Expert Parallelism</h1>
+        <p class="hero-summary">이번 장은 MoE를 큰 모델을 싸게 돌리는 요령 이 아니라 토큰을 expert로 라우팅하는 분산 시스템 으로 읽는다. Sparsely Gated MoE는 토큰별로 일부 expert만 활성화하는 conditional computation 구조를 제시했고 [S1], GShard는 top 2 gating과 expert capacity, 자동 sharding을 대규모 분산 관점에서 구체화했다 [S2]. Switch Transformer는 top 1 routing과 capacity/overflow 처리의 단순화를 통해 라우팅 정책이 시스템 비용까지 바꾼다는 점을 더 분명히 보여 준다 [S3]. 따라서 serving 관점의 핵심 질문은 활성 파라미터가 얼마나 적은가 보다 어느 expert가 병목이 되는가 , overflow를 어떻게 흡수하는가 , expert를 어디에 두면 all to all tail을 줄일 수 있는가 다 [S1][S2][S3].</p>
+      </div>
+      <div class="hero-stats">
+        <div class="stat-card"><strong>35-50 min</strong><span>reading time</span></div>
+        <div class="stat-card"><strong>2026-03-08</strong><span>updated</span></div>
+        <div class="stat-card"><button class="progress-toggle" type="button" data-progress-toggle data-progress-id="study/llm-serving-npu-roadmap/03-llm-serving-advanced/04-moe-and-expert-parallelism">완료로 표시</button></div>
+      </div>
+    </section>
+    
+    <div class="page-layout">
+      <section class="page-main content-shell">
+        
+    <article class="content-panel surface prose" data-reading-target>
+      <h1 id="moe-and-expert-parallelism">MoE and Expert Parallelism</h1>
+<h2 id="수업-개요">수업 개요</h2>
+<p>이번 장은 MoE를 <code>큰 모델을 싸게 돌리는 요령</code>이 아니라 <code>토큰을 expert로 라우팅하는 분산 시스템</code>으로 읽는다. Sparsely-Gated MoE는 토큰별로 일부 expert만 활성화하는 conditional computation 구조를 제시했고 [S1], GShard는 top-2 gating과 expert capacity, 자동 sharding을 대규모 분산 관점에서 구체화했다 [S2]. Switch Transformer는 top-1 routing과 capacity/overflow 처리의 단순화를 통해 라우팅 정책이 시스템 비용까지 바꾼다는 점을 더 분명히 보여 준다 [S3]. 따라서 serving 관점의 핵심 질문은 <code>활성 파라미터가 얼마나 적은가</code>보다 <code>어느 expert가 병목이 되는가</code>, <code>overflow를 어떻게 흡수하는가</code>, <code>expert를 어디에 두면 all-to-all tail을 줄일 수 있는가</code>다 [S1][S2][S3].</p>
+<h2 id="학습-목표">학습 목표</h2>
+<ul><li>총 파라미터와 토큰당 활성 파라미터를 구분하고, 왜 latency가 그 차이만으로 설명되지 않는지 말할 수 있다.</li><li><code>top-k</code>, <code>capacity factor</code>, <code>overflow</code>, <code>expert placement</code>가 tail latency를 어떻게 바꾸는지 설명할 수 있다.</li><li>expert parallelism의 병목이 dense tensor parallelism의 병목과 왜 다른지 설명할 수 있다.</li><li>어떤 workload에서 MoE가 throughput 이점을 살리고, 어떤 workload에서 low-batch interactive tail 때문에 dense가 더 단순한 선택인지 판단할 수 있다.</li></ul>
+<h2 id="수업-전에-생각할-질문">수업 전에 생각할 질문</h2>
+<ul><li><code>top-2 MoE</code>라는 말만 듣고 실제 dispatch/combine 비용을 과소평가하기 쉬운 이유는 무엇일까?</li><li>capacity factor를 낮추면 메모리는 아낄 수 있는데, 왜 p99는 오히려 나빠질 수 있을까?</li><li>expert를 여러 노드에 나눠 두었을 때 왜 평균 FLOPs보다 <code>가장 늦은 expert</code>가 더 중요해질까?</li></ul>
+<h2 id="강의-스크립트">강의 스크립트</h2>
+<h3 id="part-1-active-parameter는-출발점일-뿐-끝이-아니다">Part 1. active parameter는 출발점일 뿐 끝이 아니다</h3>
+<p><strong>학습자:</strong> MoE 소개를 들으면 항상 <code>총 파라미터는 크지만 토큰당 활성 파라미터는 작다</code>는 문장이 먼저 나옵니다. serving에서도 거의 그 문장으로 이해하면 되나요?</p>
+<p><strong>교수자:</strong> 출발점으로는 맞지만 충분하지는 않습니다. Sparsely-Gated MoE와 GShard는 모두 토큰이 일부 expert로만 라우팅된다는 점을 전제로 설명하지만, 동시에 gating과 expert capacity가 따로 필요하다는 점도 분명히 적습니다 [S1][S2]. Switch Transformer도 top-1 routing을 제안하면서 오히려 <code>routing을 단순하게 만들어야 시스템이 버틴다</code>는 메시지를 줍니다 [S3].</p>
+<h4 id="핵심-수식-1-활성-파라미터와-expert-capacity를-같이-본다">핵심 수식 1. 활성 파라미터와 expert capacity를 같이 본다</h4>
+<div class="math-block">$$
+\begin{aligned}
+P_{\mathrm{active/token}} &amp;= P_{\mathrm{shared}} + k \cdot P_{\mathrm{expert}} \\
+C_e &amp;= \left\lceil \alpha \cdot \frac{B \cdot k}{E} \right\rceil
+\end{aligned}
+$$</div>
+<p>첫 식은 토큰당 실제로 깨우는 파라미터 양을 보여 주고, 둘째 식은 GShard와 Switch Transformer가 설명하는 expert capacity 개념을 수업용으로 정리한 식이다 [합성] [S2][S3]. 여기서 <code>k</code>는 top-k, <code>E</code>는 expert 수, <code>B</code>는 함께 처리하는 토큰 수, <code>\alpha</code>는 capacity factor다.</p>
+<p><strong>학습자:</strong> 그러면 active parameter만 보고 <code>dense보다 싸다</code>라고 말하면 반쪽짜리군요.</p>
+<p><strong>교수자:</strong> 맞습니다. active parameter가 줄어도 router, dispatch, combine, overflow 처리가 새로 생깁니다 [S1][S2][S3]. MoE의 실전 병목은 평균 expert가 아니라 <code>가장 바쁜 expert</code>가 만드는 경우가 많습니다 [합성] [S1][S2][S3].</p>
+<h3 id="part-2-top-k와-capacity-factor는-품질-값이자-tail-latency-값이다">Part 2. top-k와 capacity factor는 품질 값이자 tail-latency 값이다</h3>
+<p><strong>학습자:</strong> top-k를 1에서 2로 올리는 건 보통 품질을 위한 선택 아닌가요?</p>
+<p><strong>교수자:</strong> 품질만의 문제는 아닙니다. GShard의 top-2 gating은 한 토큰이 두 expert 경로를 타게 만들고 [S2], Switch Transformer가 top-1 routing을 택한 이유 중 하나도 이 dispatch 복잡도를 줄이기 위해서입니다 [S3]. top-k가 커지면 토큰 복제와 combine 대기 경로도 함께 늘어납니다 [S2][S3].</p>
+<p><strong>교수자:</strong> capacity factor도 비슷합니다. capacity를 낮추면 expert당 예약 슬롯은 줄지만 overflow 가능성은 높아집니다 [S2][S3]. overflow를 reroute하든, drop하든, delay하든 tail latency에는 비용이 남습니다 [합성] [S2][S3].</p>
+<pre class="mermaid">flowchart LR
+    A[Token batch] --&gt; B[Router top-k]
+    B --&gt; C1[Expert 3&lt;br/&gt;14 tokens]
+    B --&gt; C2[Expert 7&lt;br/&gt;5 tokens]
+    B --&gt; C3[Expert 11&lt;br/&gt;18 tokens]
+    B --&gt; C4[Expert 19&lt;br/&gt;3 tokens]
+    C1 --&gt; D[Capacity check]
+    C2 --&gt; D
+    C3 --&gt; D
+    C4 --&gt; D
+    D --&gt;|n_e &lt;= C_e| E[Run expert FFN]
+    D --&gt;|n_e &gt; C_e| F[Overflow / reroute / delay]
+    E --&gt; G[Combine]
+    F --&gt; G</pre>
+<p><strong>학습자:</strong> 결국 <code>capacity factor를 낮추면 메모리가 준다</code>만 보면 안 되겠네요.</p>
+<p><strong>교수자:</strong> 그렇죠. serving에서는 <code>overflow 비율</code>, <code>expert별 queue depth</code>, <code>dispatch bytes</code>, balancedness 같은 운영 지표를 같이 봐야 합니다 [합성] [S2][S3][S4].</p>
+<h3 id="part-3-expert-parallelism의-병목은-dense-tensor-parallel과-다르다">Part 3. expert parallelism의 병목은 dense tensor parallel과 다르다</h3>
+<p><strong>학습자:</strong> 그래도 여러 GPU를 함께 쓰는 건 같으니 dense tensor parallel 감각을 어느 정도 가져와도 되지 않나요?</p>
+<p><strong>교수자:</strong> 그대로 가져오면 자주 틀립니다. GShard는 expert 집합을 sharding된 분산 자원으로 두고 토큰을 all-to-all에 가깝게 재배치하는 구조를 설명합니다 [S2]. Sparsely-Gated MoE도 애초에 expert별 불균형이 생길 수 있음을 전제로 auxiliary load balancing을 둡니다 [S1]. 최신 serving 구현인 vLLM expert parallel deployment도 EP deployment와 expert parallel load balancer(EPLB)를 따로 두어, 추론 단계에서도 skew와 rebalancing을 운영 문제로 다룹니다 [S4]. dense tensor parallel이 <code>모든 shard가 비슷한 연산을 같이 한다</code>에 가깝다면, expert parallel은 <code>토큰 분포가 매 step 달라지고 가장 늦은 expert가 completion을 잡는다</code>에 가깝습니다 [합성] [S1][S2][S4].</p>
+<h4 id="핵심-수식-2-moe-step-latency는-가장-늦은-expert와-dispatch가-정한다">핵심 수식 2. MoE step latency는 가장 늦은 expert와 dispatch가 정한다</h4>
+<div class="math-block">$$
+\begin{aligned}
+T_{\mathrm{step}}^{\mathrm{MoE}} &amp;\approx T_{\mathrm{router}} + T_{\mathrm{dispatch}} + \max_e\left(T_{\mathrm{queue},e} + T_{\mathrm{ffn},e}\right) + T_{\mathrm{combine}} \\
+T_{\mathrm{dispatch}} &amp;\propto \frac{B \cdot k \cdot H}{BW_{\mathrm{fabric}}}
+\end{aligned}
+$$</div>
+<p>이 식은 S1-S3의 routing, capacity, sharding 설명을 serving step 지연으로 묶은 학습용 식이다 [합성] [S1][S2][S3]. <code>H</code>는 hidden state 크기다. 평균 expert 시간이 아니라 <code>가장 늦은 expert</code>와 <code>fabric 대역폭</code>이 tail을 만든다는 점이 핵심이다.</p>
+<pre class="mermaid">flowchart TB
+    subgraph N1[Node A]
+        A1[E1]
+        A2[E2]
+        A3[E3]
+    end
+    subgraph N2[Node B]
+        B1[E4]
+        B2[E5]
+        B3[E6]
+    end
+    T[Tokens after router] --&gt; A1
+    T --&gt; A2
+    T --&gt; B2
+    T --&gt; B3
+    A1 --&gt; X[Cross-node all-to-all]
+    A2 --&gt; X
+    B2 --&gt; X
+    B3 --&gt; X
+    X --&gt; Y[Combine on next layer]</pre>
+<p><strong>학습자:</strong> 그러면 hot expert 쌍이 서로 다른 노드에 놓여 있으면 fabric이 먼저 울겠네요.</p>
+<p><strong>교수자:</strong> 맞습니다. expert placement가 잘못되면 <code>연산이 느린 모델</code>이 아니라 <code>경로가 나쁜 모델</code>이 됩니다 [합성] [S2][S3].</p>
+<h3 id="part-4-low-batch-interactive-serving에서는-amortization이-깨진다">Part 4. low-batch interactive serving에서는 amortization이 깨진다</h3>
+<p><strong>학습자:</strong> 그럼 batch만 크게 만들면 MoE가 항상 유리한가요?</p>
+<p><strong>교수자:</strong> 큰 batch가 유리한 건 맞지만 만능은 아닙니다. S1-S3는 모두 충분한 토큰 집합을 expert에 분산시키는 전제를 두고 routing을 설명합니다 [S1][S2][S3]. 반대로 인터랙티브 서비스처럼 동시에 살아 있는 토큰 수가 적으면, top-k 복제와 dispatch의 고정 비용이 숨지 못합니다 [합성] [S1][S2][S3].</p>
+<p><strong>교수자:</strong> 그래서 <code>MoE는 active parameter가 적으니 인터랙티브에도 더 좋다</code>는 단순화는 위험합니다. batch가 작으면 우연한 skew가 바로 <code>가장 늦은 expert</code>로 드러나고, top-k 증가분이 거의 그대로 TTFT와 p99에 찍힐 수 있습니다. 최신 EP deployment 문서가 balancedness와 EPLB를 따로 두는 이유도 이런 tail 관리가 운영 문제이기 때문입니다 [합성] [S1][S2][S3][S4].</p>
+<h3 id="part-5-실제-실패-장면은-세-가지로-압축된다">Part 5. 실제 실패 장면은 세 가지로 압축된다</h3>
+<p><strong>교수자:</strong> 세 가지 운영 사고를 보겠습니다.</p>
+<p><strong>교수자:</strong> 첫째는 <code>capacity overflow</code>입니다. 특정 표현이 같은 expert로 몰리면 capacity factor를 낮게 잡아 둔 expert가 먼저 터집니다. 이 장면은 GShard와 Switch Transformer가 왜 capacity 개념과 load balancing을 강조하는지와 직접 연결됩니다 [S2][S3].</p>
+<p><strong>교수자:</strong> 둘째는 <code>cross-node placement 실패</code>입니다. 자주 같이 선택되는 expert 쌍이 서로 다른 노드에 놓이면 매 step마다 remote dispatch bytes가 커집니다. GShard의 sharding 설명은 바로 이런 expert 분산 경로가 공짜가 아님을 보여 줍니다 [S2].</p>
+<p><strong>교수자:</strong> 셋째는 <code>low-batch amortization failure</code>입니다. 인터랙티브 상담 봇처럼 동시성이 낮은 서비스에서는 top-k 증가로 생긴 dispatch와 combine 비용이 숨지 못하고, dense보다 active parameter는 적어도 체감 latency가 더 나빠질 수 있습니다 [합성] [S1][S2][S3].</p>
+<h3 id="part-6-디버깅-순서는-router에서-workload-적합성까지-간다">Part 6. 디버깅 순서는 router에서 workload 적합성까지 간다</h3>
+<p><strong>학습자:</strong> 장애가 나면 무엇부터 확인해야 하나요?</p>
+<p><strong>교수자:</strong> MoE에서는 순서가 다릅니다.</p>
+<ol><li><code>router histogram</code>이나 balancedness 지표를 봅니다. 어떤 토큰군이 어느 expert로 쏠리는지 모르면 원인을 못 잡습니다 [합성] [S1][S2][S3][S4].</li><li><code>capacity overflow, reroute, delay 비율</code>을 봅니다. capacity factor가 traffic mix에 맞는지 확인해야 합니다 [S2][S3][S4].</li><li><code>expert placement와 remote dispatch bytes</code>를 봅니다. 자주 같이 선택되는 expert 쌍이 원격 경로를 강제하는지 확인해야 합니다 [S2][S4].</li><li><code>batch size와 top-k</code>를 함께 봅니다. 작은 batch에서는 top-k 증분이 곧 latency 증분일 수 있습니다 [합성] [S1][S2][S3][S4].</li><li>마지막으로 <code>이 workload가 원래 MoE에 맞는지</code>를 다시 판단합니다. low-batch interactive라면 dense가 더 단순한 선택일 수 있습니다 [합성] [S1][S2][S3].</li></ol>
+<p><strong>학습자:</strong> 결국 MoE 운영의 핵심은 <code>active parameter가 적다</code>를 증명하는 게 아니라 <code>어떤 경로가 tail을 만들었는지</code>를 증명하는 거군요.</p>
+<p><strong>교수자:</strong> 바로 그 점입니다. dense tensor parallel에서는 계산과 메모리 분해가 중심이었다면, expert parallel에서는 <code>경로</code>, <code>편중</code>, <code>배치</code>, <code>배치 위치</code>가 중심입니다 [합성] [S1][S2][S3].</p>
+<h2 id="자주-헷갈리는-포인트">자주 헷갈리는 포인트</h2>
+<ul><li><code>총 파라미터가 크다</code>와 <code>토큰당 활성 파라미터가 작다</code>는 함께 참일 수 있다. 하지만 serving latency는 router, dispatch, combine, overflow 처리까지 더해져 결정된다 [S1][S2][S3].</li><li>top-k는 품질만 바꾸는 값이 아니다. top-k가 커질수록 expert 복제 수와 combine 대기 경로도 같이 커진다 [S2][S3].</li><li>capacity factor를 낮추면 항상 빠른 것이 아니다. overflow를 흡수하지 못하면 p99가 먼저 망가진다 [S2][S3].</li><li>expert parallelism의 병목은 dense tensor parallel의 all-reduce 감각으로 설명되지 않는다. <code>가장 바쁜 expert</code>와 <code>가장 먼 expert 쌍</code>이 더 중요하다 [합성] [S1][S2].</li><li>low-batch interactive workload에서는 routing 오버헤드를 amortize하지 못해 dense보다 체감 지연이 나빠질 수 있다 [합성] [S1][S2][S3].</li></ul>
+<h2 id="사례로-다시-보기">사례로 다시 보기</h2>
+<h3 id="사례-1-세일-이벤트-상품-추천">사례 1. 세일 이벤트 상품 추천</h3>
+<ul><li>특정 카테고리 표현이 몰리면서 하나의 hot expert가 capacity를 자주 초과했다 [수업용 추론] [S2][S3].</li><li>증상은 평균 utilization보다 p99 급등, overflow 증가, expert queue depth 편차, balancedness 악화로 먼저 나타난다 [합성] [S2][S3][S4].</li><li>우선 조치는 GPU 추가가 아니라 <code>capacity factor 재조정</code>, <code>router skew 확인</code>, <code>overflow 처리 정책 점검</code>, <code>EPLB/배치 정책 확인</code>이다 [합성] [S2][S3][S4].</li></ul>
+<h3 id="사례-2-code-assistant의-cross-node-expert-배치-실패">사례 2. code assistant의 cross-node expert 배치 실패</h3>
+<ul><li>자주 같이 선택되는 expert 두 개가 서로 다른 노드에 있어 remote dispatch bytes가 커졌다 [수업용 추론] [S2][S4].</li><li>사용자는 중간중간 멈칫하는 tail latency를 체감하지만 평균 throughput은 크게 나쁘지 않을 수 있다 [합성] [S2][S4].</li><li>우선 조치는 <code>expert co-placement</code>, <code>hot pair 분석</code>, <code>remote dispatch bytes 감소</code>다 [합성] [S2][S4].</li></ul>
+<h3 id="사례-3-낮은-동시성의-고객-상담-봇">사례 3. 낮은 동시성의 고객 상담 봇</h3>
+<ul><li>GPU당 동시에 살아 있는 요청 수가 적어 router와 dispatch 고정 비용이 숨지 못했다 [수업용 추론] [S1][S2][S3][S4].</li><li>dense보다 활성 파라미터는 적었지만 top-k 증가와 작은 batch가 겹쳐 TTFT와 p99가 악화될 수 있다 [합성] [S1][S2][S3][S4].</li><li>우선 조치는 <code>top-k 재검토</code>, <code>microbatching 정책 조정</code>, <code>dense 대안 재평가</code>다 [합성] [S1][S2][S3][S4].</li></ul>
+<h3 id="사례-4-야간-대량-문서-분류-파이프라인">사례 4. 야간 대량 문서 분류 파이프라인</h3>
+<ul><li>큰 batch와 비교적 고른 expert 사용이 유지되면 routing overhead가 평균화되기 쉽다 [합성] [S1][S2][S3].</li><li>이 경우 active parameter 절감이 실제 throughput 개선으로 이어질 가능성이 커진다 [합성] [S1][S2][S3].</li><li>이런 workload가 MoE가 제값을 하는 전형적인 장면이다.</li></ul>
+<h2 id="핵심-정리">핵심 정리</h2>
+<ul><li>MoE serving의 핵심은 <code>몇 개 expert를 켜는가</code>보다 <code>그 expert까지 어떤 경로로 보내고, 어디서 기다리게 되는가</code>다 [S1][S2][S3].</li><li>top-k, capacity factor, expert placement는 서로 독립 변수가 아니라 하나의 tail-latency 세트다 [S2][S3].</li><li>p95/p99를 악화시키는 주범은 평균 FLOPs 부족보다 hot expert, overflow, cross-node all-to-all, low-batch amortization failure인 경우가 많다 [합성] [S1][S2][S3].</li><li>dense tensor parallel 감각으로 접근하면 평균만 보고 놓치기 쉽다. MoE는 <code>가장 늦은 expert</code>가 step completion을 결정한다 [합성] [S1][S2].</li><li>batch가 충분하고 expert 사용이 고르게 퍼지는 throughput 지향 workload에서는 MoE가 강하지만, low-batch interactive 서비스에서는 dense가 더 단순하고 빠를 수 있다 [합성] [S1][S2][S3].</li></ul>
+<h2 id="복습-체크리스트">복습 체크리스트</h2>
+<ul><li>활성 파라미터와 expert capacity를 각각 무엇을 설명하는 식으로 읽어야 하는지 설명할 수 있는가?</li><li>top-k를 1에서 2로 올렸을 때 품질 외에 어떤 latency 비용이 붙는지 말할 수 있는가?</li><li>capacity factor가 너무 낮을 때 생기는 overflow, reroute, delay 문제를 구분할 수 있는가?</li><li>expert placement가 tail latency를 어떻게 키우는지 cross-node all-to-all 관점에서 설명할 수 있는가?</li><li>low-batch interactive workload에서 MoE의 amortization이 깨지는 조건을 말할 수 있는가?</li></ul>
+<h2 id="대안과-비교">대안과 비교</h2>
+<p>아래 비교표는 <code>MoE 고유 병목</code>과 <code>다른 serving 병목</code>을 구분하기 위한 보조 표다. 이 표의 S4-S6은 MoE 자체의 근거가 아니라 인접 병목의 기준선으로만 쓴다.</p>
+<p>| 접근 | 먼저 보는 병목 | 잘 맞는 상황 | MoE와의 관계 | 참고 | | --- | --- | --- | --- | --- | | MoE + Expert Parallel | router skew, capacity overflow, all-to-all, placement, EPLB | 큰 batch, 고른 expert 사용, throughput 지향 작업 | 활성 파라미터 절감이 실제 처리량으로 이어질 수 있다 | 본문 [S1][S2][S3][S4] | | Disaggregated Prefill/Decode | 긴 입력이 만드는 prefill 대기열 | 긴 입력과 짧은 출력이 섞인 서비스 | expert routing과 다른 단계 분리 병목이다 | [S5] |</p>
+<div class="table-wrap"><table><thead><tr><th>Structured Outputs</th><th>constrained decoding, schema repair</th><th>짧지만 제약된 생성 API</th><th>expert routing과 다른 decode 제약 병목이다</th><th>[S6]</th></tr></thead><tbody></tbody></table></div>
+<h2 id="참고-이미지">참고 이미지</h2>
+<p><img src="./assets/img-01.svg" alt="Hot expert skew and capacity overflow"></p>
+<ul><li>캡션: hot expert가 capacity를 넘을 때 overflow와 queue delay가 어떻게 생기는지 보여 주는 도식이다 [합성] [S2][S3].</li><li>출처 번호: [I1], [S2], [S3]</li><li>왜 이 그림이 필요한지: <code>capacity factor를 낮추면 메모리는 줄어도 tail은 나빠질 수 있다</code>는 문장을 시각적으로 붙잡게 한다.</li></ul>
+<p><img src="./assets/img-02.svg" alt="Cross-node expert placement map"></p>
+<ul><li>캡션: 자주 같이 선택되는 expert 쌍이 다른 노드에 있을 때 cross-node dispatch와 combine이 매 step 반복되는 장면을 그린 도식이다 [합성] [S2].</li><li>출처 번호: [I2], [S2]</li><li>왜 이 그림이 필요한지: expert parallel의 병목이 dense tensor parallel의 평균 대역폭 설명과 다른 이유를 placement 관점에서 직접 보여 준다.</li></ul>
+<h2 id="출처">출처</h2>
+<p>| 번호 | 제목 | 발행 주체 | 날짜 | URL | 사용 이유 | | --- | --- | --- | --- | --- | --- | | [S1] | Outrageously Large Neural Networks: The Sparsely-Gated Mixture-of-Experts Layer | Google Research / arXiv | 2017-01-23 | https://arxiv.org/abs/1701.06538 | sparse gating, load balancing, expert routing의 기본 개념 | | [S2] | GShard: Scaling Giant Models with Conditional Computation and Automatic Sharding | Google Research / arXiv | 2020-06-29 | https://arxiv.org/abs/2006.16668 | top-2 gating, expert capacity, sharding, distributed MoE 경로 설명 | | [S3] | Switch Transformers: Scaling to Trillion Parameter Models with Simple and Efficient Sparsity | Google Research / JMLR | 2022-01-01 | https://arxiv.org/abs/2101.03961 | top-1 routing, capacity/overflow 단순화, routing 비용과 안정성 설명 | | [S4] | Expert Parallel Deployment | vLLM project | 2026-03-08 (accessed) | https://docs.vllm.ai/en/v0.14.1/serving/expert_parallel_deployment/ | 최신 expert parallel serving, EP deployment, EPLB와 balancedness 지표 설명 | | [S5] | Disaggregated Prefill V1 | vLLM project | 2026-03-08 (accessed) | https://docs.vllm.ai/en/latest/features/disagg_prefill.html | MoE가 아닌 단계 분리 병목과 비교하기 위한 보조 출처 | | [S6] | Structured Outputs | vLLM project | 2026-03-08 (accessed) | https://docs.vllm.ai/en/latest/features/structured_outputs.html | expert routing과 다른 constrained decoding 병목을 비교하기 위한 보조 출처 |</p>
+    </article>
+    <section class="content-panel surface quiz-panel">
+      <div class="section-heading">
+        <div>
+          <p class="eyebrow">Quiz</p>
+          <h2>복습 문제</h2>
+        </div>
+      </div>
+      <div class="prose">
+        <h1 id="moe-and-expert-parallelism-퀴즈">MoE and Expert Parallelism 퀴즈</h1>
+<h2 id="객관식-1">객관식 1</h2>
+<p>MoE 서비스에서 평균 GPU utilization은 큰 변화가 없는데 p99만 급등했다. 가장 먼저 의심할 원인으로 가장 적절한 것은 무엇인가?</p>
+<ol><li>특정 hot expert의 queue depth 증가와 capacity overflow</li><li>모든 expert가 같은 속도로 조금씩 느려진 현상</li><li>KV cache hit율이 너무 높아진 현상</li><li>structured output validator가 항상 비활성화된 현상</li></ol>
+<h2 id="객관식-2">객관식 2</h2>
+<p>인터랙티브 챗봇에서 batch가 매우 작은 상태로 운영 중인데 top-k를 1에서 2로 올렸다. 가장 직접적으로 예상되는 변화는 무엇인가?</p>
+<ol><li>dispatch와 combine 비용이 늘고, all-to-all 오버헤드가 amortize되지 않기 쉬워진다</li><li>router가 사라져 dense 모델과 거의 같은 통신 패턴이 된다</li><li>capacity factor를 바꾸지 않아도 overflow 위험이 자동으로 줄어든다</li><li>cross-node placement가 더 이상 중요하지 않게 된다</li></ol>
+<h2 id="객관식-3">객관식 3</h2>
+<p>다음 중 expert placement 문제를 가장 직접적으로 시사하는 증상은 무엇인가?</p>
+<ol><li>자주 같이 선택되는 expert 쌍이 서로 다른 노드에 있어 remote dispatch bytes가 지속적으로 높다</li><li>총 파라미터 수가 dense 모델보다 크다</li><li>공통 system prompt가 자주 반복된다</li><li>출력 JSON의 필드 수가 많다</li></ol>
+<h2 id="짧은-서술형-1">짧은 서술형 1</h2>
+<p><code>활성 파라미터가 dense보다 적다</code>는 사실만으로 MoE latency를 예측하면 안 되는 이유를 3문장 이내로 설명하라.</p>
+<h2 id="짧은-서술형-2">짧은 서술형 2</h2>
+<p>MoE 서비스의 tail latency가 나빠졌을 때 점검할 순서를 4단계 이상으로 적어라. 답에는 <code>router histogram</code>, <code>capacity/overflow</code>, <code>placement</code>, <code>batch 또는 top-k</code>가 반드시 들어가야 한다.</p>
+<h2 id="심화-설명형-1">심화 설명형 1</h2>
+<p>실시간 code assistant가 MoE로 전환된 뒤 사용자가 <code>가끔 2초 이상 멈췄다가 토큰이 몰아서 나온다</code>고 불평한다. 현재 조건은 다음과 같다.</p>
+<ul><li>GPU당 동시 활성 요청 수는 낮다.</li><li>top-k는 2다.</li><li>자주 같이 선택되는 expert 두 개가 서로 다른 노드에 있다.</li><li>capacity factor는 공격적으로 낮게 잡혀 있다.</li></ul>
+<p>다음을 설명하라.</p>
+<ol><li>이 상황에서 p99가 튀는 직접 원인 3가지</li><li>조정 우선순위와 그 이유</li><li>언제 dense 대안 재검토가 합리적인지</li></ol>
+<h2 id="심화-설명형-2">심화 설명형 2</h2>
+<p>야간 대량 문서 분류 파이프라인과 낮 시간 인터랙티브 상담 봇이 같은 MoE 클러스터를 공유한다. 운영자는 두 workload에 동일한 <code>top-k</code>, <code>capacity factor</code>, <code>expert placement</code> 정책을 쓰고 있다.</p>
+<p>다음을 포함해 설명하라.</p>
+<ol><li>왜 같은 정책이 두 workload에 모두 최적이 아닐 수 있는가</li><li>batch size와 skew가 두 workload에서 다르게 작동하는 방식</li><li>어느 workload가 MoE의 장점을 더 잘 살리고, 어느 workload가 dense에 더 가까운 선택을 요구하는지</li></ol><details class="answer-key"><summary>정답 및 해설 보기</summary><h2 id="정답-및-해설">정답 및 해설</h2>
+<ul><li>객관식 1 정답: 1. GShard와 Switch Transformer는 expert capacity와 load balancing을 핵심 장치로 설명한다 [S2][S3]. 그래서 평균 utilization이 멀쩡해도 hot expert의 queue depth와 overflow가 p99를 먼저 망가뜨릴 수 있다 [합성] [S2][S3].</li><li>객관식 2 정답: 1. GShard의 top-2 gating은 토큰이 두 expert 경로를 타게 만들고 [S2], Switch Transformer가 top-1을 택한 이유 중 하나도 이 복잡도를 줄이기 위해서다 [S3]. 작은 batch에서는 이 dispatch/combine 비용이 amortize되지 못해 latency가 바로 드러난다 [합성] [S2][S3].</li><li>객관식 3 정답: 1. placement 문제는 <code>어떤 expert가 어디에 놓였는가</code>와 <code>그 결과 remote dispatch bytes가 얼마나 생기는가</code>로 가장 직접적으로 드러난다 [S2].</li><li>짧은 서술형 1 예시: MoE latency는 활성 파라미터 수뿐 아니라 router, dispatch, combine, expert queue에 의해 결정된다 [S1][S2][S3]. 특히 토큰이 특정 expert로 쏠리면 평균 계산량이 작아도 가장 바쁜 expert가 전체 step을 늦춘다 [합성] [S1][S2]. 그래서 active parameter만 보면 overflow와 all-to-all tail 비용을 놓치게 된다.</li><li>짧은 서술형 2 예시: <code>router histogram 또는 balancedness 지표 확인 -&amp;gt; capacity overflow와 reroute 비율 확인 -&amp;gt; 자주 같이 선택되는 expert의 placement와 remote dispatch bytes 확인 -&amp;gt; EPLB나 재배치 정책 검토 -&amp;gt; batch size, top-k, microbatch 정책 확인 -&amp;gt; workload 자체가 low-batch interactive인지 재판단</code> 순서가 적절하다 [합성] [S1][S2][S3][S4].</li><li>심화 설명형 1 포인트: 낮은 동시성 때문에 dispatch 오버헤드가 amortize되지 않고 [합성] [S1][S2][S3], top-k=2라 remote all-to-all이 더 자주 일어나며 [S2], 낮은 capacity factor 때문에 overflow나 지연이 겹쳐 p99가 튈 수 있다 [S2][S3]. 우선순위는 <code>hot pair co-placement 또는 remote traffic 감소 -&amp;gt; capacity factor 재조정 -&amp;gt; top-k 재검토 -&amp;gt; dense 대안 재평가</code>가 합리적이다. 계속 low-batch interactive이고 routing 비용이 품질 이득보다 크면 dense가 더 실용적일 수 있다 [합성] [S1][S2][S3].</li><li>심화 설명형 2 포인트: 야간 대량 문서 분류는 batch가 크고 skew가 평균화되기 쉬워 MoE의 active parameter 절감이 throughput 개선으로 이어질 가능성이 높다 [합성] [S1][S2][S3]. 반면 낮 시간 상담 봇은 batch가 작아 top-k와 dispatch 고정 비용이 크게 보이고, 우연한 expert 편중도 바로 p99로 드러난다 [합성] [S1][S2][S3]. 따라서 두 workload에 같은 top-k와 capacity factor를 쓰면 하나에는 과보수, 다른 하나에는 과공격적 정책이 될 수 있다.</li></ul></details>
+      </div>
+    </section>
+    <nav class="pager">
+      <a class="pager-link" href="../03-disaggregated-prefill-decode/"><span>이전</span><strong>Disaggregated Prefill/Decode</strong></a>
+      <a class="pager-link" href="../05-structured-outputs-and-tool-calling/"><span>다음</span><strong>Structured Outputs and Tool Calling</strong></a>
+    </nav>
+    
+      </section>
+      <aside class="page-sidebar">
+    <div class="sidebar-panel surface">
+      <p class="eyebrow">On This Page</p>
+      <div class="toc" data-toc>
+        <a class="toc-link" href="#수업-개요">수업 개요</a><a class="toc-link" href="#학습-목표">학습 목표</a><a class="toc-link" href="#수업-전에-생각할-질문">수업 전에 생각할 질문</a><a class="toc-link" href="#강의-스크립트">강의 스크립트</a><a class="toc-link sub" href="#part-1-active-parameter는-출발점일-뿐-끝이-아니다">Part 1. active parameter는 출발점일 뿐 끝이 아니다</a><a class="toc-link sub" href="#part-2-top-k와-capacity-factor는-품질-값이자-tail-latency-값이다">Part 2. top k와 capacity factor는 품질 값이자 tail latency 값이다</a><a class="toc-link sub" href="#part-3-expert-parallelism의-병목은-dense-tensor-parallel과-다르다">Part 3. expert parallelism의 병목은 dense tensor parallel과 다르다</a><a class="toc-link sub" href="#part-4-low-batch-interactive-serving에서는-amortization이-깨진다">Part 4. low batch interactive serving에서는 amortization이 깨진다</a><a class="toc-link sub" href="#part-5-실제-실패-장면은-세-가지로-압축된다">Part 5. 실제 실패 장면은 세 가지로 압축된다</a><a class="toc-link sub" href="#part-6-디버깅-순서는-router에서-workload-적합성까지-간다">Part 6. 디버깅 순서는 router에서 workload 적합성까지 간다</a><a class="toc-link" href="#자주-헷갈리는-포인트">자주 헷갈리는 포인트</a><a class="toc-link" href="#사례로-다시-보기">사례로 다시 보기</a><a class="toc-link sub" href="#사례-1-세일-이벤트-상품-추천">사례 1. 세일 이벤트 상품 추천</a><a class="toc-link sub" href="#사례-2-code-assistant의-cross-node-expert-배치-실패">사례 2. code assistant의 cross node expert 배치 실패</a><a class="toc-link sub" href="#사례-3-낮은-동시성의-고객-상담-봇">사례 3. 낮은 동시성의 고객 상담 봇</a><a class="toc-link sub" href="#사례-4-야간-대량-문서-분류-파이프라인">사례 4. 야간 대량 문서 분류 파이프라인</a><a class="toc-link" href="#핵심-정리">핵심 정리</a><a class="toc-link" href="#복습-체크리스트">복습 체크리스트</a><a class="toc-link" href="#대안과-비교">대안과 비교</a><a class="toc-link" href="#참고-이미지">참고 이미지</a><a class="toc-link" href="#출처">출처</a>
+      </div>
+    </div>
+    </aside>
+    </div>
+  </main>
+  <script type="module" src="../../assets/app.js"></script>
+  <script type="module">
+    import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs';
+    mermaid.initialize({ startOnLoad: true, theme: 'neutral', securityLevel: 'loose' });
+  </script>
+  <script>
+    window.MathJax = {
+      tex: { inlineMath: [['$', '$'], ['\\(', '\\)']], displayMath: [['$$', '$$'], ['\\[', '\\]']] },
+      svg: { fontCache: 'global' }
+    };
+  </script>
+  <script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-svg.js" async></script>
+</body>
+</html>

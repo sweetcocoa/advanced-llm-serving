@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>MLIR, StableHLO, IREE | 런타임과 컴파일러</title>
+  <meta name="description" content="같은 matmul + elementwise tail 블록도 어디까지를 StableHLO 같은 높은 수준의 의미 공간에 남기고, 어디서 MLIR lower dialect와 target specific 단계로 내릴지에 따라 IREE runtime이 보게 되는 dispatch 경계와 최종 artifact 구성이 달라질 수 있다 [합성: S1,S2,S3]. 이 챕터는 그 판단 기준을 먼저 세운다.">
+  <meta name="theme-color" content="#10182a">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+KR:wght@400;500;600;700&family=Space+Grotesk:wght@500;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../../assets/style.css">
+</head>
+<body class="page-chapter" data-page-kind="chapter" data-page-id="study/llm-serving-npu-roadmap/06-runtime-and-compiler/05-mlir-stablehlo-iree" data-root-prefix="../../">
+  <div class="reading-progress" data-reading-progress></div>
+  <header class="site-header">
+    <a class="brand" href="../../">
+      <span class="brand-kicker">GitHub Pages Study</span>
+      <strong>LLM Serving + NPU</strong>
+    </a>
+    <nav class="top-nav"><a class="top-nav-link" href="../../01-foundations/">기초와 성능 직관</a><a class="top-nav-link" href="../../02-llm-serving-core/">LLM Serving 핵심</a><a class="top-nav-link" href="../../03-llm-serving-advanced/">고급 Serving 패턴</a><a class="top-nav-link" href="../../04-serving-systems/">Serving 시스템 설계</a><a class="top-nav-link" href="../../05-npu-stack/">NPU 소프트웨어 스택</a><a class="top-nav-link is-active" href="../">런타임과 컴파일러</a><a class="top-nav-link" href="../../07-synthesis/">종합 정리와 최신 흐름</a></nav>
+    <div class="search-shell">
+      <input type="search" placeholder="챕터, 모듈, 키워드 검색" aria-label="검색" data-global-search>
+      <div class="search-results" data-search-results hidden></div>
+    </div>
+  </header>
+  <main class="page-frame">
+    
+    <section class="hero">
+      <div class="hero-copy">
+        <p class="eyebrow">런타임과 컴파일러</p>
+        <h1>MLIR, StableHLO, IREE</h1>
+        <p class="hero-summary">같은 matmul + elementwise tail 블록도 어디까지를 StableHLO 같은 높은 수준의 의미 공간에 남기고, 어디서 MLIR lower dialect와 target specific 단계로 내릴지에 따라 IREE runtime이 보게 되는 dispatch 경계와 최종 artifact 구성이 달라질 수 있다 [합성: S1,S2,S3]. 이 챕터는 그 판단 기준을 먼저 세운다.</p>
+      </div>
+      <div class="hero-stats">
+        <div class="stat-card"><strong>35-50 min</strong><span>reading time</span></div>
+        <div class="stat-card"><strong>2026-03-08</strong><span>updated</span></div>
+        <div class="stat-card"><button class="progress-toggle" type="button" data-progress-toggle data-progress-id="study/llm-serving-npu-roadmap/06-runtime-and-compiler/05-mlir-stablehlo-iree">완료로 표시</button></div>
+      </div>
+    </section>
+    
+    <div class="page-layout">
+      <section class="page-main content-shell">
+        
+    <article class="content-panel surface prose" data-reading-target>
+      <h1 id="mlir-stablehlo-iree">MLIR, StableHLO, IREE</h1>
+<h2 id="수업-개요">수업 개요</h2>
+<p>같은 <code>matmul + elementwise tail</code> 블록도 어디까지를 StableHLO 같은 높은 수준의 의미 공간에 남기고, 어디서 MLIR lower dialect와 target-specific 단계로 내릴지에 따라 IREE runtime이 보게 되는 dispatch 경계와 최종 artifact 구성이 달라질 수 있다 [합성: S1,S2,S3]. 이 챕터는 그 판단 기준을 먼저 세운다.</p>
+<p>ONNX는 모델 교환 형식과 operator ecosystem의 기준점이고 [S4], StableHLO/XLA 계층은 비교적 높은 수준의 연산 의미를 보존하는 쪽에 가깝다 [S3]. MLIR은 dialect, dialect conversion, progressive lowering, bufferization 같은 다단계 변환 프레임워크를 제공하고 [S1], IREE는 그 위에서 compiler와 runtime artifact path를 연결하는 예시다 [S2]. 오늘의 핵심은 &quot;무슨 이름의 프로젝트가 멋진가&quot;가 아니라 &quot;어느 계층에서 무슨 문제를 풀고 있는가&quot;를 헷갈리지 않는 것이다 [합성: S1,S2,S3,S4].</p>
+<h2 id="학습-목표">학습 목표</h2>
+<ul><li>ONNX, StableHLO, MLIR, IREE가 서로 다른 층위의 답을 준다는 점을 설명할 수 있다 [S1][S2][S3][S4].</li><li><code>ONNX import 성공</code>과 <code>lowering 준비 완료</code>가 다른 상태라는 점을 <code>R_lowering</code>으로 설명할 수 있다 [합성: S1,S2,S4].</li><li>더 이른 decomposition이 왜 dispatch 수 증가로 이어질 수 있는지 <code>G_net</code> 관점으로 말할 수 있다 [합성: S1,S2,S3].</li><li>IREE를 볼 때 compiler만이 아니라 runtime artifact path까지 같이 봐야 하는 이유를 설명할 수 있다 [S2].</li><li>디버깅 순서를 <code>입력 의미 -&amp;gt; dialect legality -&amp;gt; dispatch/artifact -&amp;gt; backend 세부 조정</code>으로 정리할 수 있다 [합성: S1,S2,S3,S4].</li></ul>
+<h2 id="수업-전에-생각할-질문">수업 전에 생각할 질문</h2>
+<ul><li>ONNX 파일을 읽는 데 성공했다는 사실이, 왜 target backend 배포 성공을 보장하지 않을까?</li><li>StableHLO 같은 높은 수준 IR을 쓴다고 해서 왜 자동으로 최적 codegen이 보장되지는 않을까?</li><li>성능 문제처럼 보이는 현상이 사실은 dispatch 경계나 artifact packaging 문제일 가능성은 언제 커질까?</li></ul>
+<h2 id="강의-스크립트">강의 스크립트</h2>
+<h3 id="1-먼저-지금-어디서-막혔는가를-구분한다">1. 먼저 &quot;지금 어디서 막혔는가&quot;를 구분한다</h3>
+<p><strong>교수자:</strong> 오늘은 이름부터 분리하겠습니다. <code>ONNX</code>는 교환 형식입니다 [S4]. <code>StableHLO</code>는 OpenXLA/XLA 문맥에서 높은 수준 연산 의미를 유지하는 계층입니다 [S3]. <code>MLIR</code>은 이런 표현들을 dialect와 lowering pipeline으로 다루는 프레임워크입니다 [S1]. <code>IREE</code>는 MLIR 기반 compiler와 runtime을 실제 artifact 경로로 연결한 사례입니다 [S2].</p>
+<p><strong>학습자:</strong> 그러면 네 개가 경쟁 관계라기보다, 서로 다른 질문에 답하는 축이군요.</p>
+<p><strong>교수자:</strong> 맞습니다. ONNX는 &quot;모델을 어떤 공용 형식으로 들고 오나&quot;에 가깝고 [S4], StableHLO는 &quot;높은 수준 의미를 어느 정도까지 보존하나&quot;에 가깝고 [S3], MLIR은 &quot;그 의미를 어떤 단계로 쪼개고 legalize하나&quot;에 가깝고 [S1], IREE는 &quot;그 결과를 어떤 runtime artifact로 묶어 실행하나&quot;에 가깝습니다 [S2].</p>
+<p>| 층위 | 먼저 답하는 질문 | 이 챕터에서 놓치면 안 되는 점 | | --- | --- | --- | | ONNX [S4] | 모델을 어떤 교환 형식으로 표현할 것인가 | import 성공은 parser 또는 importer 단계 성공일 뿐이다 [합성: S1,S2,S4] | | StableHLO/XLA [S3] | 높은 수준 연산 의미를 얼마나 유지할 것인가 | 의미 보존과 최종 codegen 품질은 같은 문제가 아니다 [합성: S1,S2,S3] | | MLIR [S1] | 어떤 dialect를 거쳐 legalize, rewrite, bufferize할 것인가 | lowering은 한 번에 끝나는 사건이 아니라 연속된 단계다 [S1] |</p>
+<div class="table-wrap"><table><thead><tr><th>IREE [S2]</th><th>compiler 결과를 runtime이 어떤 artifact로 읽을 것인가</th><th>dispatch 형성과 artifact packaging까지 봐야 한다 [S2]</th></tr></thead><tbody></tbody></table></div>
+<pre class="mermaid">flowchart LR
+    A[&quot;ONNX graph&lt;br/&gt;interchange&quot;] --&gt; B[&quot;StableHLO or other high-level ops&lt;br/&gt;portable semantics&quot;]
+    B --&gt; C[&quot;MLIR dialect conversion&lt;br/&gt;legality, rewrite, bufferization&quot;]
+    C --&gt; D[&quot;IREE compiler path&lt;br/&gt;dispatch formation, target lowering&quot;]
+    D --&gt; E[&quot;runtime-loadable artifacts&lt;br/&gt;vmfb/executable set&quot;]</pre>
+<p>이 그림은 ONNX, StableHLO, MLIR, IREE를 &quot;대체재&quot;가 아니라 &quot;질문이 다른 연속 계층&quot;으로 읽게 하려는 요약이다 [합성: S1,S2,S3,S4].</p>
+<h3 id="식-1-lowering-준비도를-보는-간단한-비율">식 1. lowering 준비도를 보는 간단한 비율</h3>
+<p>다음 식은 MLIR의 dialect conversion/legality 관점 [S1], ONNX의 interchange 관점 [S4], IREE의 compile-to-runtime 관점 [S2]를 묶어 만든 학습용 지표다 [합성: S1,S2,S4].</p>
+<div class="math-block">$$
+R_{lowering} = \frac{N_{legalized}}{N_{required}}
+$$</div>
+<p>여기서 <code>N_required</code>는 다음 단계가 요구하는 연산, shape, type, layout 조건의 수이고, <code>N_legalized</code>는 그 조건을 실제로 충족한 수라고 읽으면 된다 [합성: S1,S2,S4]. ONNX import가 성공했다는 사실은 보통 &quot;입력이 읽혔다&quot;는 뜻이지, 바로 <code>R_lowering = 1</code>이라는 뜻은 아니다 [합성: S1,S2,S4].</p>
+<p><strong>학습자:</strong> 결국 <code>import OK</code>와 <code>deploy OK</code> 사이에 dialect legality와 target lowering이 남아 있다는 말이군요.</p>
+<p><strong>교수자:</strong> 그렇습니다. 그래서 이 챕터에서는 <code>파일을 읽었다</code>보다 <code>다음 단계가 이 표현을 받아들일 수 있는가</code>를 더 중요한 질문으로 둡니다 [합성: S1,S2,S4].</p>
+<h3 id="2-stablehlo를-쓰는-이유와-과신하면-안-되는-이유">2. StableHLO를 쓰는 이유와 과신하면 안 되는 이유</h3>
+<p><strong>학습자:</strong> 그럼 StableHLO를 쓰면 높은 수준 의미를 보존하니 항상 유리한가요?</p>
+<p><strong>교수자:</strong> <code>항상</code>은 아닙니다. XLA Architecture는 높은 수준 연산 의미와 backend-specific lowering 사이의 층을 보여 주지만 [S3], 그 자체가 어떤 특정 target에서 자동으로 최적 코드를 보장한다는 뜻은 아닙니다 [합성: S1,S2,S3]. MLIR 문서는 progressive lowering과 dialect conversion을 강조하고 [S1], IREE 문서는 compiler와 runtime artifact path를 함께 다룹니다 [S2]. 이 둘을 합치면 &quot;높은 수준 의미를 얼마나 오래 유지할지&quot;는 최적화 기회와 하위 단계 부담을 함께 바꾸는 선택이라는 점이 보입니다 [합성: S1,S2,S3].</p>
+<p><strong>학습자:</strong> 그러면 StableHLO는 portability와 의미 보존에 유리할 수 있지만, 최종 codegen 품질은 또 다른 문제라는 거네요.</p>
+<p><strong>교수자:</strong> 정확합니다. StableHLO를 쓰는 이유와, 최종 backend codegen이 잘 나오느냐는 질문을 분리해야 합니다 [합성: S1,S2,S3].</p>
+<h3 id="식-2-decomposition의-순이득을-보는-식">식 2. decomposition의 순이득을 보는 식</h3>
+<p>다음 식은 &quot;더 잘게 내리는 선택&quot;의 순이득을 설명하기 위한 학습용 식이다 [합성: S1,S2,S3].</p>
+<div class="math-block">$$
+G_{net} = B_{backend} - \left(C_{dispatch} + C_{boundary} + C_{materialize}\right)
+$$</div>
+<p><code>B_backend</code>는 더 낮은 수준으로 가면서 얻는 backend-specific 최적화 이익을, <code>C_dispatch</code>는 더 많은 dispatch 형성 비용을, <code>C_boundary</code>는 경계 간 전달과 동기화 비용을, <code>C_materialize</code>는 중간 결과 구체화 비용을 뜻한다 [합성: S1,S2,S3]. MLIR이 progressive lowering을 허용한다는 사실 [S1]과 IREE가 dispatch와 artifact 관점까지 드러낸다는 사실 [S2], 그리고 XLA 계층이 높은 수준 의미를 유지하는 이유 [S3]를 묶으면, 더 이른 decomposition이 항상 이득이 아니라는 결론이 나온다 [합성: S1,S2,S3].</p>
+<p><strong>학습자:</strong> 그러면 decomposition으로 생기는 dispatch 증가는 문서에 딱 한 줄로 적혀 있다기보다, 여러 계층 설명을 합쳐야 보이는 결론이군요.</p>
+<p><strong>교수자:</strong> 맞습니다. 그래서 이 문장은 문서 직역이 아니라 <code>[합성]</code>으로 써야 정확합니다. <code>하나의 큰 의미 덩어리</code>를 너무 일찍 잘게 나누면 IREE가 더 많은 dispatch 경계를 만들 가능성이 있고, 그때는 <code>C_dispatch</code>와 <code>C_boundary</code>가 올라갈 수 있습니다 [합성: S1,S2,S3].</p>
+<h3 id="3-iree를-볼-때는-compiler와-runtime을-같이-본다">3. IREE를 볼 때는 compiler와 runtime을 같이 본다</h3>
+<p><strong>교수자:</strong> IREE가 여기서 중요한 이유는 &quot;MLIR을 쓴다&quot;에서 멈추지 않기 때문입니다. IREE 문서는 compiler와 runtime을 분리하면서도, compiler 결과가 runtime-loadable artifact로 이어지는 경로를 함께 설명합니다 [S2].</p>
+<p><strong>학습자:</strong> 그러면 성능이나 실패 원인을 볼 때, 코드 생성만이 아니라 artifact 구성도 봐야겠네요.</p>
+<p><strong>교수자:</strong> 그렇습니다. <code>dispatch가 몇 개로 나뉘었는가</code>, <code>runtime이 무엇을 실제로 로드하는가</code>, <code>어느 단계에서 target-specific executable이 만들어졌는가</code>가 모두 같은 문제 체인의 일부입니다 [합성: S1,S2]. 그래서 IREE를 쓰는 순간, compiler debugging과 runtime artifact inspection이 연결됩니다 [S2].</p>
+<pre class="mermaid">flowchart TD
+    A[&quot;1. 입력 의미 확인&lt;br/&gt;ONNX graph인가 StableHLO 의미 공간인가&quot;] --&gt; B[&quot;2. MLIR legality 확인&lt;br/&gt;dialect conversion, shape, type&quot;]
+    B --&gt; C[&quot;3. dispatch/artifact 확인&lt;br/&gt;IREE compiler output and runtime load path&quot;]
+    C --&gt; D[&quot;4. backend 세부 조정&lt;br/&gt;target-specific tuning&quot;]
+    D --&gt; E{&quot;문제가 어디에 남는가?&quot;}
+    E --&gt;|의미 해석| A
+    E --&gt;|legality| B
+    E --&gt;|dispatch or packaging| C
+    E --&gt;|codegen detail| D</pre>
+<p>이 순서는 MLIR의 legality 관점 [S1], IREE의 compiler-runtime 관점 [S2], StableHLO/XLA 계층 구분 [S3], ONNX interchange 관점 [S4]을 묶어 정리한 디버깅용 순서다 [합성: S1,S2,S3,S4].</p>
+<h3 id="4-사례-a-onnx-import는-됐는데-배포는-아직-멀다">4. 사례 A. ONNX import는 됐는데 배포는 아직 멀다</h3>
+<p><strong>학습자:</strong> 실무에서 가장 흔한 오해를 하나 들어 주세요.</p>
+<p><strong>교수자:</strong> <code>ONNX import가 성공했으니 deployment도 거의 끝났다</code>는 오해가 대표적입니다. ONNX는 교환 형식 기준점일 뿐이고 [S4], 그 뒤에는 MLIR dialect legality와 lowering 문제 [S1], IREE artifact path 문제가 남습니다 [S2].</p>
+<p><strong>학습자:</strong> 그러면 이 장면에서 첫 질문은 &quot;왜 importer가 실패했나&quot;가 아니라 &quot;다음 단계가 이 IR을 legal하게 받는가&quot;네요.</p>
+<p><strong>교수자:</strong> 맞습니다. import 성공은 보통 출발점 확인입니다. shape, type, layout, target-specific lowering, runtime artifact 구성까지 넘어가야 비로소 배포 가능성이 생깁니다 [합성: S1,S2,S4].</p>
+<h3 id="5-사례-b-더-잘게-쪼갰더니-오히려-dispatch가-늘었다">5. 사례 B. 더 잘게 쪼갰더니 오히려 dispatch가 늘었다</h3>
+<p><strong>교수자:</strong> 두 번째 사례는 이 챕터 전용입니다. <code>matmul -&amp;gt; bias -&amp;gt; activation</code>처럼 아직 높은 수준의 연산 묶음으로 볼 수 있는 블록을 너무 이르게 쪼개면, 뒤 단계에서 볼 때는 작은 조각들의 나열처럼 보일 수 있습니다 [합성: S1,S2,S3].</p>
+<p><strong>학습자:</strong> 그럼 작은 조각이 많아지면 항상 나쁜가요?</p>
+<p><strong>교수자:</strong> 그것도 아닙니다. 어떤 target에서는 더 낮은 수준 정보가 backend 최적화에 유리할 수 있습니다 [합성: S1,S2,S3]. 그래서 <code>G_net</code>으로 봐야 합니다. 더 잘게 쪼갠 결과 <code>B_backend</code>가 <code>C_dispatch + C_boundary + C_materialize</code>보다 충분히 크면 이득이고, 아니면 dispatch만 늘어난 셈이 됩니다 [합성: S1,S2,S3].</p>
+<h3 id="6-실제로는-어떤-순서로-디버깅하나">6. 실제로는 어떤 순서로 디버깅하나</h3>
+<p><strong>학습자:</strong> 현장에서 바로 쓸 순서를 짧게 말해 주시면요.</p>
+<p><strong>교수자:</strong> 다음 순서가 안전합니다 [합성: S1,S2,S3,S4].</p>
+<ol><li>입력 IR의 의미 공간을 고정한다. ONNX graph 문제인지, StableHLO/XLA 수준 의미 문제인지 먼저 구분한다 [S3][S4].</li><li>MLIR dialect conversion과 legality를 본다. shape, type, rewrite, bufferization 중 어디에서 다음 단계 요구를 못 맞추는지 확인한다 [S1].</li><li>IREE compiler output과 runtime artifact path를 본다. dispatch 형성과 packaging을 확인한다 [S2].</li><li>마지막에 backend-specific tuning이나 codegen 세부를 본다. 앞 단계가 흔들리면 여기서 시간을 써도 큰 진전이 없다 [합성: S1,S2,S3,S4].</li></ol>
+<p><strong>학습자:</strong> 즉 backend tuning은 맨 앞이 아니라 맨 뒤군요.</p>
+<p><strong>교수자:</strong> 그렇습니다. 이 챕터에서는 그 순서가 가장 중요합니다. 많은 문제는 kernel detail 전에 IR 계층 구분이나 legality 단계에서 이미 방향이 정해집니다 [합성: S1,S2,S3,S4].</p>
+<h2 id="자주-헷갈리는-포인트">자주 헷갈리는 포인트</h2>
+<ul><li>ONNX는 <code>중간 표현 최적화 프레임워크</code>가 아니라 모델 교환 형식의 기준점이다 [S4].</li><li>StableHLO를 쓴다고 자동으로 최적 codegen이 보장되지는 않는다. 높은 수준 의미 보존과 backend 최적화 품질은 분리된 질문이다 [합성: S1,S2,S3].</li><li>MLIR은 단일 IR 하나가 아니라 여러 dialect와 progressive lowering을 포함한 프레임워크다 [S1].</li><li>IREE는 compiler로만 끝나지 않는다. runtime이 실제로 읽는 artifact path까지 같이 봐야 한다 [S2].</li><li>decomposition으로 dispatch가 늘 수 있다는 문장은 일반 법칙이 아니라, MLIR lowering과 IREE dispatch 형성을 함께 읽었을 때의 실무적 판단 기준이다 [합성: S1,S2,S3].</li></ul>
+<h2 id="사례로-다시-보기">사례로 다시 보기</h2>
+<h3 id="사례-a-import-성공-을-deployment-준비-완료-로-오해한-팀">사례 A. <code>import 성공</code>을 <code>deployment 준비 완료</code>로 오해한 팀</h3>
+<ul><li>현상: ONNX importer는 통과했는데 target-specific compile 또는 runtime 준비가 막힌다.</li><li>1차 해석: ONNX는 graph interchange의 성공일 뿐이다 [S4].</li><li>2차 해석: 다음 단계에서 dialect legality와 shape/type/layout 조건을 못 맞출 수 있다 [S1][합성: S2,S4].</li><li>결론: <code>R_lowering</code>이 아직 1이 아니다. import 성공과 lowering 준비 완료를 분리해서 봐야 한다 [합성: S1,S2,S4].</li></ul>
+<h3 id="사례-b-더-낮게-내리면-무조건-좋다-고-가정한-팀">사례 B. <code>더 낮게 내리면 무조건 좋다</code>고 가정한 팀</h3>
+<ul><li>현상: 높은 수준 블록을 일찍 decomposition했더니 runtime에서 dispatch 경계가 많아진다.</li><li>1차 해석: 더 낮은 수준 정보가 backend 이익 <code>B_backend</code>를 줄 수도 있지만, dispatch와 경계 비용도 같이 바뀐다 [합성: S1,S2,S3].</li><li>2차 해석: IREE의 artifact/dispatch 관점에서 보면 조각이 많아진 상태가 항상 좋은 것은 아니다 [S2][합성: S1,S3].</li><li>결론: <code>G_net &amp;gt; 0</code>인지 확인해야지, decomposition 자체를 목표로 삼으면 안 된다 [합성: S1,S2,S3].</li></ul>
+<h2 id="핵심-정리">핵심 정리</h2>
+<ul><li>ONNX [S4], StableHLO/XLA [S3], MLIR [S1], IREE [S2]는 같은 계층의 경쟁자가 아니라 서로 다른 질문에 답하는 층이다.</li><li><code>R_lowering</code>은 import 성공과 다음 단계 준비 완료를 분리해 생각하게 만드는 학습용 비율이다 [합성: S1,S2,S4].</li><li><code>G_net</code>은 decomposition이 backend 최적화 이익보다 dispatch/경계 비용을 더 키우는지 확인하게 만드는 학습용 식이다 [합성: S1,S2,S3].</li><li>IREE를 사용할 때는 compiler pass만이 아니라 runtime artifact path와 dispatch 형성을 함께 봐야 한다 [S2].</li><li>디버깅 순서는 <code>입력 의미 -&amp;gt; legality -&amp;gt; dispatch/artifact -&amp;gt; backend 세부</code>가 안전하다 [합성: S1,S2,S3,S4].</li></ul>
+<h2 id="복습-체크리스트">복습 체크리스트</h2>
+<ul><li>ONNX와 StableHLO가 둘 다 &quot;모델 표현&quot;처럼 보일 때, 각각 무엇을 보존하려는지 구분해서 설명할 수 있는가? [S3][S4]</li><li>MLIR의 dialect conversion과 progressive lowering을 한 문장으로 설명할 수 있는가? [S1]</li><li>IREE를 단순 compiler가 아니라 compiler-runtime artifact path로 설명할 수 있는가? [S2]</li><li><code>ONNX import 성공이 곧 deployment 성공</code>이 왜 아닌지 <code>R_lowering</code>으로 설명할 수 있는가? [합성: S1,S2,S4]</li><li>decomposition으로 인한 dispatch 증가 가능성을 <code>G_net</code>과 함께 설명할 수 있는가? [합성: S1,S2,S3]</li></ul>
+<h2 id="대안과-비교">대안과 비교</h2>
+<p>| 관점 | 잘 답하는 질문 | 잘 못 답하는 질문 | 이 챕터에서의 위치 | | --- | --- | --- | --- | | ONNX [S4] | 모델을 어떤 공용 graph 형식으로 교환할까 | target lowering과 runtime artifact 품질은 직접 답하지 못한다 | 입력 표현의 출발점 | | StableHLO/XLA [S3] | 높은 수준 연산 의미를 어느 정도 유지할까 | 특정 target에서 자동 최적 codegen을 보장하지는 않는다 | 의미 보존 계층 | | MLIR [S1] | 어떤 dialect와 legality 규칙을 거쳐 점진적으로 내릴까 | 단독으로 runtime artifact packaging을 설명하지는 않는다 | lowering 프레임워크 |</p>
+<div class="table-wrap"><table><thead><tr><th>IREE [S2]</th><th>compiler 결과를 runtime이 어떤 artifact로 읽고 실행할까</th><th>교환 형식 자체의 범용성 문제는 직접 답하지 않는다</th><th>compiler-runtime 연결 예시</th></tr></thead><tbody></tbody></table></div>
+<h2 id="참고-이미지">참고 이미지</h2>
+<h3 id="참고-이미지-1-iree-architecture">참고 이미지 1. IREE architecture</h3>
+<p><img src="https://iree.dev/assets/images/iree_architecture.svg" alt="IREE architecture"></p>
+<ul><li>원본 제목: <code>IREE architecture</code></li><li>원본 URL: <code>https://iree.dev/assets/images/iree_architecture.svg</code></li><li>출처 유형: <code>Official Docs</code></li><li>연결 단락: <code>3. IREE를 볼 때는 compiler와 runtime을 같이 본다</code></li><li>왜 필요한가: IREE를 compiler 단일 프로젝트가 아니라 compiler, runtime, plugins, artifacts가 이어진 구조로 읽게 해 준다 [S2].</li></ul>
+<h3 id="참고-이미지-2-합성-stablehlo-mlir-iree-artifact-path">참고 이미지 2. [합성] StableHLO-MLIR-IREE artifact path</h3>
+<p><img src="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI5NjAiIGhlaWdodD0iMjgwIiB2aWV3Qm94PSIwIDAgOTYwIDI4MCI+CiAgPHJlY3Qgd2lkdGg9Ijk2MCIgaGVpZ2h0PSIyODAiIGZpbGw9IiNmOGZhZmMiLz4KICA8cmVjdCB4PSIyNCIgeT0iOTIiIHdpZHRoPSIxNjAiIGhlaWdodD0iODgiIHJ4PSIxNCIgZmlsbD0iI2ZmZjdlZCIgc3Ryb2tlPSIjZWE1ODBjIiBzdHJva2Utd2lkdGg9IjIiLz4KICA8dGV4dCB4PSIxMDQiIHk9IjEyNiIgZm9udC1mYW1pbHk9IkFyaWFsIiBmb250LXNpemU9IjI2IiB0ZXh0LWFuY2hvcj0ibWlkZGxlIiBmaWxsPSIjOWEzNDEyIj5Tb3VyY2UgSVI8L3RleHQ+CiAgPHRleHQgeD0iMTA0IiB5PSIxNTYiIGZvbnQtZmFtaWx5PSJBcmlhbCIgZm9udC1zaXplPSIxOCIgdGV4dC1hbmNob3I9Im1pZGRsZSIgZmlsbD0iIzlhMzQxMiI+T05OWCAvIFN0YWJsZUhMTzwvdGV4dD4KCiAgPHJlY3QgeD0iMjI0IiB5PSI1MiIgd2lkdGg9IjIyMCIgaGVpZ2h0PSIxNzYiIHJ4PSIxNCIgZmlsbD0iI2VmZjZmZiIgc3Ryb2tlPSIjMjU2M2ViIiBzdHJva2Utd2lkdGg9IjIiLz4KICA8dGV4dCB4PSIzMzQiIHk9Ijg4IiBmb250LWZhbWlseT0iQXJpYWwiIGZvbnQtc2l6ZT0iMjYiIHRleHQtYW5jaG9yPSJtaWRkbGUiIGZpbGw9IiMxZDRlZDgiPk1MSVIgU3BhY2U8L3RleHQ+CiAgPHRleHQgeD0iMzM0IiB5PSIxMjIiIGZvbnQtZmFtaWx5PSJBcmlhbCIgZm9udC1zaXplPSIxOCIgdGV4dC1hbmNob3I9Im1pZGRsZSIgZmlsbD0iIzFlM2E4YSI+ZGlhbGVjdCBjb252ZXJzaW9uPC90ZXh0PgogIDx0ZXh0IHg9IjMzNCIgeT0iMTQ4IiBmb250LWZhbWlseT0iQXJpYWwiIGZvbnQtc2l6ZT0iMTgiIHRleHQtYW5jaG9yPSJtaWRkbGUiIGZpbGw9IiMxZTNhOGEiPnNoYXBlICsgdHlwZSBsZWdhbGl0eTwvdGV4dD4KICA8dGV4dCB4PSIzMzQiIHk9IjE3NCIgZm9udC1mYW1pbHk9IkFyaWFsIiBmb250LXNpemU9IjE4IiB0ZXh0LWFuY2hvcj0ibWlkZGxlIiBmaWxsPSIjMWUzYThhIj5idWZmZXJpemF0aW9uIC8gbG93ZXJpbmdzPC90ZXh0PgoKICA8cmVjdCB4PSI0ODQiIHk9IjUyIiB3aWR0aD0iMjIwIiBoZWlnaHQ9IjE3NiIgcng9IjE0IiBmaWxsPSIjZWNmZWZmIiBzdHJva2U9IiMwODkxYjIiIHN0cm9rZS13aWR0aD0iMiIvPgogIDx0ZXh0IHg9IjU5NCIgeT0iODgiIGZvbnQtZmFtaWx5PSJBcmlhbCIgZm9udC1zaXplPSIyNiIgdGV4dC1hbmNob3I9Im1pZGRsZSIgZmlsbD0iIzBmNzY2ZSI+SVJFRSBDb21waWxlcjwvdGV4dD4KICA8dGV4dCB4PSI1OTQiIHk9IjEyMiIgZm9udC1mYW1pbHk9IkFyaWFsIiBmb250LXNpemU9IjE4IiB0ZXh0LWFuY2hvcj0ibWlkZGxlIiBmaWxsPSIjMTE1ZTU5Ij5kaXNwYXRjaCBmb3JtYXRpb248L3RleHQ+CiAgPHRleHQgeD0iNTk0IiB5PSIxNDgiIGZvbnQtZmFtaWx5PSJBcmlhbCIgZm9udC1zaXplPSIxOCIgdGV4dC1hbmNob3I9Im1pZGRsZSIgZmlsbD0iIzExNWU1OSI+SEFMIC8gdGFyZ2V0IGxvd2VyaW5nPC90ZXh0PgogIDx0ZXh0IHg9IjU5NCIgeT0iMTc0IiBmb250LWZhbWlseT0iQXJpYWwiIGZvbnQtc2l6ZT0iMTgiIHRleHQtYW5jaG9yPSJtaWRkbGUiIGZpbGw9IiMxMTVlNTkiPmFydGlmYWN0IHBhY2thZ2luZzwvdGV4dD4KCiAgPHJlY3QgeD0iNzQ0IiB5PSI5MiIgd2lkdGg9IjE5MiIgaGVpZ2h0PSI4OCIgcng9IjE0IiBmaWxsPSIjZjBmZGY0IiBzdHJva2U9IiMxNmEzNGEiIHN0cm9rZS13aWR0aD0iMiIvPgogIDx0ZXh0IHg9Ijg0MCIgeT0iMTI2IiBmb250LWZhbWlseT0iQXJpYWwiIGZvbnQtc2l6ZT0iMjUiIHRleHQtYW5jaG9yPSJtaWRkbGUiIGZpbGw9IiMxNjY1MzQiPlJ1bnRpbWUgQXJ0aWZhY3RzPC90ZXh0PgogIDx0ZXh0IHg9Ijg0MCIgeT0iMTU2IiBmb250LWZhbWlseT0iQXJpYWwiIGZvbnQtc2l6ZT0iMTgiIHRleHQtYW5jaG9yPSJtaWRkbGUiIGZpbGw9IiMxNjY1MzQiPnZtZmIgKyB0YXJnZXQgY29kZTwvdGV4dD4KCiAgPHBhdGggZD0iTTE4NCAxMzYgSDIyNCIgc3Ryb2tlPSIjNDc1NTY5IiBzdHJva2Utd2lkdGg9IjQiIGZpbGw9Im5vbmUiLz4KICA8cG9seWdvbiBwb2ludHM9IjIyNCwxMzYgMjEwLDEyOCAyMTAsMTQ0IiBmaWxsPSIjNDc1NTY5Ii8+CiAgPHBhdGggZD0iTTQ0NCAxMzYgSDQ4NCIgc3Ryb2tlPSIjNDc1NTY5IiBzdHJva2Utd2lkdGg9IjQiIGZpbGw9Im5vbmUiLz4KICA8cG9seWdvbiBwb2ludHM9IjQ4NCwxMzYgNDcwLDEyOCA0NzAsMTQ0IiBmaWxsPSIjNDc1NTY5Ii8+CiAgPHBhdGggZD0iTTcwNCAxMzYgSDc0NCIgc3Ryb2tlPSIjNDc1NTY5IiBzdHJva2Utd2lkdGg9IjQiIGZpbGw9Im5vbmUiLz4KICA8cG9seWdvbiBwb2ludHM9Ijc0NCwxMzYgNzMwLDEyOCA3MzAsMTQ0IiBmaWxsPSIjNDc1NTY5Ii8+CgogIDx0ZXh0IHg9IjQ4MCIgeT0iMjQ4IiBmb250LWZhbWlseT0iQXJpYWwiIGZvbnQtc2l6ZT0iMTgiIHRleHQtYW5jaG9yPSJtaWRkbGUiIGZpbGw9IiMzMzQxNTUiPlN5bnRoZXRpYyBzdHVkeSBmaWd1cmUgZGVyaXZlZCBmcm9tIFMxLCBTMiwgUzMsIFM0PC90ZXh0Pgo8L3N2Zz4=" alt="Synthetic StableHLO-MLIR-IREE artifact path"></p>
+<ul><li>원본 제목: <code>[합성] StableHLO-MLIR-IREE artifact path</code></li><li>원본 URL: <code>local://README-inline-data-uri</code></li><li>출처 유형: <code>Synthetic study figure derived from official docs</code></li><li>연결 단락: <code>1. 먼저 &amp;quot;지금 어디서 막혔는가&amp;quot;를 구분한다</code>, <code>3. IREE를 볼 때는 compiler와 runtime을 같이 본다</code></li><li>왜 필요한가: ONNX/StableHLO/MLIR/IREE의 역할 차이를 한 장에 묶어, <code>import 성공</code>과 <code>runtime artifact 준비</code> 사이에 어떤 단계가 남는지 보여 준다 [합성: S1,S2,S3,S4].</li></ul>
+<h2 id="출처">출처</h2>
+<p>| 번호 | 제목 | 발행 주체 | 날짜 | URL | 이 챕터에서 사용한 포인트 | | --- | --- | --- | --- | --- | --- | | [S1] | MLIR Documentation | LLVM Project | 2026-03-08 (accessed) | <a href="https://mlir.llvm.org/" target="_blank" rel="noreferrer">https://mlir.llvm.org/</a> | dialect, dialect conversion, progressive lowering, bufferization 같은 중간 표현 변환의 기준점 | | [S2] | IREE Documentation | IREE project | 2026-03-08 (accessed) | <a href="https://iree.dev/" target="_blank" rel="noreferrer">https://iree.dev/</a> | MLIR 기반 compiler와 runtime artifact path, dispatch와 실행 경로를 함께 읽는 예시 | | [S3] | XLA Architecture | OpenXLA | 2026-03-08 (accessed) | <a href="https://openxla.org/xla/architecture" target="_blank" rel="noreferrer">https://openxla.org/xla/architecture</a> | StableHLO/XLA 계층이 높은 수준 의미를 보존하는 이유와 위치 | | [S4] | Open Neural Network Exchange | ONNX | 2026-03-08 (accessed) | <a href="https://onnx.ai/" target="_blank" rel="noreferrer">https://onnx.ai/</a> | ONNX를 interchange format과 operator ecosystem의 기준점으로 비교하기 위한 출발점 |</p>
+    </article>
+    <section class="content-panel surface quiz-panel">
+      <div class="section-heading">
+        <div>
+          <p class="eyebrow">Quiz</p>
+          <h2>복습 문제</h2>
+        </div>
+      </div>
+      <div class="prose">
+        <h1 id="mlir-stablehlo-iree-퀴즈">MLIR, StableHLO, IREE 퀴즈</h1>
+<h2 id="객관식-1">객관식 1</h2>
+<p>다음 중 README의 <code>R_lowering</code> 설명과 가장 잘 맞는 것은 무엇인가?</p>
+<ol><li>ONNX importer가 모델 파일을 읽었으면 <code>R_lowering</code>은 자동으로 1이 된다.</li><li><code>R_lowering</code>은 다음 단계가 요구하는 legality 조건을 얼마나 실제로 충족했는지 보는 학습용 비율이다.</li><li><code>R_lowering</code>은 StableHLO를 쓰는 순간 항상 높아진다.</li><li><code>R_lowering</code>은 runtime latency 평균만으로 계산된다.</li></ol>
+<h2 id="객관식-2">객관식 2</h2>
+<p>다음 중 README가 설명한 StableHLO의 위치를 가장 정확히 고른 것은 무엇인가?</p>
+<ol><li>StableHLO는 높은 수준 연산 의미를 유지하는 데 유용하지만, 자동 최적 codegen을 보장하지는 않는다.</li><li>StableHLO는 ONNX와 동일하므로 importer만 바꾸면 된다.</li><li>StableHLO를 쓰면 MLIR dialect conversion은 건너뛸 수 있다.</li><li>StableHLO를 쓰면 IREE runtime artifact 확인은 불필요해진다.</li></ol>
+<h2 id="객관식-3">객관식 3</h2>
+<p>README가 제안한 디버깅 순서로 가장 적절한 것은 무엇인가?</p>
+<ol><li>backend tuning -&gt; dispatch 확인 -&gt; legality 확인 -&gt; 입력 IR 의미 확인</li><li>입력 IR 의미 확인 -&gt; MLIR legality 확인 -&gt; IREE dispatch/artifact 확인 -&gt; backend tuning</li><li>ONNX import 성공 확인 -&gt; 곧바로 latency 측정 -&gt; StableHLO 도입 -&gt; artifact 확인</li><li>runtime UI 로그 확인 -&gt; logo 이미지 확인 -&gt; compiler pass 이름 정렬 -&gt; backend 변경</li></ol>
+<h2 id="짧은-서술형-1">짧은 서술형 1</h2>
+<p><code>ONNX import 성공</code>이 왜 <code>deployment 준비 완료</code>를 뜻하지 않는지, <code>R_lowering</code>을 사용해 2~3문장으로 설명하라.</p>
+<h2 id="짧은-서술형-2">짧은 서술형 2</h2>
+<p>더 이른 decomposition이 왜 항상 좋은 선택이 아닌지, <code>G_net</code>과 <code>C_dispatch</code>를 포함해 설명하라.</p>
+<h2 id="심화-설명형-1">심화 설명형 1</h2>
+<p>어떤 팀이 ONNX 모델을 IREE에 넣었고 importer는 통과했지만, target compile 단계에서 막혔다. README의 순서를 따라 무엇을 어떤 순서로 확인할지 서술하라. 답안에는 <code>입력 의미</code>, <code>dialect legality</code>, <code>dispatch/artifact</code>, <code>backend tuning</code> 네 표현을 모두 포함하라.</p>
+<h2 id="심화-설명형-2">심화 설명형 2</h2>
+<p>다음 두 선택을 비교해 어느 쪽이 더 나을지 설명하라.</p>
+<ol><li>StableHLO 수준에서 큰 연산 블록을 조금 더 유지한 뒤 나중에 target lowering을 본다.</li><li>초기에 더 잘게 decomposition해서 작은 연산 조각들로 빠르게 내린다.</li></ol>
+<p>답안에는 <code>B_backend</code>, <code>C_dispatch</code>, <code>C_boundary</code>, <code>자동 최적화 보장 아님</code>을 모두 포함하라.</p><details class="answer-key"><summary>정답 및 해설 보기</summary><h2 id="정답-및-해설">정답 및 해설</h2>
+<ul><li>객관식 1 정답: 2. <code>R_lowering</code>은 importer 성공 여부가 아니라, 다음 단계가 요구하는 legality 조건을 얼마나 실제로 충족했는지를 설명하기 위해 README가 도입한 학습용 비율이다 [합성: S1,S2,S4]. 1번은 <code>import 성공 = deploy 성공</code>이라는 오해이고 [합성: S1,S2,S4], 3번은 <code>StableHLO 사용 = 자동 해결</code>이라는 오해이며 [합성: S1,S2,S3], 4번은 latency 지표와 lowering 준비도를 혼동한 경우다 [합성: S1,S2,S4].</li><li>객관식 2 정답: 1. StableHLO/XLA 계층은 높은 수준 연산 의미를 유지하는 쪽에 가깝지만, 그것이 곧 자동 최적 codegen 보장을 뜻하지는 않는다고 README가 설명했다 [S3][합성: S1,S2,S3]. 2번과 3번은 ONNX, StableHLO, MLIR을 같은 층으로 섞은 오해이고 [S1][S3][S4], 4번은 IREE의 compiler-runtime artifact path를 지워 버리는 오해다 [S2].</li><li>객관식 3 정답: 2. README의 디버깅 순서는 <code>입력 의미 -&amp;gt; MLIR legality -&amp;gt; IREE dispatch/artifact -&amp;gt; backend tuning</code>이다 [합성: S1,S2,S3,S4]. 1번은 backend tuning을 너무 앞에 둔 순서이고, 3번은 import 성공을 과신하는 순서이며, 4번은 학습 목표와 무관한 잡음이다 [합성: S1,S2,S3,S4].</li><li>짧은 서술형 1 예시: ONNX import 성공은 보통 모델 graph를 읽어 들였다는 뜻이지, 다음 단계가 요구하는 legality 조건을 모두 만족했다는 뜻은 아니다 [S4][합성: S1,S2,S4]. README의 <code>R_lowering</code>은 dialect legality, shape/type/layout, target lowering 준비 상태를 함께 보게 만드는 학습용 비율이므로, import만 통과한 상태에서는 아직 <code>R_lowering = 1</code>이라고 볼 수 없다 [합성: S1,S2,S4].</li><li>짧은 서술형 2 예시: decomposition은 backend-specific 최적화 이익 <code>B_backend</code>를 키울 수도 있지만, 동시에 dispatch 수를 늘려 <code>C_dispatch</code>와 경계 비용을 높일 수 있다 [합성: S1,S2,S3]. 따라서 README는 &quot;더 잘게 내린다&quot; 자체를 목표로 보지 않고, <code>G_net = B_backend - (C_dispatch + C_boundary + C_materialize)</code>가 실제로 양수인지로 판단하라고 제안했다 [합성: S1,S2,S3].</li><li>심화 설명형 1 예시: 먼저 이 문제가 ONNX graph 해석 문제인지, StableHLO 같은 높은 수준 의미 공간 문제인지 <code>입력 의미</code>부터 고정한다 [S3][S4]. 그다음 MLIR의 <code>dialect legality</code>를 보고 shape, type, rewrite, bufferization 중 어디가 다음 단계를 막는지 확인한다 [S1]. 이후 IREE의 <code>dispatch/artifact</code>를 확인해 compiler output이 runtime-loadable artifact로 이어지는 경로에서 무엇이 깨졌는지 본다 [S2]. 마지막에만 <code>backend tuning</code>을 본다. 앞의 세 단계가 정리되지 않았으면 backend 세부 조정은 진짜 원인을 가리지 못하기 때문이다 [합성: S1,S2,S3,S4].</li><li>심화 설명형 2 예시: 큰 연산 블록을 StableHLO 수준에서 조금 더 유지하는 선택은 높은 수준 의미를 남겨 뒤 단계에서 더 큰 최적화 여지를 줄 수 있지만, 이것이 <code>자동 최적화 보장 아님</code>이라는 점은 유지해야 한다 [S3][합성: S1,S2,S3]. 반대로 초기에 잘게 decomposition하면 어떤 target에서는 <code>B_backend</code>가 커질 수도 있지만, 동시에 <code>C_dispatch</code>와 <code>C_boundary</code>가 올라갈 위험이 있다 [합성: S1,S2,S3]. 그래서 README의 판단 기준은 어느 쪽 이름이 더 고급스러운가가 아니라, 실제로 <code>G_net</code>이 플러스인지 확인하는 것이다 [합성: S1,S2,S3].</li></ul></details>
+      </div>
+    </section>
+    <nav class="pager">
+      <a class="pager-link" href="../04-openvino-npu/"><span>이전</span><strong>OpenVINO NPU</strong></a>
+      <a class="pager-link" href="../../07-synthesis/01-cloud-vs-edge-inference-tradeoffs/"><span>다음</span><strong>Cloud vs Edge Inference Tradeoffs</strong></a>
+    </nav>
+    
+      </section>
+      <aside class="page-sidebar">
+    <div class="sidebar-panel surface">
+      <p class="eyebrow">On This Page</p>
+      <div class="toc" data-toc>
+        <a class="toc-link" href="#수업-개요">수업 개요</a><a class="toc-link" href="#학습-목표">학습 목표</a><a class="toc-link" href="#수업-전에-생각할-질문">수업 전에 생각할 질문</a><a class="toc-link" href="#강의-스크립트">강의 스크립트</a><a class="toc-link sub" href="#1-먼저-지금-어디서-막혔는가를-구분한다">1. 먼저 &quot;지금 어디서 막혔는가&quot;를 구분한다</a><a class="toc-link sub" href="#식-1-lowering-준비도를-보는-간단한-비율">식 1. lowering 준비도를 보는 간단한 비율</a><a class="toc-link sub" href="#2-stablehlo를-쓰는-이유와-과신하면-안-되는-이유">2. StableHLO를 쓰는 이유와 과신하면 안 되는 이유</a><a class="toc-link sub" href="#식-2-decomposition의-순이득을-보는-식">식 2. decomposition의 순이득을 보는 식</a><a class="toc-link sub" href="#3-iree를-볼-때는-compiler와-runtime을-같이-본다">3. IREE를 볼 때는 compiler와 runtime을 같이 본다</a><a class="toc-link sub" href="#4-사례-a-onnx-import는-됐는데-배포는-아직-멀다">4. 사례 A. ONNX import는 됐는데 배포는 아직 멀다</a><a class="toc-link sub" href="#5-사례-b-더-잘게-쪼갰더니-오히려-dispatch가-늘었다">5. 사례 B. 더 잘게 쪼갰더니 오히려 dispatch가 늘었다</a><a class="toc-link sub" href="#6-실제로는-어떤-순서로-디버깅하나">6. 실제로는 어떤 순서로 디버깅하나</a><a class="toc-link" href="#자주-헷갈리는-포인트">자주 헷갈리는 포인트</a><a class="toc-link" href="#사례로-다시-보기">사례로 다시 보기</a><a class="toc-link sub" href="#사례-a-import-성공-을-deployment-준비-완료-로-오해한-팀">사례 A. import 성공 을 deployment 준비 완료 로 오해한 팀</a><a class="toc-link sub" href="#사례-b-더-낮게-내리면-무조건-좋다-고-가정한-팀">사례 B. 더 낮게 내리면 무조건 좋다 고 가정한 팀</a><a class="toc-link" href="#핵심-정리">핵심 정리</a><a class="toc-link" href="#복습-체크리스트">복습 체크리스트</a><a class="toc-link" href="#대안과-비교">대안과 비교</a><a class="toc-link" href="#참고-이미지">참고 이미지</a><a class="toc-link sub" href="#참고-이미지-1-iree-architecture">참고 이미지 1. IREE architecture</a><a class="toc-link sub" href="#참고-이미지-2-합성-stablehlo-mlir-iree-artifact-path">참고 이미지 2. [합성] StableHLO MLIR IREE artifact path</a><a class="toc-link" href="#출처">출처</a>
+      </div>
+    </div>
+    </aside>
+    </div>
+  </main>
+  <script type="module" src="../../assets/app.js"></script>
+  <script type="module">
+    import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs';
+    mermaid.initialize({ startOnLoad: true, theme: 'neutral', securityLevel: 'loose' });
+  </script>
+  <script>
+    window.MathJax = {
+      tex: { inlineMath: [['$', '$'], ['\\(', '\\)']], displayMath: [['$$', '$$'], ['\\[', '\\]']] },
+      svg: { fontCache: 'global' }
+    };
+  </script>
+  <script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-svg.js" async></script>
+</body>
+</html>

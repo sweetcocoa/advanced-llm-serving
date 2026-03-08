@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Benchmarking and Observability | Serving 시스템 설계</title>
+  <meta name="description" content="이 챕터의 출발점은 단순하다. 좋은 benchmark는 현실을 일부러 깎아 내리고, 좋은 observability는 현실의 흔들림을 일부러 남긴다. 그래서 둘 다 숫자를 다루지만 같은 표로 합치면 곧바로 오판이 생긴다. 하나는 &quot;같은 조건에서 무엇이 더 낫나&quot;를 묻고, 다른 하나는 &quot;지금 어디가 무너지는가&quot;를 묻는다. 이 챕터가 다루는 tradeoff는 바로 그 사이, 즉 측정 단순성과 운영 현실 반영의 긴장이다.">
+  <meta name="theme-color" content="#10182a">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+KR:wght@400;500;600;700&family=Space+Grotesk:wght@500;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../../assets/style.css">
+</head>
+<body class="page-chapter" data-page-kind="chapter" data-page-id="study/llm-serving-npu-roadmap/04-serving-systems/03-benchmarking-and-observability" data-root-prefix="../../">
+  <div class="reading-progress" data-reading-progress></div>
+  <header class="site-header">
+    <a class="brand" href="../../">
+      <span class="brand-kicker">GitHub Pages Study</span>
+      <strong>LLM Serving + NPU</strong>
+    </a>
+    <nav class="top-nav"><a class="top-nav-link" href="../../01-foundations/">기초와 성능 직관</a><a class="top-nav-link" href="../../02-llm-serving-core/">LLM Serving 핵심</a><a class="top-nav-link" href="../../03-llm-serving-advanced/">고급 Serving 패턴</a><a class="top-nav-link is-active" href="../">Serving 시스템 설계</a><a class="top-nav-link" href="../../05-npu-stack/">NPU 소프트웨어 스택</a><a class="top-nav-link" href="../../06-runtime-and-compiler/">런타임과 컴파일러</a><a class="top-nav-link" href="../../07-synthesis/">종합 정리와 최신 흐름</a></nav>
+    <div class="search-shell">
+      <input type="search" placeholder="챕터, 모듈, 키워드 검색" aria-label="검색" data-global-search>
+      <div class="search-results" data-search-results hidden></div>
+    </div>
+  </header>
+  <main class="page-frame">
+    
+    <section class="hero">
+      <div class="hero-copy">
+        <p class="eyebrow">Serving 시스템 설계</p>
+        <h1>Benchmarking and Observability</h1>
+        <p class="hero-summary">이 챕터의 출발점은 단순하다. 좋은 benchmark는 현실을 일부러 깎아 내리고, 좋은 observability는 현실의 흔들림을 일부러 남긴다. 그래서 둘 다 숫자를 다루지만 같은 표로 합치면 곧바로 오판이 생긴다. 하나는 &quot;같은 조건에서 무엇이 더 낫나&quot;를 묻고, 다른 하나는 &quot;지금 어디가 무너지는가&quot;를 묻는다. 이 챕터가 다루는 tradeoff는 바로 그 사이, 즉 측정 단순성과 운영 현실 반영의 긴장이다.</p>
+      </div>
+      <div class="hero-stats">
+        <div class="stat-card"><strong>35-50 min</strong><span>reading time</span></div>
+        <div class="stat-card"><strong>2026-03-08</strong><span>updated</span></div>
+        <div class="stat-card"><button class="progress-toggle" type="button" data-progress-toggle data-progress-id="study/llm-serving-npu-roadmap/04-serving-systems/03-benchmarking-and-observability">완료로 표시</button></div>
+      </div>
+    </section>
+    
+    <div class="page-layout">
+      <section class="page-main content-shell">
+        
+    <article class="content-panel surface prose" data-reading-target>
+      <h1 id="benchmarking-and-observability">Benchmarking and Observability</h1>
+<h2 id="수업-개요">수업 개요</h2>
+<p>이 챕터의 출발점은 단순하다. 좋은 benchmark는 현실을 일부러 깎아 내리고, 좋은 observability는 현실의 흔들림을 일부러 남긴다. 그래서 둘 다 숫자를 다루지만 같은 표로 합치면 곧바로 오판이 생긴다. 하나는 &quot;같은 조건에서 무엇이 더 낫나&quot;를 묻고, 다른 하나는 &quot;지금 어디가 무너지는가&quot;를 묻는다. 이 챕터가 다루는 tradeoff는 바로 그 사이, 즉 측정 단순성과 운영 현실 반영의 긴장이다.</p>
+<p>이번 장에서는 출처의 역할도 좁게 잡는다. [S2]는 prefill과 decode를 분리해서 봐야 한다는 직접 근거로 사용하고, [S1]은 최신 serving 문서 용어를 맞추는 기준선으로만 사용한다. 반대로 <code>schema-valid rate</code>나 usable goodput 같은 structured output 운영 규칙은 이 챕터에서 교수자 운영 휴리스틱으로 다루며, 공식 출처가 직접 뒷받침하는 사실처럼 서술하지 않는다.</p>
+<h2 id="학습-목표">학습 목표</h2>
+<ul><li>benchmark scorecard와 observability dashboard가 서로 다른 질문에 답한다는 점을 설명할 수 있다.</li><li>단일 평균 latency가 workload mix 변화를 가릴 수 있다는 점을 설명할 수 있다.</li><li><code>TTFT</code>를 queue, prefill, first-token 단계로 분해해 병목 가설을 세울 수 있다.</li><li>TensorRT-LLM의 disaggregated serving 관점을 prefill/decode 분리 계측의 직접 근거와 연결할 수 있다 [S2].</li><li>structured output 서비스에서 <code>schema-valid rate</code> 같은 보조 지표를 별도로 두는 이유를 교수자 운영 휴리스틱 수준에서 설명할 수 있다.</li></ul>
+<h2 id="수업-전에-생각할-질문">수업 전에 생각할 질문</h2>
+<ul><li>평균 throughput이 좋아졌는데도 사용자는 더 느려졌다고 느낄 수 있을까?</li><li>긴 문서 요약과 짧은 채팅 요청을 하나의 synthetic benchmark로 대표하면 무엇이 사라질까?</li><li>JSON 형식이 중요한 서비스에서 속도 그래프만 보고 배포 성공이라고 말해도 될까?</li></ul>
+<h2 id="강의-스크립트">강의 스크립트</h2>
+<h3 id="세션-1-점수판과-대시보드는-같은-벽에-붙지-않는다">세션 1. 점수판과 대시보드는 같은 벽에 붙지 않는다</h3>
+<p><strong>교수자:</strong> 운영 회의에서 자주 생기는 실수가 하나 있습니다. benchmark 표를 들고 들어와서 장애를 설명하려는 겁니다.</p>
+<p><strong>학습자:</strong> 둘 다 latency, throughput을 보니까 헷갈리기 쉬운 것 같습니다.</p>
+<p><strong>교수자:</strong> 이름은 같아도 질문이 다릅니다. benchmark는 조건을 고정하고 구성을 비교합니다. observability는 조건이 흔들리는 상태에서 원인을 좁힙니다. 그래서 같은 <code>TTFT</code>라도 benchmark에서는 &quot;어느 설정이 더 빠른가&quot;를 묻고, observability에서는 &quot;왜 오늘 p95가 튀었는가&quot;를 묻습니다.</p>
+<p>| 지금 답하려는 질문 | benchmark에서 먼저 보는 값 | observability에서 같이 보는 값 | 섞어 쓰면 생기는 오해 | | --- | --- | --- | --- | | 어떤 설정이 더 빠른가 | 고정 prompt/output 길이의 <code>TTFT</code>, throughput | 실트래픽 비중, 시간대, 배포 버전 | benchmark 승자가 운영 승자라고 단정 | | 오늘 왜 느려졌는가 | 재현용 replay benchmark | <code>TTFT p95</code>, queue wait, phase별 latency | 평균 한 줄이면 충분하다고 착각 |</p>
+<div class="table-wrap"><table><thead><tr><th>어디가 병목인가</th><th>bucket별 synthetic run</th><th>queue, prefill, first-token, retry</th><th>총 latency 하나로 원인을 찾으려 함</th></tr></thead><tbody></tbody></table></div>
+<pre class="mermaid">flowchart TB
+    A[새 serving 설정 또는 장애 신호] --&gt; B{지금 필요한 답}
+    B --&gt;|구성 비교| C[Benchmark scorecard]
+    B --&gt;|원인 추적| D[Observability dashboard]
+    C --&gt; E[고정된 입력 길이&lt;br/&gt;고정된 동시성&lt;br/&gt;재현성]
+    D --&gt; F[시계열 변화&lt;br/&gt;percentile&lt;br/&gt;phase 분해]</pre>
+<h3 id="세션-2-benchmark는-현실을-버리는-대신-비교력을-산다">세션 2. benchmark는 현실을 버리는 대신 비교력을 산다</h3>
+<p><strong>학습자:</strong> 그러면 benchmark는 현실을 덜 닮을수록 오히려 좋은 건가요?</p>
+<p><strong>교수자:</strong> 비교가 목적이라면 그렇습니다. 입력 길이, 출력 길이, 동시성, warm-up 상태를 묶어 두어야 A와 B를 선명하게 비교할 수 있습니다. 이 장에서는 최신 serving 문서 용어 기준선으로 vLLM Documentation을 함께 보지만 [S1], 그 문서가 곧바로 운영 대시보드 설계를 대신해 주는 것은 아닙니다. 문맥을 맞추는 기준선과 운영 판단은 분리해야 합니다.</p>
+<p><strong>학습자:</strong> 그런데 운영 트래픽은 길이도 섞이고 시간대도 흔들립니다.</p>
+<p><strong>교수자:</strong> 그래서 benchmark를 버리는 것이 아니라, bucket을 나눕니다. 평균 하나로 덮지 않고 workload mix를 밝히는 식입니다.</p>
+<div class="math-block">$$
+\bar{L}_{\text{mix}} = \sum_{i=1}^{n} w_i L_i \qquad \left(\sum_{i=1}^{n} w_i = 1\right)
+$$</div>
+<p><strong>교수자:</strong> 같은 엔진이라도 <code>짧은 채팅</code>, <code>긴 문서 요약</code>, <code>structured output</code>의 비중 $w_i$가 달라지면 평균 latency는 얼마든지 달라집니다. 그래서 benchmark의 단순성은 버릴 것이 아니라, 어떤 단순화를 했는지 적어 두어야 쓸모가 생깁니다.</p>
+<h3 id="세션-3-observability는-한-숫자보다-분해가-먼저다">세션 3. observability는 한 숫자보다 분해가 먼저다</h3>
+<p><strong>교수자:</strong> 운영에서는 사용자가 가장 먼저 불평하는 지점부터 쪼개 봅니다. 대개는 첫 응답입니다.</p>
+<div class="math-block">$$
+TTFT = T_{\text{queue}} + T_{\text{prefill}} + T_{\text{first-token}}
+$$</div>
+<p><strong>교수자:</strong> 이 분해식은 강의용 모델입니다. <code>queue</code>가 길면 admission이나 batching을 의심하고, <code>prefill</code>이 길면 긴 입력과 컨텍스트 비용을 의심하고, <code>first-token</code> 직전이 길면 실행 경로 전환이나 phase handoff를 의심합니다.</p>
+<p><strong>학습자:</strong> benchmark 표의 평균 <code>TTFT</code>만 보면 여기까지는 안 보이겠네요.</p>
+<p><strong>교수자:</strong> 맞습니다. 참고 이미지 <code>I1</code>을 같이 보십시오. roofline은 계산 집약도와 메모리 대역폭이 만드는 상한을 설명하는 데는 유용합니다. 하지만 그 그림에는 queue wait도 없고, 배포 직후 특정 bucket만 밀리는 운영 현실도 없습니다. benchmark는 이런 상한선 설명에 강하고, observability는 상한선 밖에서 실제로 어디가 늦어지는지 밝히는 데 강합니다.</p>
+<p><img src="./assets/img-01.png" alt="I1. Roofline model"></p>
+<h3 id="세션-4-prefill과-decode를-합치면-phase별-tradeoff가-사라진다">세션 4. prefill과 decode를 합치면 phase별 tradeoff가 사라진다</h3>
+<p><strong>교수자:</strong> 이 장에서 공식 출처가 가장 직접적으로 들어오는 부분이 여기입니다. TensorRT-LLM의 disaggregated serving은 prefill과 decode를 다른 worker pool과 다른 운영 단위로 볼 수 있다는 점을 분명히 보여 줍니다 [S2].</p>
+<p><strong>학습자:</strong> 그러면 benchmark도 phase를 따로 설계해야 합니까?</p>
+<p><strong>교수자:</strong> 그렇습니다. 긴 문서 요약은 prefill 부담이 먼저 튀고, 짧은 채팅은 decode 반복과 queue 체감이 먼저 튑니다. 둘을 한 평균 total latency로 합치면 어떤 최적화가 누구에게 이익이었는지 흐려집니다.</p>
+<p><strong>교수자:</strong> 참고 이미지 <code>I2</code>도 여기서 보조적으로 쓸 수 있습니다. transformer 구조도는 serving phase를 직접 설명하는 그림은 아니지만, 입력을 넓게 읽는 attention 경로와 출력 토큰을 이어 가는 경로의 성격 차이를 직관적으로 상기시키는 데는 도움이 됩니다. 이 이미지는 phase 분리의 직접 근거가 아니라 설명 보조물입니다.</p>
+<pre class="mermaid">flowchart LR
+    A[운영 알람 또는 사용자 불만] --&gt; B{무엇이 먼저 나빠졌는가}
+    B --&gt;|TTFT 상승| C[queue와 prefill 분리 측정]
+    B --&gt;|throughput 하락| D[decode 단계와 동시성 확인]
+    B --&gt;|형식 실패 증가| E[응답 검증 실패와 retry 확인]
+    C --&gt; F[replay benchmark]
+    D --&gt; F
+    E --&gt; F
+    F --&gt; G[정책 조정 또는 롤백]</pre>
+<p><img src="./assets/img-02.png" alt="I2. Transformer model architecture"></p>
+<h3 id="세션-5-structured-output은-속도-외의-운영선이-하나-더-필요하다">세션 5. structured output은 속도 외의 운영선이 하나 더 필요하다</h3>
+<p><strong>학습자:</strong> throughput은 올랐는데 팀이 배포를 싫어하는 경우도 있습니까?</p>
+<p><strong>교수자:</strong> 있습니다. 다만 여기부터는 공식 문서의 직접 인용이 아니라 교수자 운영 휴리스틱으로 들어야 합니다. tool calling이나 JSON 응답이 중요한 서비스에서는, 토큰을 빨리 내보내는 것만으로는 충분하지 않습니다. 응답 형식이 자주 깨지면 retry나 fallback이 늘고, 체감 성공률은 오히려 떨어집니다.</p>
+<p><strong>학습자:</strong> 그래서 <code>schema-valid rate</code> 같은 지표를 같이 본다는 말이군요.</p>
+<p><strong>교수자:</strong> 그렇습니다. 이 챕터에서는 <code>schema-valid rate</code>, retry rate, fallback 비율을 structured output 운영에서 자주 쓰는 실무적 추론으로 소개합니다. 공식 출처 [S1], [S2]가 이 값을 표준 지표로 정의한다고 주장하는 것은 아닙니다. 핵심은 &quot;빠른 토큰 생성&quot;과 &quot;실제로 후속 단계에 쓸 수 있는 응답&quot;을 같은 것으로 착각하지 말라는 것입니다.</p>
+<h3 id="세션-6-benchmark와-observability는-왕복해야-한다">세션 6. benchmark와 observability는 왕복해야 한다</h3>
+<p><strong>교수자:</strong> 실무 순서는 보통 이렇게 갑니다.</p>
+<ol><li>사용자 불만이 첫 응답 지연인지, 생성 속도 저하인지, 형식 실패인지부터 구분한다.</li><li>운영 대시보드에서 그 증상에 맞는 값을 본다. <code>TTFT p95</code>, queue wait, prefill latency, retry 증가 같은 값이 여기에 들어간다.</li><li>실제 workload mix를 기준으로 replay benchmark를 다시 만든다.</li><li>그 benchmark에서 batching, phase 분리, rollout 설정을 비교한다.</li></ol>
+<p><strong>학습자:</strong> observability가 문제를 발견하고, benchmark가 수정안을 검증하는 구조군요.</p>
+<p><strong>교수자:</strong> 그 순서가 흔들리면 숫자는 많아지는데 결론은 약해집니다. 대시보드는 범인을 지목하는 곳이고, benchmark는 용의자를 동일 조건에 세워 보는 곳입니다.</p>
+<h2 id="자주-헷갈리는-포인트">자주 헷갈리는 포인트</h2>
+<ul><li>benchmark와 observability는 같은 숫자 이름을 써도 같은 질문에 답하지 않는다.</li><li>평균 throughput 개선은 자동으로 사용자 체감 개선을 뜻하지 않는다.</li><li><code>TTFT</code>는 queue, prefill, first-token으로 분해할 때 비로소 운영 지표가 된다.</li><li>prefill/decode 분리는 이 챕터에서 [S2]의 직접 근거를 갖는 부분이고, structured output 운영 지표는 별도 공식 출처가 없는 교수자 운영 휴리스틱이다.</li><li>이미지 <code>I1</code>, <code>I2</code>는 설명 보조물이지 공식 서빙 표준 문서를 대체하지 않는다.</li></ul>
+<h2 id="사례로-다시-보기">사례로 다시 보기</h2>
+<h3 id="사례-1-평균은-좋아졌는데-짧은-채팅이-더-미끄러진-배포">사례 1. 평균은 좋아졌는데 짧은 채팅이 더 미끄러진 배포</h3>
+<p>팀은 2K prompt 중심의 synthetic benchmark에서 이긴 설정을 배포했다. 그런데 실제 서비스는 한두 줄짜리 질문이 대부분이었다. 결과적으로 전체 throughput은 올랐지만, 짧은 요청의 queue 대기가 길어지면서 <code>TTFT p95</code> 불만이 늘었다. 이 사례가 보여 주는 포인트는 간단하다. benchmark가 틀린 것이 아니라, 그 benchmark가 대표한다고 가정한 workload mix가 틀렸다.</p>
+<h3 id="사례-2-json은-빨리-오는데-쓸-수가-없는-agent-서비스">사례 2. JSON은 빨리 오는데 쓸 수가 없는 agent 서비스</h3>
+<p>이 사례는 교수자 운영 휴리스틱이다. 어떤 agent 서비스는 JSON 응답 형식이 틀리면 후속 tool 호출이 바로 깨진다. 이때 팀이 throughput 그래프만 보고 배포를 유지하면, retry와 fallback 비용을 너무 늦게 본다. 그래서 structured output 서비스에서는 <code>schema-valid rate</code>와 retry 비율을 속도 그래프 옆에 따로 두는 편이 실무적으로 안전하다. 이 판단은 [S1], [S2]의 직접 진술이 아니라, 이 챕터의 운영 현실 반영 쪽으로 기울인 실무적 추론이다.</p>
+<h2 id="핵심-정리">핵심 정리</h2>
+<ul><li>benchmark는 현실을 줄여서 비교력을 얻고, observability는 현실의 흔들림을 남겨서 원인 추적력을 얻는다.</li><li>workload mix를 드러내지 않는 평균값은 배포 판단을 쉽게 흐린다.</li><li><code>TTFT</code> 분해는 운영 진단의 출발점이다.</li><li>prefill/decode를 다른 운영 단위로 볼 수 있다는 점은 [S2]의 직접 근거에 기대는 핵심 포인트다.</li><li>structured output 품질 지표는 이 챕터에서 교수자 운영 휴리스틱으로 취급하며, 공식 출처가 직접 정의한 표준이라고 주장하지 않는다.</li></ul>
+<h2 id="복습-체크리스트">복습 체크리스트</h2>
+<ul><li>benchmark scorecard와 observability dashboard가 각각 무슨 질문에 답하는지 말할 수 있는가?</li><li>평균 latency를 workload bucket 평균으로 다시 읽어야 하는 이유를 설명할 수 있는가?</li><li><code>TTFT</code> 분해식에서 어느 항이 어떤 운영 병목과 연결되는지 말할 수 있는가?</li><li>[S2]를 근거로 prefill/decode 분리의 의미를 설명할 수 있는가?</li><li>structured output 운영 규칙 중 무엇이 공식 출처가 아니라 교수자 휴리스틱인지 구분할 수 있는가?</li></ul>
+<h2 id="대안과-비교">대안과 비교</h2>
+<p>| 접근 | 장점 | 약점 | 적합한 상황 | | --- | --- | --- | --- | | 단일 synthetic benchmark | 반복성과 비교력이 높다 | 실 workload mix와 tail을 잘 숨긴다 | 엔진이나 설정의 1차 비교 | | bucket별 benchmark | 짧은 요청과 긴 요청을 분리해서 본다 | 설계와 유지 비용이 든다 | 배포 전 현실성 있는 검증 | | observability 중심 운영 | 회귀와 장애를 빨리 잡는다 | 통제 조건이 약해 원인 분리가 늦을 수 있다 | 배포 후 감시와 알람 |</p>
+<div class="table-wrap"><table><thead><tr><th>replay benchmark 연동</th><th>운영 증상과 실험 검증을 왕복시킨다</th><th>태깅 규율과 로그 품질이 필요하다</th><th>장기 운영 팀의 안정화 단계</th></tr></thead><tbody></tbody></table></div>
+<h2 id="참고-이미지">참고 이미지</h2>
+<p><img src="./assets/img-01.png" alt="I1. Roofline model"></p>
+<div class="table-wrap"><table><thead><tr><th>- <code>img-01.png</code></th><th>원본 제목: <code>Roofline model</code></th><th>원본 URL: <code>https://commons.wikimedia.org/wiki/File:Roofline_model.png</code></th><th>출처 유형: <code>Wikimedia Commons</code></th><th>접근 날짜: <code>2026-03-08</code></th><th>사용 이유: 세션 3에서 benchmark가 계산/메모리 상한을 설명하는 데는 강하지만 queue wait와 phase별 운영 지연은 담지 못한다는 대비를 직접 설명할 때 사용했다.</th></tr></thead><tbody></tbody></table></div>
+<p><img src="./assets/img-02.png" alt="I2. Transformer model architecture"></p>
+<div class="table-wrap"><table><thead><tr><th>- <code>img-02.png</code></th><th>원본 제목: <code>Transformer model architecture</code></th><th>원본 URL: <code>https://commons.wikimedia.org/wiki/File:The_Transformer_model_architecture.png</code></th><th>출처 유형: <code>Wikimedia Commons</code></th><th>접근 날짜: <code>2026-03-08</code></th><th>사용 이유: 세션 4에서 입력을 넓게 읽는 구간과 토큰을 이어 가는 구간의 직관 차이를 보조적으로 설명하는 시각자료로 사용했다. serving phase를 직접 증명하는 출처는 아니다.</th></tr></thead><tbody></tbody></table></div>
+<h2 id="출처">출처</h2>
+<p>| Ref | 제목 | 발행처 | 날짜 | URL | 직접 근거로 사용한 문장 | 경계와 파생 해석 | | --- | --- | --- | --- | --- | --- | --- | | [S1] | vLLM Documentation | vLLM project | 2026-01-07 | https://docs.vllm.ai/en/latest/ | <code>수업 개요</code> 2문단의 &quot;최신 serving 문서 용어를 맞추는 기준선&quot;과 <code>세션 2</code>의 &quot;최신 serving 문서 용어 기준선으로 함께 본다&quot;는 설명에만 사용했다. | <code>schema-valid rate</code>, retry, usable response 운영 규칙의 직접 근거로 쓰지 않았다. 그 부분은 교수자 운영 휴리스틱이다. | | [S2] | Disaggregated Serving | NVIDIA TensorRT-LLM | 2026-03-08 (accessed) | https://nvidia.github.io/TensorRT-LLM/1.2.0rc6/features/disagg-serving.html | <code>수업 개요</code> 2문단의 &quot;prefill과 decode를 분리해서 봐야 한다&quot;는 설명, <code>세션 4</code>의 phase 분리 설명, <code>핵심 정리</code>의 prefill/decode를 다른 운영 단위로 본다는 문장에 사용했다. | <code>세션 4</code>의 bucket 설계와 <code>세션 6</code>의 디버깅 순서는 [S2]를 바탕으로 한 수업용 운영 정리이며, 문서의 문장 자체를 재현한 것은 아니다. |</p>
+    </article>
+    <section class="content-panel surface quiz-panel">
+      <div class="section-heading">
+        <div>
+          <p class="eyebrow">Quiz</p>
+          <h2>복습 문제</h2>
+        </div>
+      </div>
+      <div class="prose">
+        <h1 id="benchmarking-and-observability-퀴즈">Benchmarking and Observability 퀴즈</h1>
+<h2 id="객관식-1">객관식 1</h2>
+<p>다음 중 observability dashboard의 질문으로 가장 적절한 것은 무엇인가?</p>
+<ol><li>고정된 입력 길이와 동시성에서 설정 A와 B 중 어느 쪽이 더 빠른가?</li><li>오늘 오후 배포 이후 왜 <code>TTFT p95</code>가 갑자기 상승했는가?</li><li>같은 synthetic workload에서 어느 엔진이 더 높은 throughput을 내는가?</li><li>warm-up 조건을 같게 둘 때 어떤 설정이 더 안정적인가?</li></ol>
+<h2 id="객관식-2">객관식 2</h2>
+<p>이 챕터에서 TensorRT-LLM의 disaggregated serving을 직접 근거로 끌어오는 이유로 가장 적절한 것은 무엇인가?</p>
+<ol><li>prefill과 decode를 합쳐서 읽어도 충분하다는 점을 보여 주기 위해</li><li>prefill과 decode를 다른 운영 단위와 다른 계측 대상으로 볼 수 있음을 보여 주기 위해</li><li>observability 없이 benchmark만으로 운영 원인을 찾을 수 있음을 보여 주기 위해</li><li>structured output 지표의 표준값을 정의하기 위해</li></ol>
+<h2 id="객관식-3">객관식 3</h2>
+<p>다음 중 이 챕터에서 공식 출처 기반 주장이라기보다 교수자 운영 휴리스틱으로 명시된 항목은 무엇인가?</p>
+<ol><li>disaggregated serving은 prefill/decode 분리 관점을 제공한다</li><li>benchmark와 observability는 같은 질문에 답하지 않는다</li><li>structured output 서비스에서는 <code>schema-valid rate</code>를 속도 그래프 옆에 두는 편이 안전하다</li><li>workload mix를 드러내지 않는 평균값은 배포 판단을 흐릴 수 있다</li></ol>
+<h2 id="짧은-서술형-1">짧은 서술형 1</h2>
+<p>benchmark가 현실을 일부러 단순화해야 하는 이유를 2~3문장으로 설명하라.</p>
+<h2 id="짧은-서술형-2">짧은 서술형 2</h2>
+<p><code>TTFT = T_queue + T_prefill + T_first-token</code> 분해식이 운영 디버깅에서 왜 유용한지 설명하라.</p>
+<h2 id="심화-설명형-1">심화 설명형 1</h2>
+<p>짧은 채팅 요청과 긴 문서 요약 요청이 함께 들어오는 서비스를 맡았다고 하자. benchmark bucket을 어떻게 나누고, 각 bucket에서 어떤 값을 먼저 볼지 설명하라.</p>
+<h2 id="심화-설명형-2">심화 설명형 2</h2>
+<p>배포 직후 사용자 불만이 늘었다. <code>TTFT p95</code>, queue wait, phase 분리, replay benchmark를 포함해 진단 순서를 서술하라. structured output 실패를 함께 의심해야 하는 상황이라면 어떤 값이 공식 출처 기반이 아니라 운영 휴리스틱인지도 구분해서 적어라.</p><details class="answer-key"><summary>정답 및 해설 보기</summary><h2 id="정답-및-해설">정답 및 해설</h2>
+<ul><li>객관식 1 정답: 2. observability는 &quot;왜 지금 나빠졌는가&quot;를 묻는 도구다. 1, 3, 4는 조건을 고정한 비교 질문이라 benchmark scorecard 쪽에 가깝다.</li><li>객관식 2 정답: 2. [S2]는 prefill과 decode를 다른 운영 단위로 볼 수 있다는 점을 이 챕터의 직접 근거로 제공한다. 그래서 phase별 benchmark와 운영 계측을 따로 설계해야 한다는 설명이 가능해진다.</li><li>객관식 3 정답: 3. <code>schema-valid rate</code>를 structured output 운영 지표로 두는 설명은 이 챕터에서 교수자 운영 휴리스틱으로 명시했다. 반면 1은 [S2]의 직접 근거, 2와 4는 챕터의 핵심 개념 정리다.</li><li>짧은 서술형 1 예시: benchmark는 입력 길이, 출력 길이, 동시성 같은 조건을 고정해야 설정 간 차이를 선명하게 비교할 수 있다. 운영 현실을 그대로 복사하면 숫자는 많아지지만 어떤 변화가 설정 때문인지 workload mix 때문인지 흐려지기 쉽다.</li><li>짧은 서술형 2 예시: 같은 <code>TTFT</code> 상승이라도 queue가 원인인지, 긴 입력 때문에 prefill이 늘어난 것인지, first-token 직전 단계가 막힌 것인지에 따라 대응이 달라진다. 분해식은 latency를 한 숫자로 보지 않고 병목 가설을 단계별로 나누게 해 준다.</li><li>심화 설명형 1 해설 포인트: 최소한 <code>짧은 채팅 bucket</code>과 <code>긴 문서 요약 bucket</code>은 분리해야 한다. 짧은 채팅에서는 <code>TTFT</code>와 queue 대기가 먼저 중요하고, 긴 문서 요약에서는 prefill 비중과 phase 분리가 더 중요하다. 평균 하나로 합치면 workload mix 변화가 설정 효과처럼 보일 수 있다.</li><li>심화 설명형 2 해설 포인트: 먼저 불만이 첫 응답 지연인지, 중간 생성 속도 저하인지, 형식 실패인지 분류한다. 그 다음 <code>TTFT p95</code>, queue wait, prefill/decode 분리값을 보고 증상을 특정한 뒤, 실제 workload mix를 반영한 replay benchmark로 재현한다. structured output 실패를 함께 의심한다면 <code>schema-valid rate</code>와 retry 비율을 볼 수 있지만, 이 부분은 [S1], [S2]의 직접 근거가 아니라 운영 휴리스틱으로 적는 것이 맞다.</li></ul></details>
+      </div>
+    </section>
+    <nav class="pager">
+      <a class="pager-link" href="../02-model-parallelism-tp-pp-ep/"><span>이전</span><strong>Model Parallelism: TP, PP, EP</strong></a>
+      <a class="pager-link" href="../04-vllm-tensorrt-llm-neuron-comparison/"><span>다음</span><strong>vLLM, TensorRT-LLM, Neuron Comparison</strong></a>
+    </nav>
+    
+      </section>
+      <aside class="page-sidebar">
+    <div class="sidebar-panel surface">
+      <p class="eyebrow">On This Page</p>
+      <div class="toc" data-toc>
+        <a class="toc-link" href="#수업-개요">수업 개요</a><a class="toc-link" href="#학습-목표">학습 목표</a><a class="toc-link" href="#수업-전에-생각할-질문">수업 전에 생각할 질문</a><a class="toc-link" href="#강의-스크립트">강의 스크립트</a><a class="toc-link sub" href="#세션-1-점수판과-대시보드는-같은-벽에-붙지-않는다">세션 1. 점수판과 대시보드는 같은 벽에 붙지 않는다</a><a class="toc-link sub" href="#세션-2-benchmark는-현실을-버리는-대신-비교력을-산다">세션 2. benchmark는 현실을 버리는 대신 비교력을 산다</a><a class="toc-link sub" href="#세션-3-observability는-한-숫자보다-분해가-먼저다">세션 3. observability는 한 숫자보다 분해가 먼저다</a><a class="toc-link sub" href="#세션-4-prefill과-decode를-합치면-phase별-tradeoff가-사라진다">세션 4. prefill과 decode를 합치면 phase별 tradeoff가 사라진다</a><a class="toc-link sub" href="#세션-5-structured-output은-속도-외의-운영선이-하나-더-필요하다">세션 5. structured output은 속도 외의 운영선이 하나 더 필요하다</a><a class="toc-link sub" href="#세션-6-benchmark와-observability는-왕복해야-한다">세션 6. benchmark와 observability는 왕복해야 한다</a><a class="toc-link" href="#자주-헷갈리는-포인트">자주 헷갈리는 포인트</a><a class="toc-link" href="#사례로-다시-보기">사례로 다시 보기</a><a class="toc-link sub" href="#사례-1-평균은-좋아졌는데-짧은-채팅이-더-미끄러진-배포">사례 1. 평균은 좋아졌는데 짧은 채팅이 더 미끄러진 배포</a><a class="toc-link sub" href="#사례-2-json은-빨리-오는데-쓸-수가-없는-agent-서비스">사례 2. JSON은 빨리 오는데 쓸 수가 없는 agent 서비스</a><a class="toc-link" href="#핵심-정리">핵심 정리</a><a class="toc-link" href="#복습-체크리스트">복습 체크리스트</a><a class="toc-link" href="#대안과-비교">대안과 비교</a><a class="toc-link" href="#참고-이미지">참고 이미지</a><a class="toc-link" href="#출처">출처</a>
+      </div>
+    </div>
+    </aside>
+    </div>
+  </main>
+  <script type="module" src="../../assets/app.js"></script>
+  <script type="module">
+    import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs';
+    mermaid.initialize({ startOnLoad: true, theme: 'neutral', securityLevel: 'loose' });
+  </script>
+  <script>
+    window.MathJax = {
+      tex: { inlineMath: [['$', '$'], ['\\(', '\\)']], displayMath: [['$$', '$$'], ['\\[', '\\]']] },
+      svg: { fontCache: 'global' }
+    };
+  </script>
+  <script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-svg.js" async></script>
+</body>
+</html>

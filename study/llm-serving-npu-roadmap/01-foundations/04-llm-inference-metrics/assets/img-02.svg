@@ -1,0 +1,49 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="960" height="420" viewBox="0 0 960 420" role="img" aria-label="Inference metrics dashboard example">
+  <rect width="960" height="420" fill="#f8fafc"/>
+  <style>
+    text { font-family: Arial, sans-serif; fill: #0f172a; }
+    .title { font-size: 28px; font-weight: 700; }
+    .subtitle { font-size: 15px; fill: #475569; }
+    .panel-title { font-size: 18px; font-weight: 700; }
+    .label { font-size: 14px; font-weight: 700; }
+    .value { font-size: 14px; }
+  </style>
+  <text x="28" y="42" class="title">Inference metrics dashboard example</text>
+  <text x="28" y="68" class="subtitle">Instructor interpretation built from [S1] autoregressive flow, [S2] roofline caution, and [S3] runtime batching context.</text>
+
+  <rect x="28" y="96" width="430" height="284" rx="18" fill="#dbeafe" stroke="#2563eb" stroke-width="2"/>
+  <rect x="502" y="96" width="430" height="284" rx="18" fill="#dcfce7" stroke="#16a34a" stroke-width="2"/>
+
+  <text x="243" y="128" text-anchor="middle" class="panel-title">Latency-first preset</text>
+  <text x="717" y="128" text-anchor="middle" class="panel-title">Efficiency-first preset</text>
+
+  <text x="58" y="158" class="label">Timeline</text>
+  <rect x="58" y="172" width="70" height="18" rx="9" fill="#93c5fd"/>
+  <rect x="136" y="172" width="120" height="18" rx="9" fill="#60a5fa"/>
+  <rect x="264" y="172" width="110" height="18" rx="9" fill="#2563eb"/>
+  <text x="92" y="185" text-anchor="middle" class="value">queue</text>
+  <text x="196" y="185" text-anchor="middle" class="value">prefill</text>
+  <text x="319" y="185" text-anchor="middle" class="value">decode</text>
+  <text x="58" y="220" class="label">Metric readout</text>
+  <text x="58" y="246" class="value">TTFT: low</text>
+  <text x="58" y="270" class="value">TPOT: stable</text>
+  <text x="58" y="294" class="value">Request throughput: medium</text>
+  <text x="58" y="318" class="value">Output-token throughput: medium</text>
+  <text x="58" y="342" class="value">Utilization: moderate</text>
+  <text x="58" y="366" class="subtitle">Keep queue short for interactive UX.</text>
+
+  <text x="532" y="158" class="label">Timeline</text>
+  <rect x="532" y="172" width="130" height="18" rx="9" fill="#86efac"/>
+  <rect x="670" y="172" width="120" height="18" rx="9" fill="#4ade80"/>
+  <rect x="798" y="172" width="110" height="18" rx="9" fill="#16a34a"/>
+  <text x="597" y="185" text-anchor="middle" class="value">queue</text>
+  <text x="730" y="185" text-anchor="middle" class="value">prefill</text>
+  <text x="853" y="185" text-anchor="middle" class="value">decode</text>
+  <text x="532" y="220" class="label">Metric readout</text>
+  <text x="532" y="246" class="value">TTFT: higher</text>
+  <text x="532" y="270" class="value">TPOT: similar or worse</text>
+  <text x="532" y="294" class="value">Request throughput: medium or high</text>
+  <text x="532" y="318" class="value">Output-token throughput: high</text>
+  <text x="532" y="342" class="value">Utilization: high</text>
+  <text x="532" y="366" class="subtitle">Better total work, riskier first-token delay.</text>
+</svg>

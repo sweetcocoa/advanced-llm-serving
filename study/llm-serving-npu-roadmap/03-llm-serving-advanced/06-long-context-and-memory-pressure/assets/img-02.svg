@@ -1,0 +1,106 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="820" viewBox="0 0 1280 820" role="img" aria-labelledby="title desc">
+  <title id="title">Synthetic long-context diagnostic map for decode-side KV residence</title>
+  <desc id="desc">Chapter-specific teaching diagram showing four long-context diagnostic axes with emphasis on block reuse, host offload, prefill TTFT, and decode-side KV residence.</desc>
+  <defs>
+    <marker id="arrow" markerWidth="10" markerHeight="10" refX="8" refY="5" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#6b3e2e"/>
+    </marker>
+    <style>
+      .bg { fill: #f6f1e8; }
+      .panel { fill: #fffaf4; stroke: #4d4d4d; stroke-width: 2; rx: 24; ry: 24; }
+      .title { font: 700 30px Arial, sans-serif; fill: #222; }
+      .subtitle { font: 700 22px Arial, sans-serif; fill: #6b3e2e; }
+      .label { font: 600 18px Arial, sans-serif; fill: #2a2a2a; }
+      .small { font: 500 16px Arial, sans-serif; fill: #4c4c4c; }
+      .axis { fill: #fff0d8; stroke: #b5651d; stroke-width: 2; rx: 16; ry: 16; }
+      .reuse { fill: #d9edc4; stroke: #4f772d; stroke-width: 2; rx: 14; ry: 14; }
+      .gpu { fill: #dbe7f5; stroke: #355070; stroke-width: 2; rx: 14; ry: 14; }
+      .host { fill: #d7eef4; stroke: #206a83; stroke-width: 2; rx: 14; ry: 14; }
+      .kv { fill: #efb0a1; stroke: #9d2a2b; stroke-width: 2; rx: 10; ry: 10; }
+      .decode { fill: #d7e8d2; stroke: #386641; stroke-width: 2; rx: 14; ry: 14; }
+      .callout { fill: #fff7e8; stroke: #8a5a44; stroke-width: 2; rx: 14; ry: 14; }
+      .line { stroke: #6b3e2e; stroke-width: 4; fill: none; marker-end: url(#arrow); }
+      .line2 { stroke: #355070; stroke-width: 4; fill: none; marker-end: url(#arrow); }
+      .line3 { stroke: #206a83; stroke-width: 4; fill: none; marker-end: url(#arrow); }
+    </style>
+  </defs>
+
+  <rect class="bg" x="0" y="0" width="1280" height="820" />
+  <text class="title" x="56" y="64">[Synthetic] Long-context diagnostic map for decode-side KV residence</text>
+  <text class="small" x="56" y="94">Derived from S1, S2, S4, S5, and S6 as a simplified chapter-specific diagram.</text>
+
+  <rect class="panel" x="44" y="126" width="1192" height="642" />
+  <text class="subtitle" x="76" y="168">Four diagnostic axes for long-context serving</text>
+  <rect class="axis" x="86" y="208" width="250" height="116" />
+  <text class="label" x="118" y="250">1. Shared prefix hit</text>
+  <text class="small" x="118" y="280">Ask where block boundaries match.</text>
+  <text class="small" x="118" y="304">High hit points to reuse.</text>
+
+  <rect class="axis" x="368" y="208" width="250" height="116" />
+  <text class="label" x="400" y="250">2. GPU KV residence</text>
+  <text class="small" x="400" y="280">Ask how much KV must stay hot.</text>
+  <text class="small" x="400" y="304">High pressure points to offload.</text>
+
+  <rect class="axis" x="650" y="208" width="250" height="116" />
+  <text class="label" x="682" y="250">3. Prefill TTFT</text>
+  <text class="small" x="682" y="280">Ask whether prompt compute dominates.</text>
+  <text class="small" x="682" y="304">Compare prefill CP and phase split.</text>
+
+  <rect class="axis" x="932" y="208" width="250" height="116" />
+  <text class="label" x="964" y="250">4. Decode KV capacity</text>
+  <text class="small" x="964" y="280">Ask where live KV remains resident.</text>
+  <text class="small" x="964" y="304">Compare offload and decode CP.</text>
+
+  <rect class="reuse" x="92" y="386" width="256" height="250" />
+  <text class="subtitle" x="122" y="426">Reuse branch</text>
+  <rect class="reuse" x="124" y="458" width="58" height="42" />
+  <rect class="reuse" x="192" y="458" width="58" height="42" />
+  <rect class="reuse" x="260" y="458" width="58" height="42" />
+  <text class="label" x="143" y="486">B0</text>
+  <text class="label" x="211" y="486">B1</text>
+  <text class="label" x="279" y="486">B2</text>
+  <text class="small" x="122" y="540">Common-prefix blocks already exist.</text>
+  <text class="small" x="122" y="566">Skip recomputing matched blocks.</text>
+  <text class="small" x="122" y="592">Manager semantics decide what is reusable.</text>
+
+  <rect class="gpu" x="376" y="386" width="256" height="250" />
+  <text class="subtitle" x="406" y="426">Residence branch</text>
+  <rect class="gpu" x="408" y="458" width="192" height="74" />
+  <text class="label" x="462" y="502">GPU KV pool</text>
+  <rect class="host" x="430" y="554" width="148" height="48" />
+  <text class="label" x="470" y="584">Host</text>
+  <path class="line3" d="M 504 532 C 504 542 504 546 504 554" />
+  <text class="small" x="404" y="656">Colder reusable blocks move out of GPU,</text>
+  <text class="small" x="404" y="682">but can return later with copy cost.</text>
+
+  <rect class="panel" x="660" y="386" width="240" height="250" />
+  <text class="subtitle" x="688" y="426">Prefill branch</text>
+  <rect class="gpu" x="690" y="458" width="72" height="54" />
+  <rect class="gpu" x="774" y="458" width="72" height="54" />
+  <text class="label" x="706" y="490">GPU 0</text>
+  <text class="label" x="790" y="490">GPU 1</text>
+  <text class="small" x="688" y="548">If prompt compute dominates,</text>
+  <text class="small" x="688" y="572">split prefill work across GPUs.</text>
+  <text class="small" x="688" y="612">If phase interference dominates,</text>
+  <text class="small" x="688" y="636">only then compare disaggregation.</text>
+
+  <rect class="decode" x="928" y="386" width="266" height="250" />
+  <text class="subtitle" x="956" y="426">Decode branch</text>
+  <rect class="gpu" x="960" y="456" width="90" height="66" />
+  <rect class="gpu" x="1072" y="456" width="90" height="66" />
+  <text class="label" x="984" y="496">GPU A</text>
+  <text class="label" x="1096" y="496">GPU B</text>
+  <rect class="kv" x="978" y="548" width="54" height="36" />
+  <rect class="kv" x="1042" y="548" width="54" height="36" />
+  <rect class="kv" x="1106" y="548" width="54" height="36" />
+  <text class="small" x="956" y="612">Shard or offload live KV to lower</text>
+  <text class="small" x="956" y="636">decode-side residence pressure.</text>
+
+  <path class="line" d="M 210 324 C 210 346 210 356 210 386" />
+  <path class="line2" d="M 494 324 C 494 346 494 356 494 386" />
+  <path class="line2" d="M 776 324 C 776 346 776 356 776 386" />
+  <path class="line" d="M 1058 324 C 1058 346 1058 356 1058 386" />
+
+  <rect class="callout" x="90" y="676" width="1100" height="62" />
+  <text class="small" x="116" y="714">This image is long-context specific: it centers reuse, residence, TTFT, and decode capacity, while keeping disaggregation as one optional branch instead of the main picture.</text>
+</svg>

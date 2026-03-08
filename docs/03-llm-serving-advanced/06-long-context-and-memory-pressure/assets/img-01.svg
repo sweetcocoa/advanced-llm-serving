@@ -1,0 +1,74 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="760" viewBox="0 0 1200 760" role="img" aria-labelledby="title desc">
+  <title id="title">Synthetic KV block reuse and host offload flow</title>
+  <desc id="desc">Chapter-specific teaching diagram showing shared prefix blocks, GPU KV pool, host offload, and block-manager semantics.</desc>
+  <defs>
+    <marker id="arrow" markerWidth="10" markerHeight="10" refX="8" refY="5" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#31572c"/>
+    </marker>
+    <style>
+      .bg { fill: #f7f4ea; }
+      .panel { fill: #fffdf8; stroke: #3d3d3d; stroke-width: 2; rx: 22; ry: 22; }
+      .title { font: 700 30px Arial, sans-serif; fill: #222; }
+      .subtitle { font: 600 20px Arial, sans-serif; fill: #31572c; }
+      .label { font: 600 18px Arial, sans-serif; fill: #2a2a2a; }
+      .small { font: 500 16px Arial, sans-serif; fill: #4c4c4c; }
+      .blockA { fill: #a7c957; stroke: #31572c; stroke-width: 2; rx: 10; ry: 10; }
+      .blockB { fill: #f4d35e; stroke: #946c00; stroke-width: 2; rx: 10; ry: 10; }
+      .blockC { fill: #ee964b; stroke: #9b4a07; stroke-width: 2; rx: 10; ry: 10; }
+      .gpu { fill: #dce8c8; stroke: #31572c; stroke-width: 2; rx: 16; ry: 16; }
+      .host { fill: #d8edf4; stroke: #206a83; stroke-width: 2; rx: 16; ry: 16; }
+      .callout { fill: #fff4d6; stroke: #9b4a07; stroke-width: 2; rx: 14; ry: 14; }
+      .line { stroke: #31572c; stroke-width: 4; fill: none; marker-end: url(#arrow); }
+      .line2 { stroke: #206a83; stroke-width: 4; fill: none; marker-end: url(#arrow); }
+    </style>
+  </defs>
+
+  <rect class="bg" x="0" y="0" width="1200" height="760" />
+  <text class="title" x="60" y="64">[Synthetic] KV block reuse and host offload flow</text>
+  <text class="small" x="60" y="94">Derived from S3, S4, and S6 as a simplified teaching diagram.</text>
+
+  <rect class="panel" x="48" y="126" width="330" height="270" />
+  <text class="subtitle" x="78" y="166">Shared prefix blocks</text>
+  <text class="small" x="78" y="194">Request A and Request B match up to block boundary.</text>
+  <rect class="blockA" x="82" y="224" width="66" height="54" />
+  <rect class="blockB" x="160" y="224" width="66" height="54" />
+  <rect class="blockC" x="238" y="224" width="66" height="54" />
+  <text class="label" x="104" y="258">B0</text>
+  <text class="label" x="182" y="258">B1</text>
+  <text class="label" x="260" y="258">B2</text>
+  <text class="small" x="82" y="316">Reuse hit: computed/common-prefix blocks already exist.</text>
+  <text class="small" x="82" y="346">No need to prefill these blocks again.</text>
+
+  <rect class="panel" x="430" y="126" width="350" height="270" />
+  <text class="subtitle" x="460" y="166">KV manager and GPU pool</text>
+  <rect class="gpu" x="460" y="198" width="290" height="118" />
+  <text class="label" x="486" y="230">GPU KV pool</text>
+  <rect class="blockA" x="488" y="250" width="56" height="44" />
+  <rect class="blockB" x="554" y="250" width="56" height="44" />
+  <rect class="blockC" x="620" y="250" width="56" height="44" />
+  <rect class="blockA" x="686" y="250" width="36" height="44" opacity="0.45" />
+  <text class="small" x="486" y="338">Manager tracks computed blocks, common-prefix blocks,</text>
+  <text class="small" x="486" y="362">and slot allocation before new decode work starts.</text>
+
+  <rect class="panel" x="830" y="126" width="320" height="270" />
+  <text class="subtitle" x="860" y="166">Host offload path</text>
+  <rect class="host" x="870" y="208" width="240" height="98" />
+  <text class="label" x="946" y="244">Host memory</text>
+  <rect class="blockB" x="916" y="258" width="56" height="34" />
+  <rect class="blockC" x="982" y="258" width="56" height="34" />
+  <text class="small" x="860" y="338">Blocks can leave GPU, stay reusable,</text>
+  <text class="small" x="860" y="362">and return later with copy cost.</text>
+
+  <path class="line" d="M 306 252 C 362 252 382 252 430 252" />
+  <path class="line2" d="M 780 252 C 820 252 836 252 870 252" />
+  <path class="line2" d="M 870 290 C 836 330 818 344 780 344" />
+  <text class="small" x="804" y="226">offload</text>
+  <text class="small" x="790" y="372">copy back for reuse</text>
+
+  <rect class="callout" x="80" y="470" width="1040" height="186" />
+  <text class="subtitle" x="112" y="512">Diagnostic cues encoded in this image</text>
+  <text class="label" x="112" y="552">A. High shared-prefix hit means computed/common-prefix blocks are the first clue.</text>
+  <text class="label" x="112" y="586">B. High GPU residence pressure means colder reusable blocks can move to host.</text>
+  <text class="label" x="112" y="620">C. Match rate and copy-back frequency tell you whether this branch is healthy.</text>
+  <text class="small" x="112" y="652">This is a teaching simplification, not a vendor implementation diagram.</text>
+</svg>

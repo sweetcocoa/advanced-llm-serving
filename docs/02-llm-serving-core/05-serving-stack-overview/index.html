@@ -1,0 +1,216 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Serving Stack Overview | LLM Serving 핵심</title>
+  <meta name="description" content="이 챕터는 서빙 스택을 제품 이름 목록으로 외우지 않고, 장애 티켓이 어느 계층으로 흘러가야 하는지 보여 주는 운영 지도처럼 정리한다. 2026년 기준으로 많은 팀은 위로는 OpenAI compatible API를 요구하고, 아래로는 PagedAttention, KV cache reuse, disaggregated serving 같은 backend specific 최적화를 검토한다. 따라서 핵심 질문은 &quot;무엇이 더 고성능인가&quot; 하나가 아니라 &quot;어느 계층까지 공통화하고, 어느 계층부터 직접 책임질 것인가&quot;다. [S1] [S2] [S3] [S4]">
+  <meta name="theme-color" content="#10182a">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+KR:wght@400;500;600;700&family=Space+Grotesk:wght@500;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../../assets/style.css">
+</head>
+<body class="page-chapter" data-page-kind="chapter" data-page-id="study/llm-serving-npu-roadmap/02-llm-serving-core/05-serving-stack-overview" data-root-prefix="../../">
+  <div class="reading-progress" data-reading-progress></div>
+  <header class="site-header">
+    <a class="brand" href="../../">
+      <span class="brand-kicker">GitHub Pages Study</span>
+      <strong>LLM Serving + NPU</strong>
+    </a>
+    <nav class="top-nav"><a class="top-nav-link" href="../../01-foundations/">기초와 성능 직관</a><a class="top-nav-link is-active" href="../">LLM Serving 핵심</a><a class="top-nav-link" href="../../03-llm-serving-advanced/">고급 Serving 패턴</a><a class="top-nav-link" href="../../04-serving-systems/">Serving 시스템 설계</a><a class="top-nav-link" href="../../05-npu-stack/">NPU 소프트웨어 스택</a><a class="top-nav-link" href="../../06-runtime-and-compiler/">런타임과 컴파일러</a><a class="top-nav-link" href="../../07-synthesis/">종합 정리와 최신 흐름</a></nav>
+    <div class="search-shell">
+      <input type="search" placeholder="챕터, 모듈, 키워드 검색" aria-label="검색" data-global-search>
+      <div class="search-results" data-search-results hidden></div>
+    </div>
+  </header>
+  <main class="page-frame">
+    
+    <section class="hero">
+      <div class="hero-copy">
+        <p class="eyebrow">LLM Serving 핵심</p>
+        <h1>Serving Stack Overview</h1>
+        <p class="hero-summary">이 챕터는 서빙 스택을 제품 이름 목록으로 외우지 않고, 장애 티켓이 어느 계층으로 흘러가야 하는지 보여 주는 운영 지도처럼 정리한다. 2026년 기준으로 많은 팀은 위로는 OpenAI compatible API를 요구하고, 아래로는 PagedAttention, KV cache reuse, disaggregated serving 같은 backend specific 최적화를 검토한다. 따라서 핵심 질문은 &quot;무엇이 더 고성능인가&quot; 하나가 아니라 &quot;어느 계층까지 공통화하고, 어느 계층부터 직접 책임질 것인가&quot;다. [S1] [S2] [S3] [S4]</p>
+      </div>
+      <div class="hero-stats">
+        <div class="stat-card"><strong>35-50 min</strong><span>reading time</span></div>
+        <div class="stat-card"><strong>2026-03-08</strong><span>updated</span></div>
+        <div class="stat-card"><button class="progress-toggle" type="button" data-progress-toggle data-progress-id="study/llm-serving-npu-roadmap/02-llm-serving-core/05-serving-stack-overview">완료로 표시</button></div>
+      </div>
+    </section>
+    
+    <div class="page-layout">
+      <section class="page-main content-shell">
+        
+    <article class="content-panel surface prose" data-reading-target>
+      <h1 id="serving-stack-overview">Serving Stack Overview</h1>
+<h2 id="수업-개요">수업 개요</h2>
+<p>이 챕터는 서빙 스택을 제품 이름 목록으로 외우지 않고, 장애 티켓이 어느 계층으로 흘러가야 하는지 보여 주는 운영 지도처럼 정리한다. 2026년 기준으로 많은 팀은 위로는 OpenAI-compatible API를 요구하고, 아래로는 PagedAttention, KV cache reuse, disaggregated serving 같은 backend-specific 최적화를 검토한다. 따라서 핵심 질문은 &quot;무엇이 더 고성능인가&quot; 하나가 아니라 &quot;어느 계층까지 공통화하고, 어느 계층부터 직접 책임질 것인가&quot;다. [S1] [S2] [S3] [S4]</p>
+<h2 id="학습-목표">학습 목표</h2>
+<ul><li>API layer, runtime, backend optimization, observability를 서로 다른 책임 계층으로 설명할 수 있다.</li><li>같은 <code>/v1/chat/completions</code> 엔드포인트라도 내부 스택 선택에 따라 운영 복잡도가 달라지는 이유를 말할 수 있다.</li><li>TTFT 저하를 만났을 때 API, queue, prefill, backend 순서로 좁혀 가는 진단 흐름을 설명할 수 있다.</li><li>vLLM 계열의 범용 runtime 선택과 TensorRT-LLM 계열의 backend-specific 선택이 각각 어떤 조직에 맞는지 비교할 수 있다.</li></ul>
+<h2 id="수업-전에-생각할-질문">수업 전에 생각할 질문</h2>
+<ul><li>클라이언트 SDK는 같은데 어떤 서비스는 첫 토큰이 빠르고 어떤 서비스는 느린 이유가 정말 모델 하나 때문일까?</li><li>반복되는 시스템 프롬프트가 많은 서비스라면 API 호환성보다 더 먼저 챙겨야 할 계층은 무엇일까?</li><li>GPU 사용률이 높게 나오는데 사용자는 계속 느리다고 말한다면, 어떤 숫자부터 확인해야 오진을 줄일 수 있을까?</li></ul>
+<h2 id="강의-스크립트">강의 스크립트</h2>
+<h3 id="장면-1-스택은-기능표가-아니라-책임-분할표다">장면 1. 스택은 기능표가 아니라 책임 분할표다</h3>
+<p><strong>교수자:</strong> 서빙 스택을 고를 때 가장 흔한 실수는 엔드포인트 이름만 보고 같은 제품군이라고 생각하는 겁니다. <code>/v1/chat/completions</code>를 열 수 있다는 사실은 입구 규약만 맞췄다는 뜻이지, 내부 운영 방식까지 같다는 뜻은 아닙니다. [S2]</p>
+<p><strong>학습자:</strong> 그러면 오늘은 계층을 어디까지 나눠서 봐야 하나요?</p>
+<p><strong>교수자:</strong> 네 층으로 시작합시다.</p>
+<ul><li>API layer: 인증, 요청 스키마, 모델 라우팅, OpenAI-compatible contract를 맡는다. [S2]</li><li>runtime layer: batching, scheduler, KV cache 관리, 메모리 효율 같은 공통 운영을 맡는다. [S1] [S2]</li><li>backend optimization layer: 장치 친화적인 cache reuse나 prefill/decode 분리 같은 더 깊은 최적화를 맡는다. [S3] [S4]</li><li>observability layer: 위 세 층의 상태를 숫자로 연결해 어디서 병목이 생겼는지 보여 준다. [S2] [S3] [S4]</li></ul>
+<p><strong>학습자:</strong> observability를 따로 떼는 이유가 있나요?</p>
+<p><strong>교수자:</strong> 있습니다. 앞의 세 층은 &quot;무엇을 실행하나&quot;를 정하고, observability는 &quot;왜 느린가&quot;를 분해합니다. 이 챕터는 구조도보다 진단 순서를 더 중요하게 봅니다.</p>
+<pre class="mermaid">flowchart LR
+    U[&quot;Client / SDK&quot;] --&gt; A[&quot;API layer&lt;br/&gt;auth, schema, routing&quot;]
+    A --&gt; R[&quot;Runtime layer&lt;br/&gt;batching, scheduler, KV cache&quot;]
+    R --&gt; B[&quot;Backend optimization layer&lt;br/&gt;cache reuse, disaggregation&quot;]
+    B --&gt; D[&quot;Device&lt;br/&gt;GPU / NPU&quot;]
+    A --&gt; O[&quot;Observability&quot;]
+    R --&gt; O
+    B --&gt; O</pre>
+<h3 id="장면-2-같은-api도-다른-운영-계약을-만든다">장면 2. 같은 API도 다른 운영 계약을 만든다</h3>
+<p><strong>학습자:</strong> 그러면 OpenAI-compatible API를 제공하는 순간 선택은 거의 끝난 것 아닌가요?</p>
+<p><strong>교수자:</strong> 아닙니다. 거기서부터 두 갈래가 갈립니다. 하나는 표준 API 위에 범용 runtime을 얹어 공통 운영을 최대화하는 길이고, 다른 하나는 backend-specific 기능을 더 드러내 장치 맞춤 최적화를 깊게 가져가는 길입니다. [S2] [S3] [S4]</p>
+<p><strong>교수자:</strong> vLLM 논문과 문서는 PagedAttention과 serving runtime을 같은 이야기 안에 둡니다. 메모리 관리와 스케줄링을 공통 엔진에서 해결해 더 안정적으로 많은 요청을 처리하려는 관점입니다. [S1] [S2]</p>
+<p><strong>교수자:</strong> 반면 TensorRT-LLM 문서는 <code>KV Cache Reuse</code>, <code>Disaggregated Serving</code>을 별도 기능으로 내세웁니다. 이쪽은 &quot;공통 엔진 하나로 충분한가&quot;보다 &quot;반복 prefix, 긴 prefill, 큰 클러스터에서 더 세밀하게 제어해야 하는가&quot;에 더 가깝습니다. [S3] [S4]</p>
+<p><strong>학습자:</strong> 결국 API는 같아도 운영 계약은 달라지는군요.</p>
+<p><strong>교수자:</strong> 맞습니다. 제품 팀은 SDK 호환을 계약으로 보고, 플랫폼 팀은 runtime 안정성을 계약으로 보고, 성능 엔지니어링 팀은 backend 제어권을 계약으로 봅니다.</p>
+<h3 id="장면-3-첫-토큰이-늦을-때는-계층별로-시간을-쪼개-본다">장면 3. 첫 토큰이 늦을 때는 계층별로 시간을 쪼개 본다</h3>
+<p><strong>교수자:</strong> 이제 진단 순서를 고정해 봅시다. 첫 토큰이 늦다는 현상은 하나의 숫자처럼 보여도 실제로는 여러 계층이 합쳐진 결과입니다.</p>
+<h4 id="수식-1-first-token-latency-분해">수식 1. First Token Latency 분해</h4>
+<div class="math-block">$$
+T_{\mathrm{TTFT}} = T_{\mathrm{api}} + T_{\mathrm{queue}} + T_{\mathrm{prefill}} + T_{\mathrm{dispatch}}
+$$</div>
+<p><strong>교수자:</strong> 이 식은 논문 공식을 외우라는 뜻이 아니라, 티켓을 어디로 보내야 하는지 정하는 점검표입니다.</p>
+<ul><li><code>T_api</code>: 인증, 요청 정규화, 라우팅에서 생긴 시간</li><li><code>T_queue</code>: batching 대기와 admission control로 묶인 시간</li><li><code>T_prefill</code>: 입력을 읽고 KV cache를 채우는 시간</li><li><code>T_dispatch</code>: runtime에서 backend 실행으로 넘어가는 시간</li></ul>
+<p><strong>학습자:</strong> 그럼 첫 토큰이 느릴 때 바로 kernel profiler를 켜는 건 순서가 뒤집힌 거네요.</p>
+<p><strong>교수자:</strong> 정확합니다. 저는 보통 네 단계로 좁힙니다.</p>
+<ol><li>API 에러율과 라우팅 이상이 있는지 본다.</li><li>queue depth가 올라갔는지 확인한다.</li><li>긴 입력 때문에 prefill이 길어졌는지 본다.</li><li>그다음에도 설명이 안 되면 backend 시간과 메모리 압박을 본다.</li></ol>
+<p><strong>교수자:</strong> 이 흐름이 잡혀 있으면 &quot;GPU는 바쁜데 사용자는 왜 느리다고 하지?&quot; 같은 질문이 훨씬 빨리 정리됩니다. [S2] [S3] [S4]</p>
+<h3 id="장면-4-범용-runtime은-공통-병목을-흡수하려고-만든다">장면 4. 범용 runtime은 공통 병목을 흡수하려고 만든다</h3>
+<p><strong>학습자:</strong> 범용 runtime이 잘하는 일은 정확히 무엇인가요?</p>
+<p><strong>교수자:</strong> 공통 병목을 한 곳에 모아 다루는 일입니다. vLLM의 PagedAttention은 KV cache 메모리 관리를 더 효율적으로 하려는 접근으로 소개되고, vLLM 문서는 이를 serving 기능과 함께 설명합니다. 즉 범용 runtime은 &quot;다양한 요청이 섞여도 공통 스케줄러와 공통 메모리 정책으로 운영할 수 있는가&quot;를 중심에 둡니다. [S1] [S2]</p>
+<p><strong>학습자:</strong> 어떤 팀이 이 선택에 잘 맞나요?</p>
+<p><strong>교수자:</strong> 예를 들어 사내 챗봇처럼 짧은 질의응답과 다중 모델 라우팅이 섞인 경우를 생각해 봅시다. 이런 서비스는 매 요청마다 backend를 바꿔 가며 미세 조정하기보다, 표준 API와 공통 runtime으로 운영 단순성을 확보하는 편이 낫습니다. 문제도 주로 queue 정책, 메모리 여유, 라우팅 품질에서 드러납니다. [S1] [S2]</p>
+<h3 id="장면-5-backend-specific-최적화는-기능-추가가-아니라-책임-추가다">장면 5. backend-specific 최적화는 기능 추가가 아니라 책임 추가다</h3>
+<p><strong>학습자:</strong> 그럼 backend-specific 기능은 언제 내려가야 하나요?</p>
+<p><strong>교수자:</strong> 반복 prefix와 긴 입력이 성능 문제의 중심일 때입니다. TensorRT-LLM 문서가 <code>KV Cache Reuse</code>와 <code>Disaggregated Serving</code>을 따로 설명하는 이유도 여기에 있습니다. [S3] [S4]</p>
+<ul><li><code>KV Cache Reuse</code>: 같은 prefix를 다시 계산하지 않도록 해 prefill 부담을 줄이려는 선택이다. [S3]</li><li><code>Disaggregated Serving</code>: prefill과 decode를 서로 다른 자원이나 역할로 분리해 간섭을 줄이려는 선택이다. [S4]</li></ul>
+<p><strong>교수자:</strong> 예를 들어 계약서 검토 서비스처럼 긴 공통 시스템 프롬프트와 긴 첨부 문서가 반복된다면, &quot;API는 이미 맞다&quot;에서 멈추면 안 됩니다. cache hit ratio를 보지 못하면 reuse의 이점도 확인할 수 없고, prefill과 decode를 구분해 보지 못하면 분리 구조가 필요한지조차 판단하기 어렵습니다. [S3] [S4]</p>
+<pre class="mermaid">flowchart TD
+    A[&quot;TTFT 급등&quot;] --&gt; B{&quot;API 이상?&quot;}
+    B -- 예 --&gt; C[&quot;auth / routing / schema 확인&quot;]
+    B -- 아니오 --&gt; D{&quot;queue depth 증가?&quot;}
+    D -- 예 --&gt; E[&quot;runtime batching / admission 조정&quot;]
+    D -- 아니오 --&gt; F{&quot;반복 prefix 많은가?&quot;}
+    F -- 예 --&gt; G[&quot;cache hit ratio 확인&lt;br/&gt;KV cache reuse 검토&quot;]
+    F -- 아니오 --&gt; H{&quot;prefill이 decode를 밀어내는가?&quot;}
+    H -- 예 --&gt; I[&quot;disaggregated serving 검토&quot;]
+    H -- 아니오 --&gt; J[&quot;backend / kernel / memory pressure 확인&quot;]</pre>
+<h3 id="장면-6-kernel-최적화는-위-계층이-정리된-뒤에-의미가-커진다">장면 6. kernel 최적화는 위 계층이 정리된 뒤에 의미가 커진다</h3>
+<p><strong>교수자:</strong> 이제 roofline 관점을 가져와 봅시다. backend-specific 최적화가 항상 가장 큰 체감 개선을 주는 것은 아닙니다.</p>
+<h4 id="수식-2-roofline-관점의-상한">수식 2. Roofline 관점의 상한</h4>
+<div class="math-block">$$
+P_{\mathrm{attainable}} \le \min \left(P_{\mathrm{peak}},\ I \cdot B_{\mathrm{mem}}\right)
+$$</div>
+<p><strong>교수자:</strong> 달성 가능한 성능은 연산 상한과 메모리 대역폭 상한 중 더 낮은 쪽에 묶입니다. 만약 이미 memory-bound라면 kernel만 더 다듬어도 사용자 체감은 제한적일 수 있습니다. 이때는 오히려 queue 조정, cache reuse, prefill/decode 분리처럼 더 위 계층의 선택이 더 큰 변화를 만듭니다. [S1] [S3] [S4]</p>
+<p><strong>학습자:</strong> 그러면 kernel 최적화는 늦게 봐도 되나요?</p>
+<p><strong>교수자:</strong> 늦게 본다기보다, 원인 후보를 먼저 정리한 다음 봐야 합니다. observability 없이 backend-specific 기능만 늘리면, 복잡도는 올라가는데 설명 가능한 성능 향상은 남지 않는 경우가 많습니다.</p>
+<h2 id="자주-헷갈리는-포인트">자주 헷갈리는 포인트</h2>
+<ul><li>OpenAI-compatible API를 쓴다고 runtime과 backend 특성까지 표준화되는 것은 아니다.</li><li>PagedAttention, KV cache reuse, disaggregated serving은 모두 &quot;성능 기능&quot;처럼 보이지만 겨냥하는 병목이 서로 다르다. [S1] [S3] [S4]</li><li>queue 문제를 backend 문제로 착각하면 GPU 사용률이 높다는 숫자만 붙잡고 오래 헤매게 된다.</li><li>backend-specific 기능은 토글 하나가 아니라 추가 책임이다. hit ratio, 분리 상태, fallback 신호를 읽지 못하면 운영 부담만 커진다. [S3] [S4]</li><li>observability는 대시보드 장식이 아니라 API, runtime, backend를 순서대로 배제하는 플레이북이다.</li></ul>
+<h2 id="사례로-다시-보기">사례로 다시 보기</h2>
+<h3 id="사례-1-사내-업무-챗봇">사례 1. 사내 업무 챗봇</h3>
+<p>짧은 질의응답, 빠른 SDK 연동, 여러 모델 실험이 중요한 팀이라면 API layer와 범용 runtime의 결합이 먼저다. 여기서는 OpenAI-compatible endpoint와 공통 batching, 공통 KV cache 관리가 운영 효율을 좌우한다. PagedAttention 같은 runtime 설계가 메모리 낭비를 줄여 다중 요청을 안정적으로 받치는 방향과 잘 맞는다. [S1] [S2]</p>
+<h3 id="사례-2-계약서-검토와-긴-문서-요약">사례 2. 계약서 검토와 긴 문서 요약</h3>
+<p>공통 시스템 프롬프트가 길고, 반복 prefix가 많고, 긴 입력이 몰리는 서비스라면 질문이 달라진다. 같은 prefix를 반복 계산하고 있는지, prefill이 decode를 계속 밀어내는지 먼저 봐야 한다. 이런 서비스는 KV cache reuse와 disaggregated serving이 실질 후보가 되는 전형적인 형태다. [S3] [S4]</p>
+<h3 id="사례-3-운영-팀의-흔한-오진">사례 3. 운영 팀의 흔한 오진</h3>
+<p>사용자가 &quot;첫 토큰이 늦다&quot;고 말하자 곧바로 backend profiler부터 켠 팀이 있다고 해 보자. 그런데 실제 원인은 특정 테넌트의 요청 폭주로 queue depth가 올라간 것이고, 긴 입력이 prefill 시간을 늘려 TTFT를 더 악화시키고 있었다. 이 경우 문제는 kernel 미세 조정이 아니라 runtime 관측 부재다. [S2] [S3]</p>
+<h2 id="핵심-정리">핵심 정리</h2>
+<ul><li>서빙 스택의 핵심 차이는 엔드포인트 이름이 아니라 책임을 어디까지 공통화할지에 있다.</li><li>vLLM 계열은 PagedAttention과 범용 runtime을 묶어 공통 운영을 강화하는 쪽에 가깝고, TensorRT-LLM 계열은 KV cache reuse와 disaggregated serving처럼 backend-specific 제어를 더 깊게 드러낸다. [S1] [S2] [S3] [S4]</li><li>TTFT를 볼 때는 API, queue, prefill, backend 순서로 시간을 쪼개야 오진이 줄어든다.</li><li>observability가 준비되지 않은 상태에서 더 깊은 최적화로 내려가면 성능보다 운영 복잡도가 먼저 커질 수 있다.</li></ul>
+<h2 id="복습-체크리스트">복습 체크리스트</h2>
+<ul><li>API layer, runtime layer, backend optimization layer, observability layer를 한 문장씩 구분해 설명할 수 있는가?</li><li>같은 OpenAI-compatible API여도 운영 계약이 달라지는 이유를 사례와 함께 설명할 수 있는가?</li><li>TTFT가 악화되었을 때 queue depth, cache hit ratio, prefill 압박, backend 시간을 어떤 순서로 볼지 말할 수 있는가?</li><li>PagedAttention과 KV cache reuse, disaggregated serving이 각각 다른 층의 선택이라는 점을 설명할 수 있는가?</li><li>memory-bound 상황에서 kernel만 보는 접근이 왜 한계가 있는지 roofline 수식과 함께 설명할 수 있는가?</li></ul>
+<h2 id="대안과-비교">대안과 비교</h2>
+<p>| 선택 축 | OpenAI-compatible API 중심 | 범용 runtime 중심 | backend-specific 최적화 중심 | | --- | --- | --- | --- | | 주된 관심사 | SDK 호환과 빠른 연동 | 공통 스케줄링과 메모리 운영 | 반복 prefix, 긴 prefill, 장치 맞춤 제어 | | 대표적인 참조 문맥 | vLLM serving 문서 [S2] | PagedAttention 논문과 vLLM 문서 [S1] [S2] | TensorRT-LLM의 KV cache reuse, disaggregated serving [S3] [S4] | | 잘 맞는 팀 | 제품 애플리케이션 팀 | 플랫폼 팀 | 성능 엔지니어링 팀, 인프라 팀 | | 장점 | 도입이 빠르고 클라이언트 변경이 적다 | 운영 규칙을 공통화하기 쉽다 | 특정 병목을 더 깊게 줄일 수 있다 |</p>
+<div class="table-wrap"><table><thead><tr><th>주의점</th><th>내부 병목이 가려질 수 있다</th><th>observability 없이 운영하면 queue와 cache 문제를 놓치기 쉽다</th><th>기능을 켠 뒤 상태를 못 읽으면 복잡도만 늘어난다</th></tr></thead><tbody></tbody></table></div>
+<h2 id="참고-이미지">참고 이미지</h2>
+<p><img src="./assets/img-01.png" alt="vLLM logo"></p>
+<ul><li>[I1] 캡션: vLLM logo</li><li>출처 번호: [I1]</li><li>활용 이유: 범용 runtime과 OpenAI-compatible serving을 함께 설명할 때 대표 사례의 시각적 식별점으로 사용한다.</li></ul>
+<p><img src="./assets/img-02.png" alt="Roofline model"></p>
+<ul><li>[I2] 캡션: Roofline model</li><li>출처 번호: [I2]</li><li>활용 이유: backend 미세 최적화의 효과가 메모리 대역폭 상한에 묶일 수 있다는 설명을 보조한다.</li></ul>
+<h2 id="출처">출처</h2>
+<p>| 번호 | 제목 | 발행 주체 | 날짜 | URL | 사용 이유 | | --- | --- | --- | --- | --- | --- | | [S1] | Efficient Memory Management for Large Language Model Serving with PagedAttention | vLLM authors / arXiv | 2023-09-11 | <a href="https://arxiv.org/abs/2309.06180" target="_blank" rel="noreferrer">https://arxiv.org/abs/2309.06180</a> | PagedAttention과 범용 runtime의 메모리 관리 관점을 연결하기 위해 사용 | | [S2] | vLLM Documentation | vLLM project | 2026-01-07 | <a href="https://docs.vllm.ai/en/latest/" target="_blank" rel="noreferrer">https://docs.vllm.ai/en/latest/</a> | OpenAI-compatible serving과 runtime 운영 문맥을 설명하기 위해 사용 | | [S3] | KV Cache Reuse | NVIDIA TensorRT-LLM | 2026-03-08 (accessed) | <a href="https://nvidia.github.io/TensorRT-LLM/advanced/kv-cache-reuse.html" target="_blank" rel="noreferrer">https://nvidia.github.io/TensorRT-LLM/advanced/kv-cache-reuse.html</a> | 반복 prefix 재사용이 어떤 병목을 겨냥하는지 설명하기 위해 사용 | | [S4] | Disaggregated Serving | NVIDIA TensorRT-LLM | 2026-03-08 (accessed) | <a href="https://nvidia.github.io/TensorRT-LLM/1.2.0rc6/features/disagg-serving.html" target="_blank" rel="noreferrer">https://nvidia.github.io/TensorRT-LLM/1.2.0rc6/features/disagg-serving.html</a> | prefill/decode 분리와 계층별 선택 기준을 설명하기 위해 사용 |</p>
+    </article>
+    <section class="content-panel surface quiz-panel">
+      <div class="section-heading">
+        <div>
+          <p class="eyebrow">Quiz</p>
+          <h2>복습 문제</h2>
+        </div>
+      </div>
+      <div class="prose">
+        <h1 id="serving-stack-overview-quiz">Serving Stack Overview Quiz</h1>
+<h2 id="객관식-1">객관식 1</h2>
+<p>한 팀이 <code>/v1/chat/completions</code> 엔드포인트를 이미 열었다. 그런데 긴 문서 요청이 몰릴 때 첫 토큰 지연이 커진다. 이 챕터의 관점에서 가장 먼저 떠올려야 할 판단은 무엇인가?</p>
+<ol><li>API가 같으니 내부 runtime도 같다고 보고 모델 품질만 비교한다.</li><li>엔드포인트 호환성과 내부 스택 책임은 다르므로 queue와 prefill 계층을 먼저 분해해 본다.</li><li>이미지 리사이즈 설정을 먼저 바꾼다.</li><li>backend-specific 기능은 항상 과하므로 처음부터 배제한다.</li></ol>
+<h2 id="객관식-2">객관식 2</h2>
+<p>다음 중 <code>KV Cache Reuse</code>가 직접 겨냥하는 상황으로 가장 알맞은 것은 무엇인가?</p>
+<ol><li>인증 헤더가 자주 누락되는 상황</li><li>동일한 prefix를 반복 계산해 prefill 부담이 커지는 상황</li><li>HTTP 응답 코드가 일관되지 않은 상황</li><li>클라이언트 SDK 버전이 제각각인 상황</li></ol>
+<h2 id="객관식-3">객관식 3</h2>
+<p>다음 중 <code>disaggregated serving</code>을 검토할 가능성이 가장 높은 팀은 누구인가?</p>
+<ol><li>짧은 질의응답 위주의 사내 챗봇을 빠르게 붙여야 하는 제품 팀</li><li>모델 카드 문구를 정리하는 문서 팀</li><li>긴 입력이 몰릴 때 prefill과 decode 간섭을 줄이고 싶은 인프라 팀</li><li>API 키 발급 정책만 다루는 보안 팀</li></ol>
+<h2 id="짧은-서술형-1">짧은 서술형 1</h2>
+<p>이 챕터가 서빙 스택을 &quot;제품 이름 모음&quot;이 아니라 &quot;책임 분할표&quot;로 다루는 이유를 4문장 안팎으로 설명하라. 답변에는 반드시 <code>API layer</code>, <code>runtime</code>, <code>observability</code>를 포함하라.</p>
+<h2 id="짧은-서술형-2">짧은 서술형 2</h2>
+<p>아래 수식을 바탕으로, TTFT가 나빠졌을 때 왜 <code>T_queue</code>와 <code>T_prefill</code>을 먼저 나눠 봐야 하는지 설명하라.</p>
+<div class="math-block">$$
+T_{\mathrm{TTFT}} = T_{\mathrm{api}} + T_{\mathrm{queue}} + T_{\mathrm{prefill}} + T_{\mathrm{dispatch}}
+$$</div>
+<p>답변에는 반드시 <code>queue depth</code>, <code>병목</code>, <code>오진</code>을 포함하라.</p>
+<h2 id="심화-설명형-1">심화 설명형 1</h2>
+<p>다음 상황에서 어떤 계층부터 어떤 순서로 확인할지 서술하라.</p>
+<ul><li>계약서 검토 서비스다.</li><li>공통 시스템 프롬프트가 길다.</li><li>긴 첨부 문서가 자주 들어온다.</li><li>사용자는 첫 토큰이 특히 느리다고 말한다.</li></ul>
+<p>답변에는 반드시 <code>KV cache reuse</code>, <code>cache hit ratio</code>, <code>disaggregated serving</code>, <code>prefill</code>을 포함하라.</p>
+<h2 id="심화-설명형-2">심화 설명형 2</h2>
+<p>다음 수식을 이용해, 왜 어떤 조직은 범용 runtime 최적화 엔진에서 만족하고 어떤 조직은 backend-specific 최적화까지 내려가는지 설명하라.</p>
+<div class="math-block">$$
+P_{\mathrm{attainable}} \le \min \left(P_{\mathrm{peak}},\ I \cdot B_{\mathrm{mem}}\right)
+$$</div>
+<p>답변에는 반드시 <code>memory-bound</code>, <code>운영 복잡도</code>, <code>사용자 체감</code>, <code>디버깅 순서</code>를 포함하라.</p><details class="answer-key"><summary>정답 및 해설 보기</summary><h2 id="정답-및-해설">정답 및 해설</h2>
+<h3 id="객관식-정답">객관식 정답</h3>
+<ul><li>객관식 1: 2번</li><li>객관식 2: 2번</li><li>객관식 3: 3번</li></ul>
+<h3 id="객관식-해설">객관식 해설</h3>
+<ul><li>객관식 1 해설: 이 챕터는 API 호환성과 내부 운영 계층을 분리해서 본다. 같은 엔드포인트를 노출해도 queue, prefill, backend 선택은 달라질 수 있으므로 먼저 시간 항목을 분해해야 한다. [S2] [S3] [S4]</li><li>객관식 2 해설: <code>KV Cache Reuse</code>는 반복 prefix를 다시 계산하지 않도록 하려는 기능이다. 따라서 긴 입력과 반복 prefix가 겹치는 서비스에서 prefill 부담을 줄이는 문맥과 연결된다. [S3]</li><li>객관식 3 해설: <code>disaggregated serving</code>은 prefill과 decode의 간섭을 줄이려는 선택과 연결된다. 긴 입력과 큰 운영 규모를 직접 다루는 인프라 팀이 이 선택을 검토할 가능성이 높다. [S4]</li></ul>
+<h3 id="짧은-서술형-예시-답안">짧은 서술형 예시 답안</h3>
+<ul><li>짧은 서술형 1 예시: 이 챕터는 서빙 스택을 제품 이름보다 책임 분할표로 본다. API layer는 계약과 라우팅을 맡고, runtime은 batching과 KV cache 같은 공통 운영을 맡는다. observability는 그 둘과 backend 사이에서 어느 계층이 병목인지 가려 주는 역할을 한다. 그래서 같은 API를 제공해도 운영 계약은 달라질 수 있다. [S1] [S2] [S3] [S4]</li><li>짧은 서술형 2 예시: TTFT는 하나의 숫자처럼 보이지만 수식상 <code>T_queue</code>와 <code>T_prefill</code>이 따로 들어 있다. queue depth가 올라간 상황과 긴 입력 때문에 prefill이 늘어난 상황은 병목 위치가 다르므로, 둘을 구분하지 않으면 오진하기 쉽다. 예를 들어 queue 문제를 backend 문제로 착각하면 잘못된 최적화에 시간을 쓰게 된다. 그래서 이 챕터는 TTFT를 계층별로 쪼개 본다. [S2] [S3] [S4]</li></ul>
+<h3 id="심화-설명형-예시-답안">심화 설명형 예시 답안</h3>
+<ul><li>심화 설명형 1 예시: 먼저 API 이상보다 runtime 관측부터 본다. 첫 단계는 queue depth를 확인해 대기 자체가 늘었는지 보는 것이고, 그다음 공통 시스템 프롬프트가 길다면 cache hit ratio를 확인해 <code>KV cache reuse</code>가 필요한 상황인지 판단한다. 이어서 긴 첨부 문서 때문에 <code>prefill</code>이 길어지고 decode를 밀어내는지 확인한다. 그 간섭이 명확하면 <code>disaggregated serving</code>을 검토하는 순서가 맞다. [S3] [S4]</li><li>심화 설명형 2 예시: 수식은 달성 가능한 성능이 연산 상한보다 메모리 대역폭 상한에 먼저 막힐 수 있음을 보여 준다. 이미 memory-bound라면 backend를 더 미세하게 조정해도 사용자 체감이 제한적일 수 있으므로, 어떤 조직은 범용 runtime 안에서 queue와 cache 정책을 다듬는 쪽으로 충분한 성과를 낸다. 반대로 반복 prefix나 prefill/decode 간섭이 observability로 분명히 보이는 조직은 backend-specific 최적화를 감수할 이유가 생긴다. 결국 선택은 디버깅 순서가 정리되어 있는지와 운영 복잡도를 감당할 수 있는지에 달려 있다. [S1] [S3] [S4]</li></ul></details>
+      </div>
+    </section>
+    <nav class="pager">
+      <a class="pager-link" href="../04-quantization-basics/"><span>이전</span><strong>Quantization Basics</strong></a>
+      <a class="pager-link" href="../../03-llm-serving-advanced/01-prefix-caching/"><span>다음</span><strong>Prefix Caching</strong></a>
+    </nav>
+    
+      </section>
+      <aside class="page-sidebar">
+    <div class="sidebar-panel surface">
+      <p class="eyebrow">On This Page</p>
+      <div class="toc" data-toc>
+        <a class="toc-link" href="#수업-개요">수업 개요</a><a class="toc-link" href="#학습-목표">학습 목표</a><a class="toc-link" href="#수업-전에-생각할-질문">수업 전에 생각할 질문</a><a class="toc-link" href="#강의-스크립트">강의 스크립트</a><a class="toc-link sub" href="#장면-1-스택은-기능표가-아니라-책임-분할표다">장면 1. 스택은 기능표가 아니라 책임 분할표다</a><a class="toc-link sub" href="#장면-2-같은-api도-다른-운영-계약을-만든다">장면 2. 같은 API도 다른 운영 계약을 만든다</a><a class="toc-link sub" href="#장면-3-첫-토큰이-늦을-때는-계층별로-시간을-쪼개-본다">장면 3. 첫 토큰이 늦을 때는 계층별로 시간을 쪼개 본다</a><a class="toc-link sub" href="#장면-4-범용-runtime은-공통-병목을-흡수하려고-만든다">장면 4. 범용 runtime은 공통 병목을 흡수하려고 만든다</a><a class="toc-link sub" href="#장면-5-backend-specific-최적화는-기능-추가가-아니라-책임-추가다">장면 5. backend specific 최적화는 기능 추가가 아니라 책임 추가다</a><a class="toc-link sub" href="#장면-6-kernel-최적화는-위-계층이-정리된-뒤에-의미가-커진다">장면 6. kernel 최적화는 위 계층이 정리된 뒤에 의미가 커진다</a><a class="toc-link" href="#자주-헷갈리는-포인트">자주 헷갈리는 포인트</a><a class="toc-link" href="#사례로-다시-보기">사례로 다시 보기</a><a class="toc-link sub" href="#사례-1-사내-업무-챗봇">사례 1. 사내 업무 챗봇</a><a class="toc-link sub" href="#사례-2-계약서-검토와-긴-문서-요약">사례 2. 계약서 검토와 긴 문서 요약</a><a class="toc-link sub" href="#사례-3-운영-팀의-흔한-오진">사례 3. 운영 팀의 흔한 오진</a><a class="toc-link" href="#핵심-정리">핵심 정리</a><a class="toc-link" href="#복습-체크리스트">복습 체크리스트</a><a class="toc-link" href="#대안과-비교">대안과 비교</a><a class="toc-link" href="#참고-이미지">참고 이미지</a><a class="toc-link" href="#출처">출처</a>
+      </div>
+    </div>
+    </aside>
+    </div>
+  </main>
+  <script type="module" src="../../assets/app.js"></script>
+  <script type="module">
+    import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs';
+    mermaid.initialize({ startOnLoad: true, theme: 'neutral', securityLevel: 'loose' });
+  </script>
+  <script>
+    window.MathJax = {
+      tex: { inlineMath: [['$', '$'], ['\\(', '\\)']], displayMath: [['$$', '$$'], ['\\[', '\\]']] },
+      svg: { fontCache: 'global' }
+    };
+  </script>
+  <script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-svg.js" async></script>
+</body>
+</html>

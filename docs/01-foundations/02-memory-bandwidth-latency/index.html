@@ -1,0 +1,219 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Memory, Bandwidth, Latency | 기초와 성능 직관</title>
+  <meta name="description" content="이 챕터는 Transformer 입문을 반복하지 않고, 왜 FLOPs를 줄였는데도 latency가 그대로인가 를 판단하는 틀을 만든다. Self attention은 모델의 기본 구조를 설명해 주지만 [S1], 실제 지연은 종종 얼마나 계산했는가 보다 토큰 하나를 만들기 위해 몇 바이트를 읽고 썼는가 에 더 민감하다 [S2]. 그래서 이 장의 핵심은 개념 소개보다 진단 순서다. 먼저 compute를 볼지, 아니면 bytes moved를 다시 셀지 결정하는 기준을 세운다.">
+  <meta name="theme-color" content="#10182a">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+KR:wght@400;500;600;700&family=Space+Grotesk:wght@500;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../../assets/style.css">
+</head>
+<body class="page-chapter" data-page-kind="chapter" data-page-id="study/llm-serving-npu-roadmap/01-foundations/02-memory-bandwidth-latency" data-root-prefix="../../">
+  <div class="reading-progress" data-reading-progress></div>
+  <header class="site-header">
+    <a class="brand" href="../../">
+      <span class="brand-kicker">GitHub Pages Study</span>
+      <strong>LLM Serving + NPU</strong>
+    </a>
+    <nav class="top-nav"><a class="top-nav-link is-active" href="../">기초와 성능 직관</a><a class="top-nav-link" href="../../02-llm-serving-core/">LLM Serving 핵심</a><a class="top-nav-link" href="../../03-llm-serving-advanced/">고급 Serving 패턴</a><a class="top-nav-link" href="../../04-serving-systems/">Serving 시스템 설계</a><a class="top-nav-link" href="../../05-npu-stack/">NPU 소프트웨어 스택</a><a class="top-nav-link" href="../../06-runtime-and-compiler/">런타임과 컴파일러</a><a class="top-nav-link" href="../../07-synthesis/">종합 정리와 최신 흐름</a></nav>
+    <div class="search-shell">
+      <input type="search" placeholder="챕터, 모듈, 키워드 검색" aria-label="검색" data-global-search>
+      <div class="search-results" data-search-results hidden></div>
+    </div>
+  </header>
+  <main class="page-frame">
+    
+    <section class="hero">
+      <div class="hero-copy">
+        <p class="eyebrow">기초와 성능 직관</p>
+        <h1>Memory, Bandwidth, Latency</h1>
+        <p class="hero-summary">이 챕터는 Transformer 입문을 반복하지 않고, 왜 FLOPs를 줄였는데도 latency가 그대로인가 를 판단하는 틀을 만든다. Self attention은 모델의 기본 구조를 설명해 주지만 [S1], 실제 지연은 종종 얼마나 계산했는가 보다 토큰 하나를 만들기 위해 몇 바이트를 읽고 썼는가 에 더 민감하다 [S2]. 그래서 이 장의 핵심은 개념 소개보다 진단 순서다. 먼저 compute를 볼지, 아니면 bytes moved를 다시 셀지 결정하는 기준을 세운다.</p>
+      </div>
+      <div class="hero-stats">
+        <div class="stat-card"><strong>35-50 min</strong><span>reading time</span></div>
+        <div class="stat-card"><strong>2026-03-08</strong><span>updated</span></div>
+        <div class="stat-card"><button class="progress-toggle" type="button" data-progress-toggle data-progress-id="study/llm-serving-npu-roadmap/01-foundations/02-memory-bandwidth-latency">완료로 표시</button></div>
+      </div>
+    </section>
+    
+    <div class="page-layout">
+      <section class="page-main content-shell">
+        
+    <article class="content-panel surface prose" data-reading-target>
+      <h1 id="memory-bandwidth-latency">Memory, Bandwidth, Latency</h1>
+<h2 id="수업-개요">수업 개요</h2>
+<p>이 챕터는 Transformer 입문을 반복하지 않고, <code>왜 FLOPs를 줄였는데도 latency가 그대로인가</code>를 판단하는 틀을 만든다. Self-attention은 모델의 기본 구조를 설명해 주지만 [S1], 실제 지연은 종종 <code>얼마나 계산했는가</code>보다 <code>토큰 하나를 만들기 위해 몇 바이트를 읽고 썼는가</code>에 더 민감하다 [S2]. 그래서 이 장의 핵심은 개념 소개보다 진단 순서다. 먼저 compute를 볼지, 아니면 bytes moved를 다시 셀지 결정하는 기준을 세운다.</p>
+<h2 id="학습-목표">학습 목표</h2>
+<ul><li><code>FLOPs / Effective Compute</code>와 <code>Bytes Moved / Effective Bandwidth</code>를 같이 적는 이유를 설명할 수 있다.</li><li>Roofline을 <code>이제 compute 최적화를 멈추고 bytes moved를 다시 볼 때인가</code>를 판단하는 도구로 사용할 수 있다.</li><li><code>prefill</code>과 <code>decode</code>를 입문 개념이 아니라 서로 다른 진단 조건으로 구분할 수 있다.</li><li>모델 축소나 커널 튜닝 효과가 작을 때, 어떤 신호가 bandwidth 쪽 재점검을 요구하는지 사례로 설명할 수 있다.</li></ul>
+<h2 id="수업-전에-생각할-질문">수업 전에 생각할 질문</h2>
+<ul><li>모델 폭을 줄였는데 <code>TPOT</code>이 2~3%만 좋아졌다면, 무엇을 먼저 의심해야 할까?</li><li>긴 문맥일수록 느려지는데 장비 utilization은 높게 보인다면, 이 숫자는 무엇을 말해 주고 무엇은 말해 주지 못할까?</li><li>같은 8B 모델이라도 <code>메일 제목 자동 라우터</code>와 <code>32K 계약 비교 도구</code>가 전혀 다른 최적화 순서를 가져야 하는 이유는 무엇일까?</li></ul>
+<h2 id="강의-스크립트">강의 스크립트</h2>
+<h3 id="part-1-첫-질문은-몇-flops냐가-아니라-몇-바이트를-옮겼냐다">Part 1. 첫 질문은 &quot;몇 FLOPs냐&quot;가 아니라 &quot;몇 바이트를 옮겼냐&quot;다</h3>
+<p><strong>학습자:</strong> 모델을 줄였는데도 속도가 거의 그대로입니다. 최적화 방향이 틀린 건가요?</p>
+<p><strong>교수자:</strong> 틀렸다기보다 지배 항을 잘못 골랐을 가능성이 큽니다. 추론 단계의 latency는 계산과 메모리 이동 중 더 느린 쪽 상한을 따라갑니다 [S2]. 그래서 모델 축소가 바로 체감 속도로 이어지지 않을 수 있어요.</p>
+<h4 id="핵심-수식-1-토큰-단위-latency를-거칠게-보는-틀">핵심 수식 1. 토큰 단위 latency를 거칠게 보는 틀</h4>
+<div class="math-block">$$
+\mathrm{Latency}_{step}
+\approx
+\max\left(
+\frac{\mathrm{FLOPs}}{\mathrm{Effective\ Compute}},
+\frac{\mathrm{Bytes\ Moved}}{\mathrm{Effective\ Bandwidth}}
+\right)
+$$</div>
+<p><strong>학습자:</strong> 그러면 FLOPs가 줄어도 오른쪽 항이 그대로면 개선이 거의 없겠네요.</p>
+<p><strong>교수자:</strong> 맞습니다. 특히 긴 문맥 decode는 새로 계산하는 양보다, 이미 만든 상태와 가중치를 다시 읽는 비용이 더 큰 항이 되기 쉽습니다 [S1][S2].</p>
+<h3 id="part-2-roofline은-성능-그림이-아니라-중단-신호를-주는-도구다">Part 2. Roofline은 성능 그림이 아니라 &quot;중단 신호&quot;를 주는 도구다</h3>
+<p><strong>학습자:</strong> Roofline은 HPC 교과서 그림처럼 느껴지는데, 여기서도 그대로 쓰나요?</p>
+<p><strong>교수자:</strong> 여기서는 더 실용적으로 씁니다. Roofline의 핵심 질문은 하나입니다. <code>지금 workload는 compute ceiling에 막혀 있나, bandwidth ceiling에 막혀 있나?</code> [S2]</p>
+<h4 id="핵심-수식-2-arithmetic-intensity와-상한">핵심 수식 2. arithmetic intensity와 상한</h4>
+<div class="math-block">$$
+\mathrm{AI}=\frac{\mathrm{FLOPs}}{\mathrm{Bytes\ Moved}},
+\qquad
+\mathrm{Perf}_{\max}\le\min\left(\mathrm{Peak\ FLOPs},\ \mathrm{Bandwidth}\times\mathrm{AI}\right)
+$$</div>
+<p><strong>교수자:</strong> arithmetic intensity가 낮으면, 연산 유닛이 남아 있어도 메모리 이동이 먼저 성능을 자릅니다. 이때 compute 최적화를 계속 밀면 수고에 비해 개선이 너무 작을 수 있습니다.</p>
+<pre class="mermaid">flowchart TD
+    A[최적화 시도] --&gt; B{모델 축소 또는 커널 튜닝 후\n개선폭이 충분한가?}
+    B --&gt;|예| C[compute 최적화 계속]
+    B --&gt;|아니오| D[bytes moved 재점검]
+    D --&gt; E{문맥 길이에 따라\nTPOT이 악화되는가?}
+    E --&gt;|예| F[decode 경로와 KV read 조사]
+    E --&gt;|아니오| G[prefill 고정비, weight read,\n요청 경로 조사]</pre>
+<p><strong>학습자:</strong> 결국 Roofline은 &quot;이제 다른 질문으로 넘어가라&quot;는 신호를 주는 셈이네요.</p>
+<p><strong>교수자:</strong> 정확합니다. 이 장에서는 그 전환 시점을 잡는 감각을 익히는 게 중요합니다.</p>
+<h3 id="part-3-prefill과-decode는-입문-용어가-아니라-서로-다른-비용표다">Part 3. prefill과 decode는 입문 용어가 아니라 서로 다른 비용표다</h3>
+<p><strong>학습자:</strong> 그래도 같은 레이어를 도는 건 맞잖아요. 왜 구분이 그렇게 중요한가요?</p>
+<p><strong>교수자:</strong> 같은 레이어를 돌아도 사용자가 느끼는 문제는 다릅니다. <code>prefill</code>은 긴 입력 전체를 처리해 <code>TTFT</code>를 흔들고, <code>decode</code>는 새 토큰을 반복 생성해 <code>TPOT</code>을 흔듭니다 [S1]. 이 차이를 묶어 버리면, 긴 입력 중복 문제와 긴 문맥 read 문제를 같은 처방으로 다루게 됩니다.</p>
+<p><strong>학습자:</strong> 그러면 이 챕터에서 prefill/decode를 다시 다루는 이유는 구조 설명이 아니라 진단 분기군요.</p>
+<p><strong>교수자:</strong> 그렇죠. 여기서는 개념 소개가 아니라 &quot;느림의 형태가 어디서 시작되는가&quot;를 나누는 표지판으로 씁니다.</p>
+<h3 id="part-4-compute-최적화를-멈추고-bytes-moved를-다시-볼-신호">Part 4. compute 최적화를 멈추고 bytes moved를 다시 볼 신호</h3>
+<p><strong>학습자:</strong> 실무에서 그 전환 시점을 어떻게 잡나요?</p>
+<p><strong>교수자:</strong> 네 가지 신호를 먼저 봅니다.</p>
+<ul><li>모델 크기 축소나 커널 튜닝 후 개선폭이 예상보다 매우 작다.</li><li>문맥 길이가 길어질수록 <code>TPOT</code>이 더 나빠진다.</li><li>첫 토큰보다 후반 토큰이 더 흔들린다.</li><li>utilization 숫자는 높아 보이는데, 문맥 길이 변화가 latency를 훨씬 더 크게 흔든다.</li></ul>
+<p><strong>교수자:</strong> 이런 신호가 모이면 <code>compute를 더 깎자</code>보다 <code>이번 토큰에서 실제로 얼마나 읽고 쓰는가</code>를 다시 적는 편이 낫습니다.</p>
+<pre class="mermaid">flowchart LR
+    A[새 토큰] --&gt; B[작은 새 계산]
+    W[가중치 읽기] --&gt; B
+    B --&gt; C[과거 KV 읽기]
+    C --&gt; D[attention과 projection]
+    D --&gt; E[다음 토큰]
+    C -. 문맥 길이에 따라 증가 .-&gt; F[bytes moved]
+    W -. 레이어마다 누적 .-&gt; F
+    F --&gt; G{어느 상한이 더 낮은가?}
+    G --&gt;|Bandwidth 쪽| H[데이터 이동 최적화 재검토]
+    G --&gt;|Compute 쪽| I[연산량 최적화 유지]</pre>
+<p><strong>학습자:</strong> 이 그림을 보니 <code>새 토큰 계산량</code>만 보면 왜 오진이 생기는지 알겠습니다.</p>
+<p><strong>교수자:</strong> 맞습니다. decode에서 문제를 만드는 건 &quot;새 계산이 작다&quot;보다 &quot;작은 계산을 위해 긴 메모리 산책을 한다&quot;는 점입니다.</p>
+<h3 id="part-5-실패-사례로-보면-판단-프레임이-더-선명해진다">Part 5. 실패 사례로 보면 판단 프레임이 더 선명해진다</h3>
+<p><strong>학습자:</strong> 사례로 보면 어떤 차이가 생기나요?</p>
+<p><strong>교수자:</strong> 세 가지를 보죠.</p>
+<p><strong>교수자:</strong> <code>32K 계약 조항 비교</code> 서비스에서 팀이 먼저 모델 폭을 줄였습니다. FLOPs는 줄었는데 <code>TPOT</code> 개선은 3%뿐이었습니다. 이때 계속 compute만 파면 시간이 낭비됩니다. 긴 문맥이 핵심 가치인 서비스라면, 먼저 <code>문맥 길이와 bytes moved가 같이 늘었는가</code>를 다시 봐야 합니다.</p>
+<p><strong>교수자:</strong> <code>메일 제목 자동 라우터</code>는 반대입니다. 문맥이 짧고 출력도 거의 분류 라벨 한두 개로 끝납니다. 여기서는 긴 KV read가 지배적일 가능성이 낮으니, prefill 고정비나 요청 경로 오버헤드를 줄이는 편이 더 직접적일 수 있습니다.</p>
+<p><strong>교수자:</strong> <code>라이브 자막 후편집기</code>는 또 다릅니다. 답변이 시작된 뒤 뒤쪽 토큰이 흔들리면 화면 자막이 바로 끊겨 보입니다. 이때는 <code>TTFT</code>보다 <code>TPOT</code>과 문맥 길이 민감도를 먼저 봐야 하고, compute 최적화의 기대값도 낮춰 잡아야 합니다.</p>
+<p><strong>학습자:</strong> 결국 &quot;같은 모델&quot;보다 &quot;같은 문제 형태인가&quot;가 더 중요하군요.</p>
+<p><strong>교수자:</strong> 그렇습니다. 이 챕터의 판단 프레임은 모델 구조보다 증상과 비용표를 먼저 맞추는 데 있습니다.</p>
+<h3 id="part-6-최신-문서는-이론-증명이-아니라-운영-기준선이다">Part 6. 최신 문서는 이론 증명이 아니라 운영 기준선이다</h3>
+<p><strong>학습자:</strong> 브리프의 최신성 문장이 꽤 강한데, [S3]와 [S4]는 이 장의 핵심 공식을 직접 뒷받침하는 자료는 아니지 않나요?</p>
+<p><strong>교수자:</strong> 맞습니다. [S3]는 최신 serving 문서 기준선이고, [S4]는 <code>AWS Neuron release notes 2.26.0</code>처럼 runtime 표면이 계속 바뀌는 현실을 보여 주는 자료입니다. 둘 다 Roofline 자체를 새로 설명하는 문서는 아닙니다.</p>
+<p><strong>교수자:</strong> 그래서 이 장에서 [S3][S4]의 역할은 제한적입니다. <code>정적 FLOPs 표만 보고 진단을 끝내지 말라</code>는 운영 기준선을 주는 데 쓰고, memory-bandwidth 판단의 직접 근거는 여전히 [S2]와 Part 1-4의 비용 분해에서 가져옵니다. 다시 말해 <code>bytes moved를 따로 다시 세는 습관</code>은 이 장의 실무 해석이고, [S3][S4]는 그 해석이 여전히 현재형 문제라는 점을 보조하는 기준선입니다.</p>
+<p><strong>학습자:</strong> 그러면 최신성의 핵심은 <code>무조건 bandwidth부터 보라</code>가 아니라, <code>serving/runtime 표면이 계속 바뀌니 memory movement 진단도 살아 있는 운영 질문으로 보라</code>에 가깝네요.</p>
+<p><strong>교수자:</strong> 그렇습니다. 아래 참고 이미지 2는 Part 1-4의 <code>decode bytes moved</code> 판단을 붙잡는 수업용 도식이고, [S3][S4]는 그런 판단을 정적인 교과서 문장으로 닫지 말라는 운영 기준선으로만 씁니다.</p>
+<h2 id="자주-헷갈리는-포인트">자주 헷갈리는 포인트</h2>
+<ul><li><code>bandwidth-bound</code>는 연산이 적다는 뜻이 아니라, 더 낮은 상한이 메모리 이동 쪽이라는 뜻이다.</li><li><code>prefill</code>과 <code>decode</code>를 다시 구분하는 이유는 입문 설명이 아니라 <code>TTFT</code>와 <code>TPOT</code>을 다른 처방으로 연결하기 위해서다.</li><li>모델 축소가 실패했다고 해서 최적화가 틀린 것은 아니다. 줄인 항이 지배 항이 아니었을 수 있다.</li><li>높은 utilization은 장비가 바쁘다는 신호일 뿐, 그 바쁨이 compute인지 memory path인지를 자동으로 분리해 주지 않는다.</li><li>[S3][S4]의 최신성은 &quot;문서와 런타임이 계속 관리되는 주제&quot;라는 사실까지는 지지하지만, 구체적인 운영 우선순위는 별도 해석임을 구분해야 한다.</li></ul>
+<h2 id="사례로-다시-보기">사례로 다시 보기</h2>
+<h3 id="사례-1-계약-검토-보조의-잘못된-첫-처방">사례 1. 계약 검토 보조의 잘못된 첫 처방</h3>
+<p>증상은 <code>긴 문맥에서 TPOT 악화</code>였다. 그런데 팀은 먼저 모델 폭을 줄였다. 결과가 미미했다면, 다음 단계는 더 작은 모델이 아니라 <code>문맥 길이 증가에 따라 bytes moved가 얼마나 같이 커졌는지</code>를 다시 세는 것이다.</p>
+<h3 id="사례-2-메일-제목-라우터의-과한-decode-집착">사례 2. 메일 제목 라우터의 과한 decode 집착</h3>
+<p>문맥이 짧고 출력도 짧은 서비스에 긴 문맥용 처방을 그대로 들이대면 오버엔지니어링이 된다. 이 경우에는 <code>prefill</code> 고정비, 반복 입력, 요청 경로 오버헤드가 더 먼저일 수 있다.</p>
+<h3 id="사례-3-라이브-자막-후편집기의-후반-토큰-흔들림">사례 3. 라이브 자막 후편집기의 후반 토큰 흔들림</h3>
+<p>첫 토큰은 빨랐는데 문장이 길어질수록 자막 후반이 끊긴다. 이 현상은 <code>첫 답변이 늦다</code>는 문제와 다른 분류다. 여기서는 <code>decode</code>, <code>TPOT</code>, <code>문맥 길이 민감도</code>를 한 묶음으로 봐야 한다.</p>
+<h2 id="핵심-정리">핵심 정리</h2>
+<ul><li>이 장의 질문은 <code>무슨 연산이 있나</code>보다 <code>이번 토큰을 위해 무엇을 얼마나 옮기나</code>다.</li><li>Roofline은 LLM serving에서도 <code>compute 최적화를 계속할지 멈추고 bytes moved를 다시 셀지</code>를 가르는 실무 도구다 [S2].</li><li><code>prefill</code>과 <code>decode</code>는 같은 모델의 두 단계가 아니라, 서로 다른 병목 진단표로 읽어야 한다 [S1].</li><li>모델 축소 효과가 작고 문맥 길이에 따라 <code>TPOT</code>이 악화되면, compute보다 bytes moved가 지배 항일 가능성을 먼저 점검해야 한다.</li><li>[S3]와 [S4]가 직접 보여 주는 것은 <code>serving 문서</code>와 <code>runtime release note</code>가 2026년에도 현재형 기준선이라는 사실이다.</li><li>이 문서들로부터 추론하면, 현대 추론 최적화는 정적인 FLOPs 계산만이 아니라 실행 경로와 메모리 이동을 함께 읽는 습관이 필요하다.</li></ul>
+<h2 id="복습-체크리스트">복습 체크리스트</h2>
+<ul><li class="task-item unchecked"><span class="task-box" aria-hidden="true"></span><code>Latency_step</code>을 compute 항과 bandwidth 항 중 큰 값으로 보는 이유를 설명할 수 있다.</li><li class="task-item unchecked"><span class="task-box" aria-hidden="true"></span>arithmetic intensity가 낮을 때 왜 compute 최적화 기대값이 작아질 수 있는지 말할 수 있다.</li><li class="task-item unchecked"><span class="task-box" aria-hidden="true"></span><code>TTFT</code> 문제와 <code>TPOT</code> 문제를 서로 다른 진단표로 나눌 수 있다.</li><li class="task-item unchecked"><span class="task-box" aria-hidden="true"></span>모델 축소 효과가 작은 상황에서 bytes moved 재점검으로 전환할 신호를 2개 이상 말할 수 있다.</li><li class="task-item unchecked"><span class="task-box" aria-hidden="true"></span><code>[S3][S4]가 직접 말한 사실</code>과 <code>이 챕터가 거기서 끌어낸 운영 해석</code>을 구분할 수 있다.</li></ul>
+<h2 id="대안과-비교">대안과 비교</h2>
+<p>| 관측 신호 | compute 최적화를 계속할 조건 | bytes moved 재점검으로 전환할 조건 | 먼저 볼 것 | | --- | --- | --- | --- | | 모델 축소 후 개선폭이 큼 | FLOPs 감소가 latency 개선으로 바로 이어짐 | 개선폭이 작고 ceiling mismatch가 의심됨 | 수식 1의 두 항 비교 | | <code>TTFT</code>만 큼 | 긴 입력 처리나 요청 고정비가 중심 | 후반 토큰보다 첫 응답이 문제 | prefill 경로, 입력 반복 | | <code>TPOT</code>이 문맥 길이에 민감 | 짧은 문맥에서만 느린 문제 | 긴 문맥일수록 더 느려짐 | decode 경로, bytes moved | | utilization이 높음 | 다른 지표도 compute 쪽과 일치 | 문맥 길이 변화가 latency를 더 크게 흔듦 | utilization 외에 문맥 길이 민감도 |</p>
+<div class="table-wrap"><table><thead><tr><th>최신 문서를 읽을 때</th><th>문서가 직접 말한 사실만 인용</th><th>사실 위에 운영 해석을 따로 표시</th><th><code>[S3][S4]</code> 사실/해석 분리</th></tr></thead><tbody></tbody></table></div>
+<h2 id="참고-이미지">참고 이미지</h2>
+<p><img src="./assets/img-01.png" alt="Roofline model"></p>
+<ul><li>캡션: Roofline model</li><li>출처 번호: [I1]</li><li>왜 이 그림이 필요한지: <code>compute ceiling</code>과 <code>bandwidth ceiling</code>을 한 번에 보여 주기 때문에, 이 장의 핵심 판단인 <code>언제 compute 최적화를 멈출지</code>를 직관적으로 붙잡아 준다 [S2].</li></ul>
+<p><img src="./assets/img-02.svg" alt="Decode bytes moved path"></p>
+<ul><li>캡션: Decode bytes moved path</li><li>출처 번호: [I2]</li><li>왜 이 그림이 필요한지: <code>새 계산은 작아도 과거 상태를 읽는 경로가 길어지면 latency headroom이 줄어든다</code>는 이 장의 판단을 시각화한다. 동시에 Part 6에서 설명한 것처럼, 이 그림은 [S1][S2]를 바탕으로 만든 수업용 도식이고 [S3][S4]는 이런 memory movement 진단이 여전히 현재형 운영 문제라는 기준선을 주는 역할에 머문다.</li></ul>
+<h2 id="출처">출처</h2>
+<p>| 번호 | 제목 | 발행 주체 | 날짜 | URL | 사용 이유 | | --- | --- | --- | --- | --- | --- | | [S1] | Attention Is All You Need | Google Research / arXiv | 2017-06-12 | <a href="https://arxiv.org/abs/1706.03762" target="_blank" rel="noreferrer">https://arxiv.org/abs/1706.03762</a> | self-attention과 autoregressive 추론 구조, <code>prefill/decode</code> 구분의 기본 배경 | | [S2] | Roofline: an insightful visual performance model for multicore architectures | Communications of the ACM | 2009-04-01 | <a href="https://dl.acm.org/doi/10.1145/1498765.1498785" target="_blank" rel="noreferrer">https://dl.acm.org/doi/10.1145/1498765.1498785</a> | arithmetic intensity, compute ceiling, bandwidth ceiling을 latency 판단 틀로 연결 | | [S3] | vLLM Documentation | vLLM project | 2026-01-07 | <a href="https://docs.vllm.ai/en/latest/" target="_blank" rel="noreferrer">https://docs.vllm.ai/en/latest/</a> | 최신 serving 문서 기준선으로서, 이 챕터의 최신성 문장을 사실/해석으로 분리하는 기준 | | [S4] | AWS Neuron release notes 2.26.0 | AWS Neuron | 2026-03-08 (accessed) | <a href="https://awsdocs-neuron.readthedocs-hosted.com/en/v2.26.1/release-notes/2.26.0/" target="_blank" rel="noreferrer">https://awsdocs-neuron.readthedocs-hosted.com/en/v2.26.1/release-notes/2.26.0/</a> | 2026-03-08 접근 시점의 runtime release note 기준선으로서, 문서 최신성의 범위를 한정 |</p>
+    </article>
+    <section class="content-panel surface quiz-panel">
+      <div class="section-heading">
+        <div>
+          <p class="eyebrow">Quiz</p>
+          <h2>복습 문제</h2>
+        </div>
+      </div>
+      <div class="prose">
+        <h1 id="memory-bandwidth-latency-quiz">Memory, Bandwidth, Latency Quiz</h1>
+<h2 id="객관식-1">객관식 1</h2>
+<p>어떤 팀이 긴 문맥 서비스에서 모델 폭을 줄여 FLOPs를 낮췄지만 <code>TPOT</code> 개선은 3%뿐이었다. 이때 가장 먼저 세워야 할 가설은 무엇인가?</p>
+<ol><li>현재 지배 항이 compute보다 <code>bytes moved</code> 쪽이라서, 모델 축소 효과가 제한됐다.</li><li><code>prefill</code>이 항상 <code>decode</code>보다 느리므로 첫 토큰 문제만 보면 된다.</li><li>utilization이 높으면 자동으로 compute-bound다.</li><li>모델 폭 축소가 실패했다면 attention 수식 자체를 바꿔야 한다.</li></ol>
+<h2 id="객관식-2">객관식 2</h2>
+<p>Roofline 관점에서 arithmetic intensity가 낮은 workload를 가장 잘 설명한 것은 무엇인가?</p>
+<ol><li>메모리에서 옮기는 바이트에 비해 계산이 적어서 bandwidth ceiling이 더 낮은 상한이 되기 쉽다.</li><li>계산 유닛 사용률이 높으므로 반드시 compute-bound다.</li><li><code>prefill</code>에만 적용되고 <code>decode</code>에는 적용되지 않는다.</li><li>모델 파라미터 수만 줄이면 자동으로 arithmetic intensity가 높아진다.</li></ol>
+<h2 id="객관식-3">객관식 3</h2>
+<p>다음 중 <code>[S3]</code>와 <code>[S4]</code>에서 직접 확인 가능한 사실만으로 묶인 문장은 무엇인가?</p>
+<ol><li><code>[S3]</code>는 최신 serving 문서 기준선이고, <code>[S4]</code>는 <code>AWS Neuron release notes 2.26.0</code>이다.</li><li><code>[S3]</code>와 <code>[S4]</code>는 모든 추론 서비스에서 bandwidth ceiling을 항상 제일 먼저 보라고 직접 지시한다.</li><li><code>[S4]</code>는 긴 문맥 decode 병목이 전부 KV cache라고 단정한다.</li><li><code>[S3]</code>는 compute 최적화를 중단하라고 직접 결론 내린다.</li></ol>
+<h2 id="짧은-서술형-1">짧은 서술형 1</h2>
+<p><code>prefill</code>과 <code>decode</code>를 하나의 병목으로 묶어 진단하면 왜 잘못된 처방이 나오는지 2~3문장으로 설명하라. 답안에는 <code>TTFT</code>와 <code>TPOT</code>을 반드시 포함하라.</p>
+<h2 id="짧은-서술형-2">짧은 서술형 2</h2>
+<p>이 챕터의 Part 6처럼, 아래 두 항목을 2~3문장으로 구분해 써라.</p>
+<ul><li><code>[S3][S4]</code>에서 직접 확인 가능한 사실 1개</li><li>그 사실 위에 놓는 운영 해석 1개</li></ul>
+<p>답안에는 <code>사실</code>, <code>해석</code>이라는 단어를 반드시 포함하라.</p>
+<h2 id="심화-설명형-1">심화 설명형 1</h2>
+<p>두 서비스가 있다.</p>
+<ul><li>서비스 A: <code>메일 제목 자동 라우터</code>, 문맥이 짧고 답변도 짧음</li><li>서비스 B: <code>32K 계약 조항 비교</code>, 문맥이 길고 답변 중 근거 문맥을 오래 유지해야 함</li></ul>
+<p>두 서비스 모두 사용자는 <code>느리다</code>고 말한다. 그런데 같은 최적화 순서를 적용하면 안 되는 이유를 설명하라. 답안에는 <code>prefill</code>, <code>decode</code>, <code>연산량 최적화</code>, <code>데이터 이동 최적화</code>, <code>bandwidth ceiling</code>을 포함하라.</p>
+<h2 id="심화-설명형-2">심화 설명형 2</h2>
+<p>어떤 팀이 다음처럼 보고했다.</p>
+<p><code>모델 축소와 커널 튜닝을 했는데도 개선폭이 작고, 문맥 길이가 길어질수록 뒤쪽 토큰이 더 느려진다.</code></p>
+<p>이 상황에서 왜 <code>compute 최적화를 더 밀기 전에 bytes moved를 다시 세야 하는지</code> 설명하라. 답안에는 <code>arithmetic intensity</code>, <code>Roofline</code>, <code>문맥 길이 민감도</code>, <code>TPOT</code>을 포함하라.</p><details class="answer-key"><summary>정답 및 해설 보기</summary><h2 id="정답-및-해설">정답 및 해설</h2>
+<h3 id="객관식-정답">객관식 정답</h3>
+<ul><li>객관식 1: 1번</li><li>객관식 2: 1번</li><li>객관식 3: 1번</li></ul>
+<h3 id="객관식-해설">객관식 해설</h3>
+<ul><li>객관식 1: 모델 축소는 주로 FLOPs를 줄이지만, 긴 문맥 서비스가 이미 <code>bytes moved / bandwidth</code> 쪽 상한에 가까우면 개선폭은 작을 수 있다. 이때는 최적화 실패보다 지배 항 오판 가능성을 먼저 봐야 한다.</li><li>객관식 2: arithmetic intensity는 <code>FLOPs / Bytes Moved</code>다. 값이 낮을수록 같은 시간에 계산보다 메모리 이동이 더 강한 제약이 되므로 bandwidth ceiling을 먼저 의심해야 한다.</li><li>객관식 3: 이 챕터에서 직접 확인 가능한 최신성 사실은 문서의 성격과 기록된 날짜 수준까지다. <code>무조건 bandwidth부터 보라</code> 같은 결론은 본문이 그 위에 올린 해석이지, <code>[S3][S4]</code>의 직접 문장으로 취급하면 안 된다.</li></ul>
+<h3 id="서술형-예시-답안">서술형 예시 답안</h3>
+<ul><li>짧은 서술형 1 예시: <code>prefill</code>은 긴 입력 전체를 처리하며 <code>TTFT</code>를 크게 흔들고, <code>decode</code>는 새 토큰을 반복 생성하며 <code>TPOT</code>을 크게 흔든다. 둘을 하나로 묶으면 긴 입력 중복을 줄여야 할 상황과 긴 문맥 read를 줄여야 할 상황을 구분하지 못해 처방이 빗나간다.</li><li>짧은 서술형 2 예시: <code>사실</code>로는 <code>[S3]</code>가 최신 serving 문서 기준선이고 <code>[S4]</code>가 <code>AWS Neuron release notes 2.26.0</code>이라는 점을 들 수 있다. <code>해석</code>으로는 이 문서들이 보여 주는 최신성 때문에 성능 진단에서도 정적 FLOPs 표만 보지 말고 실행 경로와 <code>bytes moved</code>를 함께 점검해야 한다고 말할 수 있다.</li></ul>
+<h3 id="심화-설명형-채점-포인트">심화 설명형 채점 포인트</h3>
+<ul><li>심화 설명형 1: 서비스 A는 짧은 문맥이라 <code>decode</code>의 긴 read보다 <code>prefill</code> 고정비나 요청 경로가 더 중요할 수 있고, 따라서 <code>연산량 최적화</code>가 먼저일 수 있다는 점이 들어가야 한다. 서비스 B는 긴 문맥 때문에 <code>decode</code>에서 <code>bandwidth ceiling</code>과 <code>데이터 이동 최적화</code>가 더 우선일 수 있다는 구분이 필요하다.</li><li>심화 설명형 2: 답안은 <code>문맥 길이 민감도</code>가 커질수록 <code>TPOT</code> 악화가 <code>bytes moved</code> 증가와 연결될 수 있음을 설명해야 한다. 또한 <code>Roofline</code>과 <code>arithmetic intensity</code>를 사용해, compute 튜닝 개선폭이 작을 때는 지배 항이 compute가 아닐 수 있으므로 bytes moved 재측정이 다음 단계라는 판단을 보여 줘야 한다.</li></ul></details>
+      </div>
+    </section>
+    <nav class="pager">
+      <a class="pager-link" href="../01-transformer-inference/"><span>이전</span><strong>Transformer Inference</strong></a>
+      <a class="pager-link" href="../03-gpu-vs-npu-mental-model/"><span>다음</span><strong>GPU vs NPU Mental Model</strong></a>
+    </nav>
+    
+      </section>
+      <aside class="page-sidebar">
+    <div class="sidebar-panel surface">
+      <p class="eyebrow">On This Page</p>
+      <div class="toc" data-toc>
+        <a class="toc-link" href="#수업-개요">수업 개요</a><a class="toc-link" href="#학습-목표">학습 목표</a><a class="toc-link" href="#수업-전에-생각할-질문">수업 전에 생각할 질문</a><a class="toc-link" href="#강의-스크립트">강의 스크립트</a><a class="toc-link sub" href="#part-1-첫-질문은-몇-flops냐가-아니라-몇-바이트를-옮겼냐다">Part 1. 첫 질문은 &quot;몇 FLOPs냐&quot;가 아니라 &quot;몇 바이트를 옮겼냐&quot;다</a><a class="toc-link sub" href="#part-2-roofline은-성능-그림이-아니라-중단-신호를-주는-도구다">Part 2. Roofline은 성능 그림이 아니라 &quot;중단 신호&quot;를 주는 도구다</a><a class="toc-link sub" href="#part-3-prefill과-decode는-입문-용어가-아니라-서로-다른-비용표다">Part 3. prefill과 decode는 입문 용어가 아니라 서로 다른 비용표다</a><a class="toc-link sub" href="#part-4-compute-최적화를-멈추고-bytes-moved를-다시-볼-신호">Part 4. compute 최적화를 멈추고 bytes moved를 다시 볼 신호</a><a class="toc-link sub" href="#part-5-실패-사례로-보면-판단-프레임이-더-선명해진다">Part 5. 실패 사례로 보면 판단 프레임이 더 선명해진다</a><a class="toc-link sub" href="#part-6-최신-문서는-이론-증명이-아니라-운영-기준선이다">Part 6. 최신 문서는 이론 증명이 아니라 운영 기준선이다</a><a class="toc-link" href="#자주-헷갈리는-포인트">자주 헷갈리는 포인트</a><a class="toc-link" href="#사례로-다시-보기">사례로 다시 보기</a><a class="toc-link sub" href="#사례-1-계약-검토-보조의-잘못된-첫-처방">사례 1. 계약 검토 보조의 잘못된 첫 처방</a><a class="toc-link sub" href="#사례-2-메일-제목-라우터의-과한-decode-집착">사례 2. 메일 제목 라우터의 과한 decode 집착</a><a class="toc-link sub" href="#사례-3-라이브-자막-후편집기의-후반-토큰-흔들림">사례 3. 라이브 자막 후편집기의 후반 토큰 흔들림</a><a class="toc-link" href="#핵심-정리">핵심 정리</a><a class="toc-link" href="#복습-체크리스트">복습 체크리스트</a><a class="toc-link" href="#대안과-비교">대안과 비교</a><a class="toc-link" href="#참고-이미지">참고 이미지</a><a class="toc-link" href="#출처">출처</a>
+      </div>
+    </div>
+    </aside>
+    </div>
+  </main>
+  <script type="module" src="../../assets/app.js"></script>
+  <script type="module">
+    import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs';
+    mermaid.initialize({ startOnLoad: true, theme: 'neutral', securityLevel: 'loose' });
+  </script>
+  <script>
+    window.MathJax = {
+      tex: { inlineMath: [['$', '$'], ['\\(', '\\)']], displayMath: [['$$', '$$'], ['\\[', '\\]']] },
+      svg: { fontCache: 'global' }
+    };
+  </script>
+  <script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-svg.js" async></script>
+</body>
+</html>

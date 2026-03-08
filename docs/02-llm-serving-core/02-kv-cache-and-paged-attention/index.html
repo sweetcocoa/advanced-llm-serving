@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>KV Cache and PagedAttention | LLM Serving 핵심</title>
+  <meta name="description" content="이번 챕터는 &quot;왜 서빙 엔진이 KV cache를 붙잡고 사는가&quot;를 메모리 관점에서 해부하는 수업이다. decode 단계에서 과거 토큰의 key/value를 다시 계산하지 않기 위해 KV cache가 필요하고, 그 cache가 커질수록 이번에는 메모리 낭비와 fragmentation이 새 병목으로 등장한다. vLLM의 PagedAttention은 이 문제를 운영체제의 paging과 비슷한 방식으로 풀어, 시퀀스의 논리적 연속성과 물리 메모리의 연속성을 분리한다 [S1][S2]. 2026년 기준 최신 serving 엔진이 cache reuse와 cache placement를 별도 최적화 대상으로 다루는 이유도 여기서 이어진다 [S3][S4].">
+  <meta name="theme-color" content="#10182a">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+KR:wght@400;500;600;700&family=Space+Grotesk:wght@500;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../../assets/style.css">
+</head>
+<body class="page-chapter" data-page-kind="chapter" data-page-id="study/llm-serving-npu-roadmap/02-llm-serving-core/02-kv-cache-and-paged-attention" data-root-prefix="../../">
+  <div class="reading-progress" data-reading-progress></div>
+  <header class="site-header">
+    <a class="brand" href="../../">
+      <span class="brand-kicker">GitHub Pages Study</span>
+      <strong>LLM Serving + NPU</strong>
+    </a>
+    <nav class="top-nav"><a class="top-nav-link" href="../../01-foundations/">기초와 성능 직관</a><a class="top-nav-link is-active" href="../">LLM Serving 핵심</a><a class="top-nav-link" href="../../03-llm-serving-advanced/">고급 Serving 패턴</a><a class="top-nav-link" href="../../04-serving-systems/">Serving 시스템 설계</a><a class="top-nav-link" href="../../05-npu-stack/">NPU 소프트웨어 스택</a><a class="top-nav-link" href="../../06-runtime-and-compiler/">런타임과 컴파일러</a><a class="top-nav-link" href="../../07-synthesis/">종합 정리와 최신 흐름</a></nav>
+    <div class="search-shell">
+      <input type="search" placeholder="챕터, 모듈, 키워드 검색" aria-label="검색" data-global-search>
+      <div class="search-results" data-search-results hidden></div>
+    </div>
+  </header>
+  <main class="page-frame">
+    
+    <section class="hero">
+      <div class="hero-copy">
+        <p class="eyebrow">LLM Serving 핵심</p>
+        <h1>KV Cache and PagedAttention</h1>
+        <p class="hero-summary">이번 챕터는 &quot;왜 서빙 엔진이 KV cache를 붙잡고 사는가&quot;를 메모리 관점에서 해부하는 수업이다. decode 단계에서 과거 토큰의 key/value를 다시 계산하지 않기 위해 KV cache가 필요하고, 그 cache가 커질수록 이번에는 메모리 낭비와 fragmentation이 새 병목으로 등장한다. vLLM의 PagedAttention은 이 문제를 운영체제의 paging과 비슷한 방식으로 풀어, 시퀀스의 논리적 연속성과 물리 메모리의 연속성을 분리한다 [S1][S2]. 2026년 기준 최신 serving 엔진이 cache reuse와 cache placement를 별도 최적화 대상으로 다루는 이유도 여기서 이어진다 [S3][S4].</p>
+      </div>
+      <div class="hero-stats">
+        <div class="stat-card"><strong>35-50 min</strong><span>reading time</span></div>
+        <div class="stat-card"><strong>2026-03-08</strong><span>updated</span></div>
+        <div class="stat-card"><button class="progress-toggle" type="button" data-progress-toggle data-progress-id="study/llm-serving-npu-roadmap/02-llm-serving-core/02-kv-cache-and-paged-attention">완료로 표시</button></div>
+      </div>
+    </section>
+    
+    <div class="page-layout">
+      <section class="page-main content-shell">
+        
+    <article class="content-panel surface prose" data-reading-target>
+      <h1 id="kv-cache-and-pagedattention">KV Cache and PagedAttention</h1>
+<h2 id="수업-개요">수업 개요</h2>
+<p>이번 챕터는 &quot;왜 서빙 엔진이 KV cache를 붙잡고 사는가&quot;를 메모리 관점에서 해부하는 수업이다. decode 단계에서 과거 토큰의 key/value를 다시 계산하지 않기 위해 KV cache가 필요하고, 그 cache가 커질수록 이번에는 메모리 낭비와 fragmentation이 새 병목으로 등장한다. vLLM의 PagedAttention은 이 문제를 운영체제의 paging과 비슷한 방식으로 풀어, 시퀀스의 논리적 연속성과 물리 메모리의 연속성을 분리한다 [S1][S2]. 2026년 기준 최신 serving 엔진이 cache reuse와 cache placement를 별도 최적화 대상으로 다루는 이유도 여기서 이어진다 [S3][S4].</p>
+<h2 id="학습-목표">학습 목표</h2>
+<ul><li>KV cache가 decode 계산량을 줄이는 핵심 상태라는 점을 설명할 수 있다.</li><li>KV cache가 커질수록 왜 memory footprint가 곧 운영 제약이 되는지 설명할 수 있다.</li><li>연속 메모리 할당 방식이 가변 길이 요청에서 왜 fragmentation을 키우는지 말할 수 있다.</li><li>PagedAttention이 block table로 무엇을 바꾸는지 설명할 수 있다.</li><li>prefix reuse와 cache placement를 같은 문제로 보면 안 되는 이유를 구분할 수 있다.</li></ul>
+<h2 id="수업-전에-생각할-질문">수업 전에 생각할 질문</h2>
+<ul><li>매 토큰 생성 때 이전 토큰의 K, V를 다시 계산한다면 긴 응답에서 어떤 일이 벌어질까?</li><li>요청마다 출력 길이가 크게 다르면, 빈 메모리가 남아 있어도 새 요청을 못 받는 상황이 왜 생길까?</li><li>같은 시스템 프롬프트가 반복되는 서비스와 prefill/decode가 분리된 서비스는 KV cache를 서로 다른 방식으로 신경 써야 하는가?</li></ul>
+<h2 id="강의-스크립트">강의 스크립트</h2>
+<h3 id="장면-1-kv-cache는-사치가-아니라-decode의-기본-장치다">장면 1. KV cache는 사치가 아니라 decode의 기본 장치다</h3>
+<p><strong>학습자:</strong> attention은 어차피 이전 토큰을 다 참고해야 하잖아요. 그러면 KV cache가 없어도 결국 계산만 많이 하면 되는 것 아닌가요?</p>
+<p><strong>교수자:</strong> &quot;된다&quot;와 &quot;서비스로 굴러간다&quot;는 다릅니다. decode는 토큰을 한 개씩 추가하는 반복인데, 과거 토큰의 K, V를 매번 다시 만들면 같은 계산을 계속 되풀이하게 됩니다. vLLM 논문이 KV cache를 메모리 관리 문제로 끌어올린 이유가 바로 이 반복 비용 때문입니다 [S1]. 실제 serving 문서도 cache 관리와 scheduler를 엔진 핵심 기능으로 둡니다 [S2].</p>
+<p><strong>학습자:</strong> 얼마나 차이가 커지는데요?</p>
+<p><strong>교수자:</strong> 아주 단순화해서 보면, 길이 <code>T</code>의 응답을 만들 때 과거를 매번 다시 훑는 비용은 누적으로 커집니다.</p>
+<div class="math-block">$$
+\sum_{t=1}^{T} t = \frac{T(T+1)}{2}
+$$</div>
+<p><strong>교수자:</strong> 이 식은 &quot;attention이 원래 O(T^2)&quot;라는 교과서 문장을 외우라는 뜻이 아닙니다. 운영 관점에서는 &quot;이전 상태를 저장하지 않으면 긴 decode에서 같은 과거를 계속 다시 만든다&quot;는 경고로 읽으면 됩니다. KV cache는 새 토큰의 K, V만 추가하고, 과거 토큰의 K, V는 재사용하게 해 decode를 서비스 가능한 수준으로 유지합니다 [S1][S2].</p>
+<h3 id="장면-2-계산을-아끼는-순간-이번에는-메모리가-문제로-나온다">장면 2. 계산을 아끼는 순간, 이번에는 메모리가 문제로 나온다</h3>
+<p><strong>학습자:</strong> 계산을 줄였으면 좋은 것 아닌가요? 왜 KV cache가 또 문제의 시작이 되죠?</p>
+<p><strong>교수자:</strong> cache는 공짜가 아니기 때문입니다. 레이어마다, 토큰마다, K와 V를 따로 저장해야 합니다. 그래서 동시 요청 수와 시퀀스 길이가 커질수록 KV cache가 빠르게 메모리를 먹습니다.</p>
+<div class="math-block">$$
+M_{\mathrm{KV}} \approx 2 \times L \times H_{\mathrm{kv}} \times d_{\mathrm{head}} \times N_{\mathrm{tok}} \times b
+$$</div>
+<p><strong>교수자:</strong> 여기서 <code>L</code>은 레이어 수, <code>H_kv</code>는 KV head 수, <code>d_head</code>는 head 차원, <code>N_tok</code>는 현재 살아 있는 총 토큰 수, <code>b</code>는 element당 바이트 수입니다. 핵심은 모델 파라미터만이 아니라 &quot;현재 살아 있는 토큰 총량&quot;이 메모리 예산을 결정한다는 점입니다. 그래서 cache reuse를 잘하면 prefill 부담을 덜 수 있지만, 반대로 live token이 길게 남아 있으면 memory footprint는 계속 커집니다 [S1][S3].</p>
+<p><strong>학습자:</strong> 결국 throughput을 올리려다 cache 때문에 동시성 한계에 먼저 닿을 수도 있겠네요.</p>
+<p><strong>교수자:</strong> 맞습니다. 긴 컨텍스트와 긴 출력이 섞인 서비스에서 흔한 문제입니다.</p>
+<h3 id="장면-3-연속-할당-방식은-길이가-제각각인-요청에서-쉽게-망가진다">장면 3. 연속 할당 방식은 길이가 제각각인 요청에서 쉽게 망가진다</h3>
+<p><strong>학습자:</strong> 그럼 KV cache용 메모리를 넉넉히 큰 배열로 잡아 두면 되는 것 아닌가요?</p>
+<p><strong>교수자:</strong> 길이가 모두 같다면 그 접근도 단순합니다. 하지만 실제 트래픽은 다릅니다. 어떤 요청은 200토큰에서 끝나고, 어떤 요청은 8,000토큰까지 갑니다. 연속 메모리 구간을 시퀀스마다 크게 예약하면, 빨리 끝난 요청이 중간에 구멍을 만들고 늦게 끝난 요청은 긴 구간을 오래 붙잡습니다. 총 빈 공간은 충분한데도 &quot;필요한 크기의 연속 공간&quot;이 없어 새 시퀀스를 받지 못하는 일이 생깁니다 [S1].</p>
+<p><strong>학습자:</strong> 메모리가 부족한 게 아니라 배치 방식이 엉킨 거군요.</p>
+<p><strong>교수자:</strong> 그렇습니다. 이 챕터에서는 그 차이를 정확히 봐야 합니다.</p>
+<pre class="mermaid">flowchart TD
+    A[초기 상태: 큰 연속 메모리] --&gt; B[Seq A 4096토큰 예약]
+    B --&gt; C[Seq B 512토큰 예약]
+    C --&gt; D[Seq C 2048토큰 예약]
+    D --&gt; E[Seq B 먼저 종료]
+    E --&gt; F[중간에 작은 빈 구간 발생]
+    F --&gt; G[새 Seq D 1536토큰 도착]
+    G --&gt; H[총 여유는 충분하지만 연속 공간이 모자라 대기 또는 재배치]</pre>
+<h3 id="장면-4-pagedattention은-논리적으로는-길게-물리적으로는-쪼개서-저장한다">장면 4. PagedAttention은 &quot;논리적으로는 길게, 물리적으로는 쪼개서&quot; 저장한다</h3>
+<p><strong>학습자:</strong> 그러면 PagedAttention은 그냥 메모리를 더 잘 압축하는 기술인가요?</p>
+<p><strong>교수자:</strong> 압축과는 다릅니다. 핵심은 시퀀스를 고정 크기 block들의 논리적 목록으로 보고, 각 block을 물리 메모리의 아무 위치에나 배치하는 것입니다. 운영체제의 page table 비유가 나오는 이유도 여기 있습니다 [S1]. 시퀀스가 길어져도 &quot;다음 block 하나&quot;만 잡으면 되고, 중간 block이 비어도 다른 시퀀스가 그 물리 block을 쓸 수 있습니다.</p>
+<p><strong>학습자:</strong> 그러면 시퀀스 입장에서는 연속처럼 보이는데 실제 메모리에서는 여기저기 흩어져 있는 거네요.</p>
+<p><strong>교수자:</strong> 바로 그 점이 중요합니다. PagedAttention은 시퀀스의 논리 주소와 물리 block 위치를 분리해 external fragmentation을 낮춥니다. vLLM 문서가 paged KV cache 계열 구조를 엔진의 중요한 특징으로 설명하는 이유도 이 덕분입니다 [S2].</p>
+<pre class="mermaid">flowchart LR
+    subgraph Logical[&quot;논리 시퀀스&quot;]
+        L0[Block 0]
+        L1[Block 1]
+        L2[Block 2]
+        L3[Block 3]
+    end
+    subgraph Physical[&quot;물리 메모리 블록&quot;]
+        P7[Phys 7]
+        P2[Phys 2]
+        P11[Phys 11]
+        P4[Phys 4]
+    end
+    T[Block Table] --&gt; L0
+    T --&gt; L1
+    T --&gt; L2
+    T --&gt; L3
+    L0 --&gt; P7
+    L1 --&gt; P2
+    L2 --&gt; P11
+    L3 --&gt; P4</pre>
+<h3 id="장면-5-reuse와-placement는-비슷해-보여도-운영-질문이-다르다">장면 5. reuse와 placement는 비슷해 보여도 운영 질문이 다르다</h3>
+<p><strong>학습자:</strong> 블록으로 쪼갰으면 이제 cache 문제는 다 해결된 것 아닌가요?</p>
+<p><strong>교수자:</strong> 아닙니다. 여기서부터 두 질문이 갈라집니다. 첫째는 &quot;이 cache를 다시 쓸 수 있는가&quot;입니다. 반복 시스템 프롬프트, 공통 prefix, 비슷한 대화 머리말이 많다면 prefix reuse가 prefill 비용을 줄여 줍니다 [S3]. 둘째는 &quot;이 cache를 어디에 둘 것인가&quot;입니다. prefill 노드와 decode 노드를 분리하거나, 서로 다른 가속기 풀을 운영하면 cache placement와 전달 비용이 새 설계 변수로 들어옵니다 [S4].</p>
+<p><strong>학습자:</strong> reuse는 hit율 문제이고, placement는 위치와 이동 문제라고 보면 되겠네요.</p>
+<p><strong>교수자:</strong> 정확합니다. 2026년 serving 엔진이 cache reuse와 placement를 따로 다루는 이유가 그 구분입니다 [S3][S4]. 같은 KV cache라도, 상담 봇에서는 prefix hit가 핵심일 수 있고, 분리형 serving에서는 decode가 cache를 어디서 받아 얼마나 빨리 이어받는지가 더 중요할 수 있습니다.</p>
+<h3 id="장면-6-운영자는-어떤-순서로-문제를-좁히는가">장면 6. 운영자는 어떤 순서로 문제를 좁히는가</h3>
+<p><strong>학습자:</strong> 실무에서는 어떤 지표부터 보면 좋을까요? 메모리 사용률만 보면 됩니까?</p>
+<p><strong>교수자:</strong> 메모리 사용률 하나로는 부족합니다. 순서는 이렇게 잡는 편이 낫습니다.</p>
+<p><strong>교수자:</strong> 첫째, <code>live tokens</code>와 요청 길이 분포를 봅니다. 총 토큰이 늘어나는 것인지, 특정 소수의 장수 시퀀스가 오래 머무는 것인지 구분해야 합니다. 둘째, prefix 반복률과 reuse hit를 봅니다. 재사용할 앞부분이 거의 없는데 reuse 기능만 켜 두면 관리 복잡도만 늘 수 있습니다 [S3]. 셋째, 빈 메모리 총량과 block 사용률을 함께 봅니다. 빈 공간이 있어도 block 배치가 비효율적이면 admission이 막힐 수 있기 때문입니다 [S1]. 넷째, prefill/decode 분리 여부가 있다면 cache transfer 비용과 placement 정책을 봅니다 [S4].</p>
+<p><strong>학습자:</strong> 결국 &quot;메모리가 부족하다&quot;를 바로 믿지 말고, cache 구조와 요청 모양을 먼저 봐야겠네요.</p>
+<p><strong>교수자:</strong> 맞습니다. 이 챕터의 디버깅 질문은 하나입니다. &quot;계산 재사용이 문제인가, 메모리 배치가 문제인가, 아니면 둘 다인가?&quot;</p>
+<h2 id="자주-헷갈리는-포인트">자주 헷갈리는 포인트</h2>
+<ul><li>KV cache는 attention 자체를 없애는 장치가 아니다. 과거 토큰의 K, V 재계산을 피하게 해 decode를 감당 가능한 수준으로 만든다 [S1].</li><li>KV cache hit가 높다고 해서 메모리 문제가 자동으로 사라지지는 않는다. reuse는 prefill 절감에 가깝고, live token 증가에 따른 footprint 문제는 별개다 [S3].</li><li>fragmentation은 &quot;총 메모리가 부족하다&quot;와 다르다. 빈 공간의 합이 충분해도 연속 할당 전략이 나쁘면 admission이 막힐 수 있다 [S1].</li><li>PagedAttention은 단순 캐시 압축이 아니다. block table 기반 주소 변환으로 논리 시퀀스와 물리 배치를 분리하는 접근이다 [S1][S2].</li><li>prefill/decode 분리 환경에서는 cache reuse보다 cache placement와 전달 경로가 더 중요한 병목이 될 수 있다 [S4].</li></ul>
+<h2 id="사례로-다시-보기">사례로 다시 보기</h2>
+<h3 id="사례-1-상담-봇의-공통-시스템-프롬프트">사례 1. 상담 봇의 공통 시스템 프롬프트</h3>
+<p><strong>학습자:</strong> 사내 상담 봇은 모든 요청 앞에 1,500토큰짜리 정책 안내문이 붙습니다. 질문 본문은 짧고 응답도 100토큰 안쪽입니다.</p>
+<p><strong>교수자:</strong> 이 경우 운영자는 먼저 prefix reuse를 봐야 합니다. 공통 앞부분을 매번 prefill하면 같은 K, V를 계속 다시 만들게 되기 때문입니다 [S3]. 다만 reuse가 잘돼도 동시 세션 수가 많아 live token이 커지면 cache footprint 문제는 계속 남을 수 있습니다.</p>
+<h3 id="사례-2-길이가-제각각인-코딩-요청-풀">사례 2. 길이가 제각각인 코딩 요청 풀</h3>
+<p><strong>학습자:</strong> 코드 설명 요청은 300토큰에서 끝나는데, 테스트 생성 요청은 6,000토큰까지 갑니다. 둘이 같은 GPU 풀에서 섞입니다.</p>
+<p><strong>교수자:</strong> 이런 풀에서는 fragmentation을 먼저 의심해야 합니다. 짧은 요청이 자주 종료되며 중간 구멍을 만들고, 긴 요청은 오래 살아 남아 block을 점유합니다. PagedAttention은 이 환경에서 연속 공간 확보 부담을 낮춰 admission 실패를 줄이는 방향으로 작동합니다 [S1][S2].</p>
+<h3 id="사례-3-prefill과-decode를-나눈-운영">사례 3. prefill과 decode를 나눈 운영</h3>
+<p><strong>학습자:</strong> 긴 문서 요약이 많아서 prefill은 별도 노드에서 처리하고, decode는 다른 노드가 맡는 구조를 검토 중입니다.</p>
+<p><strong>교수자:</strong> 그 순간 질문이 바뀝니다. &quot;reuse hit가 높은가&quot;만으로는 부족하고, prefill에서 만든 KV cache를 decode 쪽이 어디서 받고 얼마나 빨리 이어받는지, eviction과 placement를 어떻게 할지까지 봐야 합니다 [S4]. 최신 엔진이 cache placement를 별도 최적화 항목으로 다루는 이유가 바로 이 운영 형태 때문입니다.</p>
+<h2 id="핵심-정리">핵심 정리</h2>
+<ul><li>KV cache는 decode에서 과거 토큰의 K, V를 재계산하지 않게 해 주는 핵심 상태다 [S1][S2].</li><li>KV cache가 커질수록 모델 크기뿐 아니라 살아 있는 총 토큰 수가 메모리 한계를 결정한다.</li><li>가변 길이 요청을 연속 메모리로만 다루면 fragmentation 때문에 빈 공간이 남아도 새 요청이 막힐 수 있다 [S1].</li><li>PagedAttention은 block table로 논리 시퀀스와 물리 배치를 분리해 fragmentation을 낮춘다 [S1][S2].</li><li>prefix reuse는 같은 앞부분을 다시 계산하지 않게 하는 전략이고, cache placement는 cache를 어느 자원에 둘지 정하는 전략이다 [S3][S4].</li></ul>
+<h2 id="복습-체크리스트">복습 체크리스트</h2>
+<ul><li>KV cache가 없을 때 decode 비용이 왜 반복적으로 불어나는지 설명할 수 있는가?</li><li>KV cache 메모리 식에서 어떤 항이 운영 중 실제로 가장 크게 흔들리는지 말할 수 있는가?</li><li>fragmentation과 단순 용량 부족을 구분해서 설명할 수 있는가?</li><li>PagedAttention의 block table이 무엇을 추상화하는지 말할 수 있는가?</li><li>prefix reuse와 cache placement를 서로 다른 운영 질문으로 나눌 수 있는가?</li></ul>
+<h2 id="대안과-비교">대안과 비교</h2>
+<p>| 선택지 | 잘 맞는 상황 | 장점 | 주의할 점 | | --- | --- | --- | --- | | 연속 메모리 중심 KV cache | 요청 길이가 비교적 균일하고 구현 단순성이 중요할 때 | 관리가 단순하고 직관적이다 | 길이 편차가 커지면 fragmentation과 재배치 부담이 커진다 | | PagedAttention 계열 block 관리 | 입력·출력 길이 편차가 크고 동시성이 높을 때 | 논리 시퀀스와 물리 배치를 분리해 메모리 활용도를 높이기 쉽다 [S1][S2] | block 관리와 주소 변환 오버헤드를 이해해야 한다 | | prefix reuse 강화 | 공통 시스템 프롬프트나 반복 prefix가 많은 서비스 | prefill 비용과 TTFT를 줄이기 좋다 [S3] | hit율이 낮으면 효과가 작고 footprint 문제를 직접 해결하지는 못한다 |</p>
+<div class="table-wrap"><table><thead><tr><th>disaggregated serving + cache placement 최적화</th><th>prefill과 decode를 다른 자원 풀에서 운영할 때</th><th>각 workload에 맞는 자원 배치가 가능하다 [S4]</th><th>cache 전달 경로, placement 정책, 운영 복잡도가 함께 증가한다</th></tr></thead><tbody></tbody></table></div>
+<h2 id="참고-이미지">참고 이미지</h2>
+<p><img src="./assets/img-01.png" alt="vLLM logo"></p>
+<ul><li>[I1] 캡션: vLLM logo</li><li>출처 번호: [I1]</li><li>활용 맥락: PagedAttention이 실제 serving 엔진 기능으로 연결된다는 점을 상기시키는 참고 이미지</li></ul>
+<p><img src="./assets/img-02.png" alt="Roofline model"></p>
+<ul><li>[I2] 캡션: Roofline model</li><li>출처 번호: [I2]</li><li>활용 맥락: compute 절감과 memory bottleneck이 동시에 등장하는 문제를 직관적으로 떠올리기 위한 참고 이미지</li></ul>
+<h2 id="출처">출처</h2>
+<p>| 번호 | 제목 | 발행 주체 | 날짜 | URL | 사용 이유 | | --- | --- | --- | --- | --- | --- | | [S1] | Efficient Memory Management for Large Language Model Serving with PagedAttention | vLLM authors / arXiv | 2023-09-11 | <a href="https://arxiv.org/abs/2309.06180" target="_blank" rel="noreferrer">https://arxiv.org/abs/2309.06180</a> | KV cache 메모리 관리와 PagedAttention의 block 기반 설계를 설명하는 핵심 자료 | | [S2] | vLLM Documentation | vLLM project | 2026-01-07 | <a href="https://docs.vllm.ai/en/latest/" target="_blank" rel="noreferrer">https://docs.vllm.ai/en/latest/</a> | 실제 serving 엔진에서 paged KV cache, scheduler, cache 관리가 어떻게 묶여 있는지 확인하는 자료 | | [S3] | KV Cache Reuse | NVIDIA TensorRT-LLM | 2026-03-08 (accessed) | <a href="https://nvidia.github.io/TensorRT-LLM/advanced/kv-cache-reuse.html" target="_blank" rel="noreferrer">https://nvidia.github.io/TensorRT-LLM/advanced/kv-cache-reuse.html</a> | prefix reuse와 cache hit 관점에서 KV cache 재사용 전략을 설명하는 자료 | | [S4] | Disaggregated Serving | NVIDIA TensorRT-LLM | 2026-03-08 (accessed) | <a href="https://nvidia.github.io/TensorRT-LLM/1.2.0rc6/features/disagg-serving.html" target="_blank" rel="noreferrer">https://nvidia.github.io/TensorRT-LLM/1.2.0rc6/features/disagg-serving.html</a> | prefill/decode 분리 환경에서 cache placement와 전달 문제를 이해하기 위한 자료 |</p>
+    </article>
+    <section class="content-panel surface quiz-panel">
+      <div class="section-heading">
+        <div>
+          <p class="eyebrow">Quiz</p>
+          <h2>복습 문제</h2>
+        </div>
+      </div>
+      <div class="prose">
+        <h1 id="kv-cache-and-pagedattention-퀴즈">KV Cache and PagedAttention 퀴즈</h1>
+<h2 id="객관식-1">객관식 1</h2>
+<p>다음 중 KV cache가 decode 단계에서 필요한 가장 직접적인 이유로 가장 적절한 것은 무엇인가?</p>
+<ol><li>attention을 convolution으로 바꾸기 위해</li><li>과거 토큰의 K, V를 매 step 다시 계산하지 않기 위해</li><li>모델 파라미터 수를 자동으로 줄이기 위해</li><li>모든 요청의 출력 길이를 같게 만들기 위해</li></ol>
+<h2 id="객관식-2">객관식 2</h2>
+<p>가변 길이 요청이 섞인 서빙 풀에서 &quot;총 빈 메모리는 남아 있는데 새 긴 요청이 바로 못 들어간다&quot;는 현상이 반복된다. 가장 먼저 떠올려야 할 문제는 무엇인가?</p>
+<ol><li>tokenizer 오류</li><li>fragmentation 또는 비효율적인 연속 메모리 예약</li><li>prefix reuse hit율 과다</li><li>샘플링 temperature 부족</li></ol>
+<h2 id="객관식-3">객관식 3</h2>
+<p>다음 중 cache reuse와 cache placement를 올바르게 구분한 설명은 무엇인가?</p>
+<ol><li>reuse는 KV cache를 압축하고, placement는 attention을 제거한다</li><li>reuse는 반복 prefix를 다시 쓰는 문제이고, placement는 cache를 어느 자원에 둘지 정하는 문제다</li><li>reuse와 placement는 같은 뜻이며 구현 이름만 다르다</li><li>reuse는 decode 전용이고 placement는 prefill 전용이라 서로 완전히 독립이다</li></ol>
+<h2 id="짧은-서술형-1">짧은 서술형 1</h2>
+<p>다음 식이 운영 지표 관점에서 무엇을 말해 주는지 3~4문장으로 설명하라.</p>
+<div class="math-block">$$
+M_{\mathrm{KV}} \approx 2 \times L \times H_{\mathrm{kv}} \times d_{\mathrm{head}} \times N_{\mathrm{tok}} \times b
+$$</div>
+<h2 id="짧은-서술형-2">짧은 서술형 2</h2>
+<p>PagedAttention이 &quot;메모리를 더 많이 넣는 방식&quot;이 아니라 &quot;배치 방식을 바꾸는 방식&quot;이라고 말할 수 있는 이유를 3~4문장으로 설명하라.</p>
+<h2 id="심화-설명형-1">심화 설명형 1</h2>
+<p>다음 상황에서 운영자가 어떤 순서로 문제를 좁혀 가야 하는지 설명하라.</p>
+<ul><li>서비스: 고객 지원 챗봇</li><li>공통 시스템 프롬프트: 1,200토큰</li><li>사용자 질문: 평균 150토큰</li><li>응답: 평균 80토큰</li><li>관측: 첫 토큰은 점점 빨라졌지만, 동시 접속이 늘면 GPU 메모리 한계에 자주 걸린다</li></ul>
+<p><code>prefix reuse</code>, <code>live tokens</code>, <code>memory footprint</code>, KV cache의 역할을 모두 포함해서 6문장 이상으로 답하라.</p>
+<h2 id="심화-설명형-2">심화 설명형 2</h2>
+<p>다음 상황에서 PagedAttention 도입 효과와 cache placement 이슈를 함께 설명하라.</p>
+<ul><li>워크로드 A: 짧은 질의응답, 출력 100토큰 내외</li><li>워크로드 B: 코드 생성, 출력 5,000토큰 이상이 자주 발생</li><li>두 워크로드가 같은 시간대에 섞인다</li><li>prefill은 공용 노드에서 처리하고 decode는 별도 노드로 보내는 구조를 검토 중이다</li></ul>
+<p><code>fragmentation</code>, <code>block table</code>, <code>disaggregated serving</code>, <code>cache transfer</code>를 모두 포함해서 6문장 이상으로 답하라.</p><details class="answer-key"><summary>정답 및 해설 보기</summary><h2 id="정답-및-해설">정답 및 해설</h2>
+<ul><li>객관식 1 정답: 2. KV cache의 핵심 역할은 과거 토큰의 K, V를 저장해 두고 decode에서 재사용하는 것이다. 이것이 없으면 긴 생성에서 같은 과거를 반복 계산하게 되어 비용이 급격히 커진다.</li><li>객관식 2 정답: 2. 이 현상은 총 용량 부족이 아니라 메모리 배치 실패일 수 있다. 가변 길이 시퀀스를 큰 연속 구간으로 예약하면 중간 빈 공간이 남아도 새 긴 요청을 바로 넣지 못하는 fragmentation이 생긴다.</li><li>객관식 3 정답: 2. cache reuse는 반복 prefix를 다시 계산하지 않게 하는 전략이고, cache placement는 KV cache를 어느 노드나 장치에 둘지 정하는 전략이다. 최신 serving 엔진은 이 둘을 별도 최적화 항목으로 다룬다.</li><li>짧은 서술형 1 예시: 이 식은 KV cache 메모리가 모델 구조와 현재 살아 있는 총 토큰 수의 곱으로 커진다는 뜻이다. 운영 중 가장 크게 흔들리는 항은 보통 <code>N_tok</code>다. 동시 요청 수가 늘거나 긴 시퀀스가 오래 남아 있으면 memory footprint가 빠르게 커진다. 따라서 throughput 문제를 볼 때는 파라미터 크기만이 아니라 live token 관리도 함께 봐야 한다.</li><li>짧은 서술형 2 예시: PagedAttention은 시퀀스를 block 단위의 논리 목록으로 관리하고, 각 block을 물리 메모리의 임의 위치에 배치한다. 그래서 시퀀스는 연속처럼 보이지만 실제 메모리는 조각난 공간을 활용할 수 있다. 핵심은 용량을 더 넣는 것이 아니라 논리 주소와 물리 주소를 분리하는 데 있다. 이 접근이 가변 길이 요청에서 fragmentation을 낮추는 이유다.</li><li>심화 설명형 1 해설 포인트: 이 상황에서 prefix reuse가 잘 작동하면 공통 시스템 프롬프트 재계산이 줄어 첫 토큰이 빨라질 수 있다. 하지만 응답이 계속 쌓이고 세션 수가 늘면 live tokens가 증가해 KV cache footprint는 여전히 커진다. 운영자는 reuse hit가 높다는 사실만 보고 안심하면 안 된다. 동시에 살아 있는 토큰 총량과 장수 세션 비율을 봐서 memory pressure의 원인이 무엇인지 구분해야 한다. KV cache는 decode를 빠르게 만들지만, 그 상태를 오래 들고 있으면 메모리 예산을 잡아먹는다. 따라서 이 사례의 핵심은 &quot;reuse 성공&quot;과 &quot;footprint 안정화&quot;를 별개의 목표로 관리하는 것이다.</li><li>심화 설명형 2 해설 포인트: 길이가 크게 다른 두 워크로드가 섞이면 연속 메모리 예약 방식에서 fragmentation이 커지기 쉽다. PagedAttention은 block table로 논리 시퀀스와 물리 block 배치를 분리해 이런 환경에서 메모리 활용을 개선한다. 그러나 prefill과 decode를 분리한 disaggregated serving을 도입하면 질문이 하나 더 생긴다. prefill 쪽에서 만든 KV cache를 decode 쪽으로 어떻게 전달할지, cache transfer 지연과 placement 정책을 어떻게 설계할지 봐야 한다. 즉, PagedAttention은 메모리 배치 문제를 완화하고, disaggregated serving은 자원 분리 문제를 푸는 접근이다. 둘은 함께 쓸 수 있지만, 하나가 다른 하나를 자동으로 대신하지는 않는다.</li></ul></details>
+      </div>
+    </section>
+    <nav class="pager">
+      <a class="pager-link" href="../01-prefill-vs-decode/"><span>이전</span><strong>Prefill vs Decode</strong></a>
+      <a class="pager-link" href="../03-continuous-batching/"><span>다음</span><strong>Continuous Batching</strong></a>
+    </nav>
+    
+      </section>
+      <aside class="page-sidebar">
+    <div class="sidebar-panel surface">
+      <p class="eyebrow">On This Page</p>
+      <div class="toc" data-toc>
+        <a class="toc-link" href="#수업-개요">수업 개요</a><a class="toc-link" href="#학습-목표">학습 목표</a><a class="toc-link" href="#수업-전에-생각할-질문">수업 전에 생각할 질문</a><a class="toc-link" href="#강의-스크립트">강의 스크립트</a><a class="toc-link sub" href="#장면-1-kv-cache는-사치가-아니라-decode의-기본-장치다">장면 1. KV cache는 사치가 아니라 decode의 기본 장치다</a><a class="toc-link sub" href="#장면-2-계산을-아끼는-순간-이번에는-메모리가-문제로-나온다">장면 2. 계산을 아끼는 순간, 이번에는 메모리가 문제로 나온다</a><a class="toc-link sub" href="#장면-3-연속-할당-방식은-길이가-제각각인-요청에서-쉽게-망가진다">장면 3. 연속 할당 방식은 길이가 제각각인 요청에서 쉽게 망가진다</a><a class="toc-link sub" href="#장면-4-pagedattention은-논리적으로는-길게-물리적으로는-쪼개서-저장한다">장면 4. PagedAttention은 &quot;논리적으로는 길게, 물리적으로는 쪼개서&quot; 저장한다</a><a class="toc-link sub" href="#장면-5-reuse와-placement는-비슷해-보여도-운영-질문이-다르다">장면 5. reuse와 placement는 비슷해 보여도 운영 질문이 다르다</a><a class="toc-link sub" href="#장면-6-운영자는-어떤-순서로-문제를-좁히는가">장면 6. 운영자는 어떤 순서로 문제를 좁히는가</a><a class="toc-link" href="#자주-헷갈리는-포인트">자주 헷갈리는 포인트</a><a class="toc-link" href="#사례로-다시-보기">사례로 다시 보기</a><a class="toc-link sub" href="#사례-1-상담-봇의-공통-시스템-프롬프트">사례 1. 상담 봇의 공통 시스템 프롬프트</a><a class="toc-link sub" href="#사례-2-길이가-제각각인-코딩-요청-풀">사례 2. 길이가 제각각인 코딩 요청 풀</a><a class="toc-link sub" href="#사례-3-prefill과-decode를-나눈-운영">사례 3. prefill과 decode를 나눈 운영</a><a class="toc-link" href="#핵심-정리">핵심 정리</a><a class="toc-link" href="#복습-체크리스트">복습 체크리스트</a><a class="toc-link" href="#대안과-비교">대안과 비교</a><a class="toc-link" href="#참고-이미지">참고 이미지</a><a class="toc-link" href="#출처">출처</a>
+      </div>
+    </div>
+    </aside>
+    </div>
+  </main>
+  <script type="module" src="../../assets/app.js"></script>
+  <script type="module">
+    import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs';
+    mermaid.initialize({ startOnLoad: true, theme: 'neutral', securityLevel: 'loose' });
+  </script>
+  <script>
+    window.MathJax = {
+      tex: { inlineMath: [['$', '$'], ['\\(', '\\)']], displayMath: [['$$', '$$'], ['\\[', '\\]']] },
+      svg: { fontCache: 'global' }
+    };
+  </script>
+  <script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-svg.js" async></script>
+</body>
+</html>

@@ -1,0 +1,49 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="760" viewBox="0 0 1200 760" role="img" aria-labelledby="title desc">
+  <title id="title">Compile and Import Reuse Excerpt</title>
+  <desc id="desc">Local excerpt visual reconstructed from QNN Execution Provider, Qualcomm AI Hub compile examples, and OpenVINO NPU device documentation.</desc>
+  <rect width="1200" height="760" fill="#eef4f1"/>
+  <rect x="28" y="28" width="1144" height="704" rx="24" fill="#fbfffd" stroke="#bfd4cb" stroke-width="2"/>
+  <text x="68" y="90" font-family="Courier New, monospace" font-size="30" font-weight="700" fill="#25352d">Compile path and import path reuse</text>
+  <text x="68" y="124" font-family="Courier New, monospace" font-size="18" fill="#486255">Reconstructed from S2, S3, and S4. Artifact names and properties are source-backed.</text>
+
+  <rect x="64" y="164" width="332" height="500" rx="18" fill="#1f2430"/>
+  <text x="90" y="208" font-family="Courier New, monospace" font-size="24" font-weight="700" fill="#f5d76e">QNN context cache [S2]</text>
+  <text x="90" y="250" font-family="Courier New, monospace" font-size="18" fill="#d8dee9">ep.context_enable = "1"</text>
+  <text x="90" y="282" font-family="Courier New, monospace" font-size="18" fill="#d8dee9">ep.context_file_path = "./model_a_ctx.onnx"</text>
+  <text x="90" y="314" font-family="Courier New, monospace" font-size="18" fill="#d8dee9">ep.context_embed_mode = "0"</text>
+  <text x="90" y="370" font-family="Courier New, monospace" font-size="18" fill="#8bd5ca">session creation generates:</text>
+  <text x="90" y="402" font-family="Courier New, monospace" font-size="18" fill="#8bd5ca">model_a_ctx.onnx</text>
+  <text x="90" y="434" font-family="Courier New, monospace" font-size="18" fill="#8bd5ca">model_a_qnn.bin</text>
+  <text x="90" y="490" font-family="Courier New, monospace" font-size="18" fill="#8bd5ca">no inference run required</text>
+
+  <rect x="434" y="164" width="332" height="500" rx="18" fill="#2f231d"/>
+  <text x="460" y="208" font-family="Courier New, monospace" font-size="24" font-weight="700" fill="#ffd08a">AI Hub artifacts [S3]</text>
+  <text x="460" y="250" font-family="Courier New, monospace" font-size="18" fill="#f7ead9">options="--target_runtime qnn_context_binary"</text>
+  <text x="460" y="306" font-family="Courier New, monospace" font-size="18" fill="#f7ead9">qnn_context_binary:</text>
+  <text x="460" y="338" font-family="Courier New, monospace" font-size="18" fill="#f7ead9">OS-agnostic</text>
+  <text x="460" y="370" font-family="Courier New, monospace" font-size="18" fill="#f7ead9">device-specific</text>
+  <text x="460" y="402" font-family="Courier New, monospace" font-size="18" fill="#f7ead9">NPU-only</text>
+  <text x="460" y="458" font-family="Courier New, monospace" font-size="18" fill="#f3c07b">precompiled_qnn_onnx/</text>
+  <text x="460" y="490" font-family="Courier New, monospace" font-size="18" fill="#f3c07b">  model.onnx</text>
+  <text x="460" y="522" font-family="Courier New, monospace" font-size="18" fill="#f3c07b">  model.bin</text>
+
+  <rect x="804" y="164" width="332" height="500" rx="18" fill="#1c2d2b"/>
+  <text x="830" y="208" font-family="Courier New, monospace" font-size="24" font-weight="700" fill="#9ae6d8">OpenVINO cache import [S4]</text>
+  <text x="830" y="250" font-family="Courier New, monospace" font-size="18" fill="#d7f2ee">ov::cache_dir</text>
+  <text x="830" y="306" font-family="Courier New, monospace" font-size="18" fill="#d7f2ee">cache hit on same compilation request</text>
+  <text x="830" y="338" font-family="Courier New, monospace" font-size="18" fill="#d7f2ee">plugin will import model</text>
+  <text x="830" y="370" font-family="Courier New, monospace" font-size="18" fill="#d7f2ee">instead of recompiling</text>
+  <text x="830" y="426" font-family="Courier New, monospace" font-size="18" fill="#a8e6a1">FEIL / FIL</text>
+  <text x="830" y="458" font-family="Courier New, monospace" font-size="18" fill="#a8e6a1">UMD dynamic model caching</text>
+
+  <path d="M398 414 L430 414" stroke="#d56f38" stroke-width="4" marker-end="url(#arrow)"/>
+  <path d="M768 414 L800 414" stroke="#d56f38" stroke-width="4" marker-end="url(#arrow)"/>
+  <rect x="446" y="680" width="308" height="30" rx="10" fill="#d56f38"/>
+  <text x="470" y="701" font-family="Courier New, monospace" font-size="16" font-weight="700" fill="#fffaf3">cold start: compile path, warm start: import path [synthesis]</text>
+
+  <defs>
+    <marker id="arrow" markerWidth="10" markerHeight="10" refX="6" refY="3" orient="auto" markerUnits="strokeWidth">
+      <path d="M0,0 L0,6 L6,3 z" fill="#d56f38"/>
+    </marker>
+  </defs>
+</svg>

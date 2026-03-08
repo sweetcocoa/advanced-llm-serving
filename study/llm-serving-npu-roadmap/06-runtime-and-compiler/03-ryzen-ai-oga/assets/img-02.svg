@@ -1,0 +1,42 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="720" viewBox="0 0 1200 720" role="img" aria-labelledby="title desc">
+  <title id="title">Ryzen AI split decision map</title>
+  <desc id="desc">Decision path for keeping or reverting a Ryzen AI hybrid split.</desc>
+  <rect width="1200" height="720" fill="#eef6f2"/>
+  <rect x="420" y="40" width="360" height="110" rx="24" fill="#143642"/>
+  <text x="600" y="88" text-anchor="middle" font-size="32" font-family="Helvetica, Arial, sans-serif" fill="#f6fbf8">Product goal</text>
+  <text x="600" y="126" text-anchor="middle" font-size="24" font-family="Helvetica, Arial, sans-serif" fill="#f6fbf8">first token / battery / thermal budget</text>
+
+  <rect x="110" y="230" width="280" height="130" rx="22" fill="#c84c09"/>
+  <text x="250" y="282" text-anchor="middle" font-size="28" font-family="Helvetica, Arial, sans-serif" fill="#fff7f0">Long decode?</text>
+  <text x="250" y="320" text-anchor="middle" font-size="22" font-family="Helvetica, Arial, sans-serif" fill="#fff7f0">If no, simplify fast</text>
+
+  <rect x="460" y="230" width="280" height="130" rx="22" fill="#3c6e71"/>
+  <text x="600" y="282" text-anchor="middle" font-size="28" font-family="Helvetica, Arial, sans-serif" fill="#f4f9f9">One handoff?</text>
+  <text x="600" y="320" text-anchor="middle" font-size="22" font-family="Helvetica, Arial, sans-serif" fill="#f4f9f9">GPU prefill to NPU decode</text>
+
+  <rect x="810" y="230" width="280" height="130" rx="22" fill="#f4b942"/>
+  <text x="950" y="282" text-anchor="middle" font-size="28" font-family="Helvetica, Arial, sans-serif" fill="#2c2416">Ops budget?</text>
+  <text x="950" y="320" text-anchor="middle" font-size="22" font-family="Helvetica, Arial, sans-serif" fill="#2c2416">artifact / provider / regression</text>
+
+  <path d="M600 150 V206" stroke="#143642" stroke-width="10" fill="none"/>
+  <polygon points="600,206 584,182 616,182" fill="#143642"/>
+  <path d="M390 295 H436" stroke="#c84c09" stroke-width="10" fill="none"/>
+  <polygon points="436,295 412,279 412,311" fill="#c84c09"/>
+  <path d="M740 295 H786" stroke="#3c6e71" stroke-width="10" fill="none"/>
+  <polygon points="786,295 762,279 762,311" fill="#3c6e71"/>
+
+  <rect x="150" y="500" width="360" height="140" rx="22" fill="#b23a48"/>
+  <text x="330" y="552" text-anchor="middle" font-size="30" font-family="Helvetica, Arial, sans-serif" fill="#fff3f4">Revert to simpler path</text>
+  <text x="330" y="590" text-anchor="middle" font-size="22" font-family="Helvetica, Arial, sans-serif" fill="#fff3f4">short replies</text>
+  <text x="330" y="620" text-anchor="middle" font-size="22" font-family="Helvetica, Arial, sans-serif" fill="#fff3f4">repeated handoffs or fallback</text>
+
+  <rect x="690" y="500" width="360" height="140" rx="22" fill="#1f7a8c"/>
+  <text x="870" y="552" text-anchor="middle" font-size="30" font-family="Helvetica, Arial, sans-serif" fill="#f2fbfc">Keep hybrid candidate</text>
+  <text x="870" y="590" text-anchor="middle" font-size="22" font-family="Helvetica, Arial, sans-serif" fill="#f2fbfc">long decode</text>
+  <text x="870" y="620" text-anchor="middle" font-size="22" font-family="Helvetica, Arial, sans-serif" fill="#f2fbfc">single boundary + manageable ops cost</text>
+
+  <path d="M250 360 V474" stroke="#b23a48" stroke-width="10" fill="none"/>
+  <polygon points="250,474 234,450 266,450" fill="#b23a48"/>
+  <path d="M950 360 V474" stroke="#1f7a8c" stroke-width="10" fill="none"/>
+  <polygon points="950,474 934,450 966,450" fill="#1f7a8c"/>
+</svg>

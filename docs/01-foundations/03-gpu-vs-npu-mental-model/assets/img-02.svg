@@ -1,0 +1,40 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="960" height="360" viewBox="0 0 960 360" role="img" aria-label="GPU NPU partition and escape path">
+  <rect width="960" height="360" fill="#f8fafc"/>
+  <style>
+    text { font-family: Arial, sans-serif; fill: #0f172a; }
+    .title { font-size: 26px; font-weight: 700; }
+    .sub { font-size: 15px; fill: #475569; }
+    .label { font-size: 17px; font-weight: 700; }
+    .note { font-size: 14px; font-weight: 700; }
+    .dash { stroke: #94a3b8; stroke-width: 2; stroke-dasharray: 8 6; fill: none; }
+  </style>
+  <text x="28" y="40" class="title">GPU/NPU partition and escape path</text>
+  <rect x="32" y="88" width="218" height="106" rx="16" fill="#dbeafe" stroke="#2563eb" stroke-width="2"/>
+  <text x="141" y="124" text-anchor="middle" class="label">Stable block</text>
+  <text x="141" y="148" text-anchor="middle" class="sub">fixed chunk, repeatable shape</text>
+  <text x="141" y="170" text-anchor="middle" class="sub">candidate for NPU compile</text>
+  <path d="M250 141 L332 141" stroke="#2563eb" stroke-width="4" fill="none"/>
+  <polygon points="332,141 316,133 316,149" fill="#2563eb"/>
+  <rect x="332" y="88" width="220" height="106" rx="16" fill="#dcfce7" stroke="#16a34a" stroke-width="2"/>
+  <text x="442" y="124" text-anchor="middle" class="label">NPU stage</text>
+  <text x="442" y="148" text-anchor="middle" class="sub">run only if all ops are supported</text>
+  <text x="442" y="170" text-anchor="middle" class="sub">keep handoff count low</text>
+  <path d="M552 141 L646 141" stroke="#16a34a" stroke-width="4" fill="none"/>
+  <polygon points="646,141 630,133 630,149" fill="#16a34a"/>
+  <rect x="646" y="68" width="282" height="146" rx="16" fill="#fee2e2" stroke="#dc2626" stroke-width="2"/>
+  <text x="787" y="110" text-anchor="middle" class="label">GPU decode loop</text>
+  <text x="787" y="134" text-anchor="middle" class="sub">variable length, dynamic stop, cache-heavy path</text>
+  <text x="787" y="158" text-anchor="middle" class="sub">leave it on one runtime to avoid per-token handoff</text>
+  <text x="787" y="184" text-anchor="middle" class="note">good cut: handoff once before decode</text>
+  <path d="M442 194 L442 270 L646 270" stroke="#f59e0b" stroke-width="4" fill="none"/>
+  <polygon points="646,270 630,262 630,278" fill="#f59e0b"/>
+  <rect x="320" y="230" width="244" height="88" rx="16" fill="#fef3c7" stroke="#f59e0b" stroke-width="2"/>
+  <text x="442" y="262" text-anchor="middle" class="label">Unsupported op?</text>
+  <text x="442" y="286" text-anchor="middle" class="sub">escape early to GPU fallback path</text>
+  <text x="442" y="308" text-anchor="middle" class="sub">do not bounce every token</text>
+  <path d="M706 214 L706 302" class="dash"/>
+  <text x="724" y="254" class="note" fill="#dc2626">bad cut</text>
+  <text x="724" y="278" class="sub">GPU &lt;-&gt; NPU each token</text>
+  <text x="724" y="300" class="sub">handoff dominates small gains</text>
+  <text x="30" y="336" class="sub">Instructor interpretation built from [S3] runtime context and [S4] support-constraint examples: choose the partition where escape happens rarely and the decode loop stays on one device.</text>
+</svg>

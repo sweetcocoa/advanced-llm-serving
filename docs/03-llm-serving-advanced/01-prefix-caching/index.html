@@ -1,0 +1,212 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Prefix Caching | 고급 Serving 패턴</title>
+  <meta name="description" content="이 챕터의 질문은 단순합니다. &quot;매 요청마다 똑같이 읽는 앞부분을 왜 계속 다시 prefill하나?&quot; Prefix caching은 같은 system prompt, 공통 정책 문서, 고정된 RAG 상단 문맥처럼 변하지 않는 입력 앞부분을 재사용해서 prefill 비용을 줄이려는 전략입니다. 이때 핵심 tradeoff는 캐시 hit율과 invalidation 비용입니다. hit율이 높으면 prefill이 거의 사라지지만, 프롬프트 안에 날짜, 사용자별 정책, 자주 바뀌는 tool 목록을 섞어 두면 캐시가 쉽게 깨집니다. [S1][S2][S3][S5][S6]">
+  <meta name="theme-color" content="#10182a">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+KR:wght@400;500;600;700&family=Space+Grotesk:wght@500;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../../assets/style.css">
+</head>
+<body class="page-chapter" data-page-kind="chapter" data-page-id="study/llm-serving-npu-roadmap/03-llm-serving-advanced/01-prefix-caching" data-root-prefix="../../">
+  <div class="reading-progress" data-reading-progress></div>
+  <header class="site-header">
+    <a class="brand" href="../../">
+      <span class="brand-kicker">GitHub Pages Study</span>
+      <strong>LLM Serving + NPU</strong>
+    </a>
+    <nav class="top-nav"><a class="top-nav-link" href="../../01-foundations/">기초와 성능 직관</a><a class="top-nav-link" href="../../02-llm-serving-core/">LLM Serving 핵심</a><a class="top-nav-link is-active" href="../">고급 Serving 패턴</a><a class="top-nav-link" href="../../04-serving-systems/">Serving 시스템 설계</a><a class="top-nav-link" href="../../05-npu-stack/">NPU 소프트웨어 스택</a><a class="top-nav-link" href="../../06-runtime-and-compiler/">런타임과 컴파일러</a><a class="top-nav-link" href="../../07-synthesis/">종합 정리와 최신 흐름</a></nav>
+    <div class="search-shell">
+      <input type="search" placeholder="챕터, 모듈, 키워드 검색" aria-label="검색" data-global-search>
+      <div class="search-results" data-search-results hidden></div>
+    </div>
+  </header>
+  <main class="page-frame">
+    
+    <section class="hero">
+      <div class="hero-copy">
+        <p class="eyebrow">고급 Serving 패턴</p>
+        <h1>Prefix Caching</h1>
+        <p class="hero-summary">이 챕터의 질문은 단순합니다. &quot;매 요청마다 똑같이 읽는 앞부분을 왜 계속 다시 prefill하나?&quot; Prefix caching은 같은 system prompt, 공통 정책 문서, 고정된 RAG 상단 문맥처럼 변하지 않는 입력 앞부분을 재사용해서 prefill 비용을 줄이려는 전략입니다. 이때 핵심 tradeoff는 캐시 hit율과 invalidation 비용입니다. hit율이 높으면 prefill이 거의 사라지지만, 프롬프트 안에 날짜, 사용자별 정책, 자주 바뀌는 tool 목록을 섞어 두면 캐시가 쉽게 깨집니다. [S1][S2][S3][S5][S6]</p>
+      </div>
+      <div class="hero-stats">
+        <div class="stat-card"><strong>35-50 min</strong><span>reading time</span></div>
+        <div class="stat-card"><strong>2026-03-08</strong><span>updated</span></div>
+        <div class="stat-card"><button class="progress-toggle" type="button" data-progress-toggle data-progress-id="study/llm-serving-npu-roadmap/03-llm-serving-advanced/01-prefix-caching">완료로 표시</button></div>
+      </div>
+    </section>
+    
+    <div class="page-layout">
+      <section class="page-main content-shell">
+        
+    <article class="content-panel surface prose" data-reading-target>
+      <h2 id="수업-개요">수업 개요</h2>
+<p>이 챕터의 질문은 단순합니다. &quot;매 요청마다 똑같이 읽는 앞부분을 왜 계속 다시 prefill하나?&quot; Prefix caching은 같은 system prompt, 공통 정책 문서, 고정된 RAG 상단 문맥처럼 변하지 않는 입력 앞부분을 재사용해서 prefill 비용을 줄이려는 전략입니다. 이때 핵심 tradeoff는 캐시 hit율과 invalidation 비용입니다. hit율이 높으면 prefill이 거의 사라지지만, 프롬프트 안에 날짜, 사용자별 정책, 자주 바뀌는 tool 목록을 섞어 두면 캐시가 쉽게 깨집니다. [S1][S2][S3][S5][S6]</p>
+<h2 id="학습-목표">학습 목표</h2>
+<ul><li>prefix caching이 어떤 종류의 요청에서 효과가 큰지 설명할 수 있다.</li><li>prefix caching과 KV cache reuse를 운영 관점에서 구분할 수 있다.</li><li>hit율, invalidation 비용, prefill/decode 분리 여부를 함께 보고 진단 순서를 세울 수 있다.</li></ul>
+<h2 id="수업-전에-생각할-질문">수업 전에 생각할 질문</h2>
+<ul><li>같은 고객지원 봇이라도 어떤 팀은 prefix cache hit율이 높고, 어떤 팀은 낮을까?</li><li>캐시 miss를 줄이는 것과 prefill 자원을 분리하는 것은 어떤 관계일까?</li><li>structured output이나 tool calling이 들어오면 왜 &quot;공통 prefix&quot; 설계가 더 까다로워질까?</li></ul>
+<h2 id="강의-스크립트">강의 스크립트</h2>
+<h3 id="1-어떤-요청이-prefix-caching에-잘-맞는가">1. 어떤 요청이 prefix caching에 잘 맞는가</h3>
+<p><strong>교수자:</strong> prefix caching은 &quot;긴 입력&quot; 일반을 노리는 기능이 아닙니다. &quot;긴데 앞부분이 반복되는 입력&quot;을 노립니다. 예를 들어 고객지원 assistant가 매번 같은 system prompt, 같은 보안 정책, 같은 브랜드 톤 가이드를 붙이고 마지막에 사용자 질문만 바뀐다면, 그 공통 앞부분이 캐시 대상이 됩니다.</p>
+<p><strong>학습자:</strong> 그러면 긴 문서 요약처럼 매번 원문 전체가 달라지는 작업은 잘 안 맞겠네요?</p>
+<p><strong>교수자:</strong> 맞습니다. 길이보다 반복성이 중요합니다. 길어도 반복이 없으면 miss가 계속 납니다. 반대로 2천 토큰짜리 system prompt가 거의 고정이면 충분히 가치가 있습니다. 이 챕터에서 봐야 할 첫 기준은 &quot;공통 prefix를 설계할 수 있는가&quot;입니다.</p>
+<p><strong>학습자:</strong> 공통 prefix 사례를 두 개만 바로 꼽아 주세요.</p>
+<p><strong>교수자:</strong> 첫째, 사내 정책 Q&amp;A입니다. 회사 규정집 상단 30페이지와 답변 정책은 거의 그대로 붙고 질문만 바뀝니다. 둘째, agent형 고객지원입니다. tool 설명과 응답 형식은 고정인데 사용자의 주문번호나 문의 내용만 뒤에 붙습니다. 여기서 prefix를 안정적으로 고정하면 prefill 비용을 크게 줄일 수 있습니다. [S3][S5][S6]</p>
+<p>캐시가 잘 맞는 요청의 기대 latency는 아래처럼 단순하게 볼 수 있습니다.</p>
+<p>\[ E[T] = T_{\text{decode}} + (1-h)\,T_{\text{prefill}} \]</p>
+<ul><li>\(h\): prefix cache hit율</li><li>\(T_{\text{prefill}}\): 공통 prefix를 새로 읽을 때 드는 시간</li><li>\(T_{\text{decode}}\): 토큰 생성 단계 시간</li></ul>
+<p>이 식이 말하는 바는 분명합니다. decode는 그대로 남고, prefix caching은 prefill만 줄입니다. 그래서 decode가 병목인 워크로드에는 체감이 약하고, 긴 공통 prompt 때문에 prefill이 큰 워크로드에서는 체감이 큽니다.</p>
+<pre class="mermaid">sequenceDiagram
+    participant C as Client
+    participant R as Router
+    participant X as Prefix Cache
+    participant P as Prefill Worker
+    participant D as Decode Worker
+
+    C-&gt;&gt;R: request(system prompt + shared context + user query)
+    R-&gt;&gt;X: hash / lookup shared prefix
+    alt cache hit
+        X--&gt;&gt;R: reuse KV for prefix
+        R-&gt;&gt;D: decode only for suffix
+        D--&gt;&gt;C: response
+    else cache miss
+        X--&gt;&gt;R: miss
+        R-&gt;&gt;P: run prefill for full prefix
+        P--&gt;&gt;X: store reusable prefix state
+        R-&gt;&gt;D: continue decode
+        D--&gt;&gt;C: response
+    end</pre>
+<p>이 시퀀스를 보면 왜 [S1], [S2]의 disaggregated prefill/serving 문서가 prefix caching 챕터와 연결되는지 드러납니다. miss가 나는 순간 비싼 일은 prefill 쪽에서 벌어지고, hit가 나면 decode만 남기 때문입니다. [S1][S2]</p>
+<h3 id="2-prefix-caching과-kv-cache-reuse는-같은-말이-아니다">2. prefix caching과 KV cache reuse는 같은 말이 아니다</h3>
+<p><strong>학습자:</strong> 그런데 source 목록에 KV Cache Reuse가 따로 있네요. prefix caching과 그냥 같은 개념 아닌가요?</p>
+<p><strong>교수자:</strong> 현장에서는 섞어 쓰지만, 운영 판단을 할 때는 분리해서 봐야 합니다. prefix caching은 &quot;여러 요청이 공유하는 앞부분&quot;을 다시 쓰는 관점입니다. KV cache reuse는 이미 계산된 KV 상태를 재활용하는 더 넓은 관점으로 볼 수 있습니다. 그래서 질문도 달라집니다. prefix caching은 &quot;어떤 prefix를 표준화할 것인가&quot;를 묻고, KV reuse는 &quot;어떤 KV 상태를 얼마나 오래 보존하고 어디서 다시 꺼낼 것인가&quot;를 묻습니다. [S3]</p>
+<p><strong>학습자:</strong> 그러면 장애 대응도 다르겠네요?</p>
+<p><strong>교수자:</strong> 그렇습니다. prefix caching 문제는 보통 프롬프트 템플릿, 해시 기준, 버전 관리, invalidation 정책에서 시작합니다. 반면 KV reuse 문제는 메모리 용량, 블록 관리, 보존 정책 같은 시스템 쪽 이슈가 더 큽니다. 둘을 같은 단어로 뭉개면 원인을 잘못 찾기 쉽습니다.</p>
+<h3 id="3-invalidation은-왜-작은-변화에도-치명적인가">3. invalidation은 왜 작은 변화에도 치명적인가</h3>
+<p><strong>교수자:</strong> prefix caching을 망치는 가장 흔한 실수는 공통 prefix에 자주 바뀌는 값을 넣는 겁니다. 예를 들어 system prompt 맨 위에 <code>현재 시각: ...</code>을 넣으면 매 요청마다 해시가 달라질 수 있습니다. 고객별 AB 테스트 문구, 회차별 정책 버전, 자주 바뀌는 tool 설명도 같은 문제를 만듭니다.</p>
+<p><strong>학습자:</strong> 구조화 출력이나 tool calling도 여기에 영향을 주나요?</p>
+<p><strong>교수자:</strong> 크게 줍니다. structured outputs는 응답 형식을 강하게 고정하고, tool calling은 호출 가능한 함수 목록과 설명을 함께 다루게 만듭니다. 이 정보가 prefix 안에 들어가면, 스키마나 tool set이 바뀔 때 캐시가 깨집니다. 즉 &quot;출력 안정성&quot;을 얻으려다 &quot;입력 prefix 안정성&quot;을 잃을 수 있습니다. [S5][S6]</p>
+<p>실무에서는 savings만 보면 안 되고, 캐시를 깨뜨리는 비용까지 같이 봐야 합니다.</p>
+<p>\[ \text{NetBenefit} = N \cdot h \cdot C_{\text{prefill-saved}} - N \cdot p_{\text{inv}} \cdot C_{\text{rebuild}} \]</p>
+<ul><li>\(N\): 관측 기간 동안의 요청 수</li><li>\(h\): prefix cache hit율</li><li>\(p_{\text{inv}}\): 요청당 invalidation이 발생할 확률</li><li>\(C_{\text{rebuild}}\): 캐시 재구축으로 추가되는 비용</li></ul>
+<p>이 식은 &quot;캐시가 있느냐&quot;보다 &quot;안정적으로 유지되느냐&quot;가 중요하다는 점을 보여 줍니다. hit율이 90%여도 정책 버전이 자주 바뀌어 재구축 비용이 크면 순이익이 작아질 수 있습니다.</p>
+<h3 id="4-prefix-miss가-많아도-prefilldecode-분리를-보는-이유">4. prefix miss가 많아도 prefill/decode 분리를 보는 이유</h3>
+<p><strong>학습자:</strong> hit율이 아직 낮으면 prefix caching은 미뤄도 되지 않나요?</p>
+<p><strong>교수자:</strong> 그렇게 단순하지 않습니다. hit율이 낮더라도 miss가 몰리는 구간이 prefill 병목이라면, prefill/decode 분리 설계는 여전히 유효합니다. [S1], [S2]가 중요한 이유가 여기 있습니다. 캐시 최적화와 자원 분리는 경쟁 관계가 아니라 보완 관계입니다.</p>
+<p><strong>학습자:</strong> 어떤 순서로 보완하죠?</p>
+<p><strong>교수자:</strong> 먼저 prefix를 표준화해 hit율을 올릴 수 있는지 봅니다. 그다음 miss가 남는다면 그 miss가 prefill 자원을 얼마나 오래 점유하는지 봅니다. 긴 공통 문맥을 가진 multi-tenant 서비스라면 두 전략을 같이 써야 할 때가 많습니다.</p>
+<pre class="mermaid">flowchart TD
+    A[새 요청 도착] --&gt; B{공통 prefix가&lt;br/&gt;버전 고정인가?}
+    B -- 아니오 --&gt; C[프롬프트 템플릿 정리&lt;br/&gt;동적 값 분리]
+    C --&gt; D{hit율 개선됨?}
+    D -- 아니오 --&gt; E[miss 요청의 prefill 부하 측정]
+    E --&gt; F{prefill이 병목인가?}
+    F -- 예 --&gt; G[Prefill/Decode 분리 검토]
+    F -- 아니오 --&gt; H[decode 최적화 검토]
+    B -- 예 --&gt; I[Prefix cache lookup]
+    I --&gt; J{cache hit?}
+    J -- 예 --&gt; K[decode 단계로 바로 진입]
+    J -- 아니오 --&gt; L[prefill 후 cache 저장]
+    L --&gt; K</pre>
+<p>이 플로우에서 [S4]는 비교 기준으로 쓰면 좋습니다. speculative decoding은 decode를 빠르게 만드는 축이고, prefix caching은 prefill을 줄이는 축입니다. 둘 다 latency 최적화지만 겨냥하는 병목이 다릅니다. [S4]</p>
+<h3 id="5-디버깅-순서는-보통-이렇게-잡는다">5. 디버깅 순서는 보통 이렇게 잡는다</h3>
+<p><strong>학습자:</strong> 운영 중인데 응답 시간이 갑자기 늘었습니다. prefix cache 문제부터 어떻게 확인하죠?</p>
+<p><strong>교수자:</strong> 순서를 고정해 두면 흔들리지 않습니다.</p>
+<ol><li>같은 제품 경로에서 system prompt와 공통 context가 정말 byte 수준으로 같은지 확인합니다.</li><li>prefix 해시에 영향을 주는 동적 필드가 어디에 들어갔는지 찾습니다. 날짜, locale, 사용자 ID, 실험군 플래그가 대표적입니다.</li><li>tool calling 또는 structured output 스키마가 최근 배포에서 바뀌었는지 확인합니다. [S5][S6]</li><li>hit율이 떨어진 뒤 prefill queue 길이와 prefill worker 점유 시간이 같이 늘었는지 봅니다. 이 단계에서 [S1][S2]의 분리 설계 필요성이 드러납니다.</li><li>그래도 지연이 decode에 남아 있으면 prefix caching이 아니라 다른 최적화 축을 봅니다. 예를 들어 speculative decoding 같은 decode 최적화가 더 직접적일 수 있습니다. [S4]</li></ol>
+<h2 id="자주-헷갈리는-포인트">자주 헷갈리는 포인트</h2>
+<p>| 헷갈리는 주장 | 실제로는 | 왜 중요한가 | | --- | --- | --- | | 긴 요청이면 무조건 prefix caching에 유리하다 | 긴 것보다 반복되는 앞부분이 중요하다 | 길기만 하고 매번 달라지면 miss가 계속 난다 | | prefix caching과 KV cache reuse는 완전히 같은 말이다 | 겹치지만 운영 질문이 다르다 | 전자는 prefix 표준화, 후자는 KV 보존/재활용 정책이 핵심이다 [S3] | | tool calling을 붙이면 기능만 늘고 캐시에는 영향이 없다 | tool 목록과 설명이 prefix 일부면 invalidation 원인이 된다 | agent 워크로드에서 hit율 저하가 쉽게 발생한다 [S6] | | structured output은 출력 단계 문제라 입력 캐시와 무관하다 | 스키마를 prompt에 포함하면 prefix 안정성에 직접 영향이 간다 | 형식 보장과 cache hit율을 같이 설계해야 한다 [S5] |</p>
+<div class="table-wrap"><table><thead><tr><th>hit율만 높으면 끝이다</th><th>invalidation 비용과 miss 시 prefill 병목도 같이 봐야 한다</th><th>hit율이 높아도 운영 순이익이 낮을 수 있다</th></tr></thead><tbody></tbody></table></div>
+<h2 id="사례로-다시-보기">사례로 다시 보기</h2>
+<h3 id="사례-1-사내-정책-q&a-봇">사례 1. 사내 정책 Q&amp;A 봇</h3>
+<p>보안팀이 만든 assistant는 매 요청마다 다음 세 덩어리를 붙입니다.</p>
+<ol><li>회사 정책 system prompt</li><li>고정된 규정집 상단 요약</li><li>사용자의 질문</li></ol>
+<p>처음엔 규정집 요약 맨 위에 <code>배포 날짜</code>를 넣어 두었습니다. 이 값이 배포 때마다 바뀌면서 prefix cache가 자주 무효화됐습니다. 해결은 단순했습니다. 날짜는 suffix의 메타데이터로 빼고, 실제 의미를 바꾸지 않는 고정 정책 문구만 prefix에 남겼습니다. 여기서 배운 점은 &quot;정확한 최신성 표시&quot; 자체가 문제가 아니라, 그것을 공통 prefix 안에 넣는 설계가 문제였다는 것입니다.</p>
+<h3 id="사례-2-주문-조회형-agent">사례 2. 주문 조회형 agent</h3>
+<p>주문 조회 assistant는 tool calling을 사용합니다. 주문 조회, 환불 접수, 배송 추적 세 도구의 설명이 길고, 응답은 JSON 형태로 고정됩니다. 어느 날 팀이 실험용 tool 두 개를 잠깐 추가했더니 hit율이 떨어졌습니다. 이유는 간단했습니다. tool 목록이 공통 prefix 일부였기 때문입니다. 이 문제의 올바른 질문은 &quot;tool을 더 넣을까 말까&quot;가 아니라 &quot;모든 요청이 공유하는 tool 집합을 안정적으로 분리할 수 있는가&quot;입니다. [S5][S6]</p>
+<h2 id="핵심-정리">핵심 정리</h2>
+<ul><li>prefix caching의 본질은 긴 입력 처리 자체가 아니라 반복되는 앞부분의 재사용이다.</li><li>기대 효과는 주로 prefill 절감에서 나오며, decode 병목은 그대로 남는다.</li><li>prefix caching과 KV cache reuse는 겹치지만, 디버깅 질문과 운영 책임이 다르다. [S3]</li><li>structured output, tool calling, 정책 버전 관리 같은 기능은 모두 prefix invalidation을 악화시킬 수 있다. [S5][S6]</li><li>hit율 최적화와 prefill/decode 분리 설계는 대체재가 아니라 함께 검토할 수 있는 보완재다. [S1][S2]</li></ul>
+<h2 id="복습-체크리스트">복습 체크리스트</h2>
+<ul><li>공통 prefix를 byte 수준으로 고정할 수 있는지 설명할 수 있는가?</li><li><code>E[T] = T_decode + (1-h)T_prefill</code> 식으로 hit율 변화의 의미를 말할 수 있는가?</li><li>prefix caching과 KV cache reuse의 차이를 운영 질문 기준으로 구분할 수 있는가?</li><li>tool calling 또는 structured output이 prefix invalidation을 어떻게 키우는지 설명할 수 있는가?</li><li>miss가 많을 때도 prefill/decode 분리를 같이 검토해야 하는 이유를 말할 수 있는가?</li></ul>
+<h2 id="대안과-비교">대안과 비교</h2>
+<p>| 기법 | 주로 줄이는 병목 | 잘 맞는 상황 | 주의할 점 | 관련 출처 | | --- | --- | --- | --- | --- | | Prefix Caching | 반복 prefix의 prefill 비용 | 같은 system prompt, 공통 context가 많은 서비스 | 동적 필드와 버전 변경이 hit율을 무너뜨린다 | [S1][S2][S3] | | KV Cache Reuse | 계산된 KV 상태의 재활용 비용 | 재사용 가능한 KV 블록을 오래 보존할 가치가 있을 때 | 메모리 관리와 보존 정책이 중요하다 | [S3] | | Disaggregated Prefill/Decode | prefill과 decode 자원 경합 | 긴 입력과 multi-tenant miss가 자주 겹칠 때 | 네트워크 이동과 운영 복잡도가 생긴다 | [S1][S2] | | Speculative Decoding | decode latency | decode가 병목이고 승인율이 충분할 때 | 추가 모델 비용과 승인 실패를 봐야 한다 | [S4] |</p>
+<div class="table-wrap"><table><thead><tr><th>Structured Outputs / Tool Calling</th><th>형식 안정성과 actionability</th><th>agent 워크로드, JSON 출력 보장</th><th>스키마/tool 정의가 prefix 안정성을 해칠 수 있다</th><th>[S5][S6]</th></tr></thead><tbody></tbody></table></div>
+<h2 id="참고-이미지">참고 이미지</h2>
+<h3 id="i1-vllm-logo">[I1] vLLM logo</h3>
+<p><img src="./assets/img-01.png" alt="vLLM logo"> vLLM은 이 모듈에서 disaggregated prefill, structured outputs, tool calling 같은 기능 축을 제공하는 대표 구현으로 반복해서 등장합니다. 이 챕터에서는 &quot;공통 prefix를 어떻게 안정적으로 만들 것인가&quot;를 생각할 때 해당 기능들이 서로 충돌하거나 보완하는 지점을 읽는 표지로 쓰면 됩니다. [S1][S5][S6]</p>
+<h3 id="i2-roofline-model">[I2] Roofline model</h3>
+<p><img src="./assets/img-02.png" alt="Roofline model"> Roofline 이미지는 prefix caching을 단순 캐시 기법으로만 보지 않게 도와줍니다. 공통 prefix를 다시 읽지 않는다는 것은 소프트웨어 해시 최적화가 아니라, 결국 prefill 단계에서 반복되던 연산과 메모리 접근을 줄이는 선택이기 때문입니다. 그래서 hit율 저하는 곧 prefill 자원 압박으로 되돌아옵니다. [S1][S2]</p>
+<h2 id="출처">출처</h2>
+<p>| ID | 제목 | 발행처 | 날짜 | URL | 본문 연결 | | --- | --- | --- | --- | --- | --- | | [S1] | Disaggregated Prefill V1 | vLLM project | 2026-03-08 (accessed) | https://docs.vllm.ai/en/latest/features/disagg_prefill.html | prefix miss가 prefill 부하로 드러나는 구조를 설명할 때 사용 | | [S2] | Disaggregated Serving | NVIDIA TensorRT-LLM | 2026-03-08 (accessed) | https://nvidia.github.io/TensorRT-LLM/1.2.0rc6/features/disagg-serving.html | prefill/decode 분리와 prefix caching의 보완 관계를 설명할 때 사용 | | [S3] | KV Cache Reuse | NVIDIA TensorRT-LLM | 2026-03-08 (accessed) | https://nvidia.github.io/TensorRT-LLM/advanced/kv-cache-reuse.html | prefix caching과 KV cache reuse의 차이를 비교할 때 사용 | | [S4] | Speculative Decoding | NVIDIA TensorRT-LLM | 2026-03-08 (accessed) | https://nvidia.github.io/TensorRT-LLM/1.2.0rc3/features/speculative-decoding.html | decode 최적화와 prefix 최적화의 비교 축을 제시할 때 사용 | | [S5] | Structured Outputs | vLLM project | 2026-03-08 (accessed) | https://docs.vllm.ai/en/latest/features/structured_outputs.html | 스키마 고정이 prefix invalidation에 주는 영향을 설명할 때 사용 | | [S6] | Tool Calling | vLLM project | 2026-03-08 (accessed) | https://docs.vllm.ai/en/latest/features/tool_calling.html | tool 정의 변화가 prefix hit율에 미치는 영향을 설명할 때 사용 |</p>
+    </article>
+    <section class="content-panel surface quiz-panel">
+      <div class="section-heading">
+        <div>
+          <p class="eyebrow">Quiz</p>
+          <h2>복습 문제</h2>
+        </div>
+      </div>
+      <div class="prose">
+        <h2 id="객관식-1">객관식 1</h2>
+<p>고객지원 assistant가 매 요청마다 같은 system prompt를 사용한다고 생각했는데, 실제 prefix cache hit율이 낮았다. 가장 먼저 의심할 원인으로 가장 적절한 것은 무엇인가?</p>
+<ol><li>decode 단계에서 생성 길이가 짧다</li><li>system prompt 내부에 현재 시각, 사용자 ID, 실험군 플래그 같은 동적 값이 들어간다</li><li>GPU 수가 충분하지 않다</li><li>speculative decoding을 사용하지 않는다</li></ol>
+<h2 id="객관식-2">객관식 2</h2>
+<p>다음 중 prefix caching과 KV cache reuse의 관계를 가장 잘 설명한 것은 무엇인가?</p>
+<ol><li>두 용어는 완전히 같은 뜻이라 운영 관점에서 구분할 필요가 없다</li><li>prefix caching은 decode 최적화이고, KV cache reuse는 prefill 최적화다</li><li>prefix caching은 공통 앞부분의 재사용에 초점을 두고, KV cache reuse는 더 넓은 KV 상태 재활용 관점으로 볼 수 있다</li><li>prefix caching은 tool calling에서만 쓰이고, KV cache reuse는 일반 챗봇에서만 쓰인다</li></ol>
+<h2 id="객관식-3">객관식 3</h2>
+<p>어떤 서비스의 평균 시간은 <code>T_prefill = 120ms</code>, <code>T_decode = 80ms</code>, prefix cache hit율은 <code>h = 0.75</code>다. 이때 단순 모델 <code>E[T] = T_decode + (1-h)T_prefill</code>로 계산한 기대 latency는 얼마인가?</p>
+<ol><li>90ms</li><li>110ms</li><li>170ms</li><li>200ms</li></ol>
+<h2 id="짧은-서술형-1">짧은 서술형 1</h2>
+<p>structured output 또는 tool calling이 prefix cache hit율을 떨어뜨릴 수 있는 이유를 2~3문장으로 설명하라.</p>
+<h2 id="짧은-서술형-2">짧은 서술형 2</h2>
+<p>prefix cache miss가 아직 많은 서비스에서도 disaggregated prefill/decode를 함께 검토할 가치가 있는 이유를 2~3문장으로 설명하라.</p>
+<h2 id="심화-설명형-1">심화 설명형 1</h2>
+<p>사내 정책 Q&amp;A 봇이 있다. 공통 system prompt와 규정집 요약을 붙인 뒤 사용자 질문을 받는다. 최근 hit율이 급감했고, 응답 지연도 늘었다. 아래 조건을 반영해 디버깅 순서를 설계하라.</p>
+<ul><li>지난 배포에서 규정집 버전 표기 방식이 바뀌었다.</li><li>structured output 스키마도 조금 수정되었다.</li><li>prefill worker queue 길이가 함께 증가했다.</li></ul>
+<h2 id="심화-설명형-2">심화 설명형 2</h2>
+<p>다음 두 워크로드 중 어느 쪽이 prefix caching에서 더 큰 효과를 보기 쉬운지 비교하고, 이유를 설명하라.</p>
+<ul><li>워크로드 A: 매 요청마다 긴 원문 문서 전체가 달라지는 요약 서비스</li><li>워크로드 B: 같은 tool 설명, 같은 응답 정책, 같은 사내 정책 문서를 붙이고 마지막 사용자 질문만 달라지는 assistant</li></ul>
+<p>또한 효과가 큰 쪽에서도 어떤 이유로 hit율이 깨질 수 있는지 한 가지 이상 덧붙여라.</p><details class="answer-key"><summary>정답 및 해설 보기</summary><h2 id="정답-및-해설">정답 및 해설</h2>
+<h3 id="객관식-정답">객관식 정답</h3>
+<ul><li>객관식 1: 2번</li><li>객관식 2: 3번</li><li>객관식 3: 2번</li></ul>
+<h3 id="객관식-해설">객관식 해설</h3>
+<ul><li>객관식 1: prefix caching은 반복되는 앞부분이 핵심이다. 따라서 dynamic field가 prefix 해시를 흔드는지 먼저 봐야 한다. 날짜, 사용자별 메타데이터, 실험군 플래그는 대표적인 invalidation 원인이다.</li><li>객관식 2: 이 챕터에서는 prefix caching을 &quot;공통 prefix 표준화&quot; 관점으로, KV cache reuse를 &quot;계산된 KV 상태 재활용&quot; 관점으로 구분했다. 둘은 겹치지만 운영 질문이 다르다. [S3]</li><li>객관식 3: <code>E[T] = 80 + (1-0.75) * 120 = 80 + 30 = 110ms</code>다. 이 식은 prefix caching이 주로 prefill 비용을 줄인다는 점을 보여 준다.</li></ul>
+<h3 id="짧은-서술형-예시-답안">짧은 서술형 예시 답안</h3>
+<ul><li>짧은 서술형 1: structured output의 스키마나 tool calling의 함수 목록과 설명이 공통 prefix 안에 들어가면, 배포마다 prefix 내용이 바뀔 수 있다. 그러면 같은 사용자 질문 패턴이 반복돼도 캐시 키가 달라져 hit율이 떨어진다. [S5][S6]</li><li>짧은 서술형 2: hit율이 낮아도 miss가 몰리는 구간의 병목이 prefill이면 지연과 자원 점유가 커진다. 이때 prefill/decode를 분리하면 miss 비용을 별도 자원에서 흡수할 수 있어 전체 서비스 안정성이 좋아질 수 있다. [S1][S2]</li></ul>
+<h3 id="심화-설명형-예시-답안">심화 설명형 예시 답안</h3>
+<ul><li>심화 설명형 1: 첫 단계는 규정집 버전 표기가 공통 prefix 안에 들어가 해시를 깨는지 확인하는 것이다. 그다음 structured output 스키마 변경이 prefix 일부를 바꿨는지 본다. 이 두 변화가 hit율 저하의 직접 원인인지 확인한 뒤, prefill worker queue 증가와 함께 관측되었다면 miss 증가가 실제 prefill 병목으로 이어졌다고 판단할 수 있다. 마지막으로 동적 값을 prefix 밖으로 빼고, 스키마 버전을 안정적으로 관리하며, 여전히 miss가 많다면 prefill/decode 분리 강화를 검토한다. [S1][S2][S5]</li><li>심화 설명형 2: 더 큰 효과를 보기 쉬운 쪽은 워크로드 B다. 같은 tool 설명, 응답 정책, 사내 정책 문서처럼 반복되는 공통 앞부분이 크기 때문이다. 반대로 워크로드 A는 길어도 매번 원문이 달라 prefix reuse 여지가 작다. 다만 워크로드 B도 tool 목록 변경, 정책 버전 문구 추가, 사용자별 동적 메타데이터 삽입 같은 이유로 hit율이 쉽게 깨질 수 있다. [S5][S6]</li></ul></details>
+      </div>
+    </section>
+    <nav class="pager">
+      <a class="pager-link" href="../../02-llm-serving-core/05-serving-stack-overview/"><span>이전</span><strong>Serving Stack Overview</strong></a>
+      <a class="pager-link" href="../02-speculative-decoding/"><span>다음</span><strong>Speculative Decoding</strong></a>
+    </nav>
+    
+      </section>
+      <aside class="page-sidebar">
+    <div class="sidebar-panel surface">
+      <p class="eyebrow">On This Page</p>
+      <div class="toc" data-toc>
+        <a class="toc-link" href="#수업-개요">수업 개요</a><a class="toc-link" href="#학습-목표">학습 목표</a><a class="toc-link" href="#수업-전에-생각할-질문">수업 전에 생각할 질문</a><a class="toc-link" href="#강의-스크립트">강의 스크립트</a><a class="toc-link sub" href="#1-어떤-요청이-prefix-caching에-잘-맞는가">1. 어떤 요청이 prefix caching에 잘 맞는가</a><a class="toc-link sub" href="#2-prefix-caching과-kv-cache-reuse는-같은-말이-아니다">2. prefix caching과 KV cache reuse는 같은 말이 아니다</a><a class="toc-link sub" href="#3-invalidation은-왜-작은-변화에도-치명적인가">3. invalidation은 왜 작은 변화에도 치명적인가</a><a class="toc-link sub" href="#4-prefix-miss가-많아도-prefilldecode-분리를-보는-이유">4. prefix miss가 많아도 prefill/decode 분리를 보는 이유</a><a class="toc-link sub" href="#5-디버깅-순서는-보통-이렇게-잡는다">5. 디버깅 순서는 보통 이렇게 잡는다</a><a class="toc-link" href="#자주-헷갈리는-포인트">자주 헷갈리는 포인트</a><a class="toc-link" href="#사례로-다시-보기">사례로 다시 보기</a><a class="toc-link sub" href="#사례-1-사내-정책-q&a-봇">사례 1. 사내 정책 Q&amp;A 봇</a><a class="toc-link sub" href="#사례-2-주문-조회형-agent">사례 2. 주문 조회형 agent</a><a class="toc-link" href="#핵심-정리">핵심 정리</a><a class="toc-link" href="#복습-체크리스트">복습 체크리스트</a><a class="toc-link" href="#대안과-비교">대안과 비교</a><a class="toc-link" href="#참고-이미지">참고 이미지</a><a class="toc-link sub" href="#i1-vllm-logo">[I1] vLLM logo</a><a class="toc-link sub" href="#i2-roofline-model">[I2] Roofline model</a><a class="toc-link" href="#출처">출처</a>
+      </div>
+    </div>
+    </aside>
+    </div>
+  </main>
+  <script type="module" src="../../assets/app.js"></script>
+  <script type="module">
+    import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs';
+    mermaid.initialize({ startOnLoad: true, theme: 'neutral', securityLevel: 'loose' });
+  </script>
+  <script>
+    window.MathJax = {
+      tex: { inlineMath: [['$', '$'], ['\\(', '\\)']], displayMath: [['$$', '$$'], ['\\[', '\\]']] },
+      svg: { fontCache: 'global' }
+    };
+  </script>
+  <script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-svg.js" async></script>
+</body>
+</html>

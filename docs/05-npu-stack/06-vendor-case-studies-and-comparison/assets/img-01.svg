@@ -1,0 +1,128 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="1400" viewBox="0 0 1600 1400" role="img" aria-labelledby="title desc">
+  <title id="title">Split Qualcomm rows를 포함한 vendor first-action comparison matrix</title>
+  <desc id="desc">Eleven-row matrix comparing one documented first deployment action, the next object, and the observability hook across Qualcomm, AMD, Intel, Apple, Windows ML, Google TPU, Hailo, and Tenstorrent flows.</desc>
+  <defs>
+    <style>
+      .bg { fill: #f7f7f2; }
+      .panel { fill: #ffffff; stroke: #24313a; stroke-width: 2; }
+      .head { fill: #24313a; }
+      .headText { fill: #ffffff; font: 700 20px Helvetica, Arial, sans-serif; }
+      .title { fill: #172026; font: 700 34px Helvetica, Arial, sans-serif; }
+      .subtitle { fill: #4d5b63; font: 400 18px Helvetica, Arial, sans-serif; }
+      .label { fill: #172026; font: 700 16px Helvetica, Arial, sans-serif; }
+      .body { fill: #172026; font: 400 15px Helvetica, Arial, sans-serif; }
+      .small { fill: #4d5b63; font: 400 13px Helvetica, Arial, sans-serif; }
+      .rule { stroke: #c9d0d4; stroke-width: 1.5; }
+      .accentA { fill: #dcefd9; }
+      .accentB { fill: #dae8f3; }
+      .accentC { fill: #f5e6d1; }
+    </style>
+  </defs>
+  <rect class="bg" x="0" y="0" width="1600" height="1400"/>
+  <text class="title" x="44" y="58">Vendor First-Action Comparison Matrix</text>
+  <text class="subtitle" x="44" y="90">Each row keeps one documented action, one next object, and one observability hook. Qualcomm is split into two compile rows because the artifact contracts differ.</text>
+
+  <rect class="panel" x="32" y="120" width="1536" height="1260" rx="18"/>
+
+  <rect class="head" x="32" y="120" width="170" height="58" rx="18"/>
+  <rect class="head" x="202" y="120" width="510" height="58"/>
+  <rect class="head" x="712" y="120" width="460" height="58"/>
+  <rect class="head" x="1172" y="120" width="396" height="58" rx="18"/>
+
+  <text class="headText" x="52" y="156">Flow</text>
+  <text class="headText" x="222" y="156">First documented deployment action</text>
+  <text class="headText" x="732" y="156">Next artifact / runtime / infra object</text>
+  <text class="headText" x="1192" y="156">Observability hook</text>
+
+  <line class="rule" x1="202" y1="178" x2="202" y2="1380"/>
+  <line class="rule" x1="712" y1="178" x2="712" y2="1380"/>
+  <line class="rule" x1="1172" y1="178" x2="1172" y2="1380"/>
+
+  <rect class="accentA" x="42" y="194" width="150" height="82" rx="12"/>
+  <text class="label" x="54" y="226">Qualcomm</text>
+  <text class="small" x="54" y="246">precompiled</text>
+  <text class="small" x="54" y="264">QNN ONNX</text>
+  <text class="body" x="222" y="222"><tspan x="222" dy="0">submit a named-device compile job</tspan><tspan x="222" dy="20">for precompiled_qnn_onnx</tspan></text>
+  <text class="body" x="732" y="222"><tspan x="732" dy="0">device-targeted precompiled</tspan><tspan x="732" dy="20">QNN ONNX package</tspan></text>
+  <text class="body" x="1192" y="222"><tspan x="1192" dy="0">AI Hub profile stage and</tspan><tspan x="1192" dy="20">ORT QNN EP load logs</tspan></text>
+
+  <line class="rule" x1="42" y1="292" x2="1558" y2="292"/>
+  <rect class="accentA" x="42" y="302" width="150" height="82" rx="12"/>
+  <text class="label" x="54" y="334">Qualcomm</text>
+  <text class="small" x="54" y="354">QNN context</text>
+  <text class="small" x="54" y="372">binary</text>
+  <text class="body" x="222" y="330"><tspan x="222" dy="0">submit a named-device compile job</tspan><tspan x="222" dy="20">for qnn_context_binary</tspan></text>
+  <text class="body" x="732" y="330"><tspan x="732" dy="0">serialized QNN context</tspan><tspan x="732" dy="20">binary for backend load</tspan></text>
+  <text class="body" x="1192" y="330"><tspan x="1192" dy="0">AI Hub compile/profile and</tspan><tspan x="1192" dy="20">context load logging</tspan></text>
+
+  <line class="rule" x1="42" y1="400" x2="1558" y2="400"/>
+  <rect class="accentB" x="42" y="410" width="150" height="82" rx="12"/>
+  <text class="label" x="54" y="444">AMD</text>
+  <text class="small" x="54" y="464">Hybrid OGA</text>
+  <text class="body" x="222" y="438"><tspan x="222" dy="0">pull a pre-optimized hybrid</tspan><tspan x="222" dy="20">OGA model folder</tspan></text>
+  <text class="body" x="732" y="438"><tspan x="732" dy="0">genai_config.json, sample runner,</tspan><tspan x="732" dy="20">runtime DLL bundle</tspan></text>
+  <text class="body" x="1192" y="438"><tspan x="1192" dy="0">model_benchmark.exe</tspan><tspan x="1192" dy="20">and sample timing output</tspan></text>
+
+  <line class="rule" x1="42" y1="508" x2="1558" y2="508"/>
+  <rect class="accentA" x="42" y="518" width="150" height="82" rx="12"/>
+  <text class="label" x="54" y="552">Intel</text>
+  <text class="small" x="54" y="572">OpenVINO NPU</text>
+  <text class="body" x="222" y="546"><tspan x="222" dy="0">call compile_model(model,</tspan><tspan x="222" dy="20">"NPU")</tspan></text>
+  <text class="body" x="732" y="546"><tspan x="732" dy="0">compiled model, plugin</tspan><tspan x="732" dy="20">properties, cache path</tspan></text>
+  <text class="body" x="1192" y="546"><tspan x="1192" dy="0">cache reuse and device</tspan><tspan x="1192" dy="20">property inspection</tspan></text>
+
+  <line class="rule" x1="42" y1="616" x2="1558" y2="616"/>
+  <rect class="accentC" x="42" y="626" width="150" height="82" rx="12"/>
+  <text class="label" x="54" y="660">Apple</text>
+  <text class="small" x="54" y="680">Core ML app</text>
+  <text class="body" x="222" y="654"><tspan x="222" dy="0">integrate converted Core ML</tspan><tspan x="222" dy="20">model into Xcode project</tspan></text>
+  <text class="body" x="732" y="654"><tspan x="732" dy="0">generated Swift / Obj-C</tspan><tspan x="732" dy="20">interface plus Core ML runtime</tspan></text>
+  <text class="body" x="1192" y="654"><tspan x="1192" dy="0">Xcode preview and</tspan><tspan x="1192" dy="20">Instruments</tspan></text>
+
+  <line class="rule" x1="42" y1="724" x2="1558" y2="724"/>
+  <rect class="accentC" x="42" y="734" width="150" height="82" rx="12"/>
+  <text class="label" x="54" y="768">Windows ML</text>
+  <text class="small" x="54" y="788">bootstrap</text>
+  <text class="body" x="222" y="762"><tspan x="222" dy="0">initialize Windows ML</tspan><tspan x="222" dy="20">through App SDK bootstrapper</tspan></text>
+  <text class="body" x="732" y="762"><tspan x="732" dy="0">shared system ORT and</tspan><tspan x="732" dy="20">dynamic EP download path</tspan></text>
+  <text class="body" x="1192" y="762"><tspan x="1192" dy="0">hardware detect result and</tspan><tspan x="1192" dy="20">shipped ORT version table</tspan></text>
+
+  <line class="rule" x1="42" y1="832" x2="1558" y2="832"/>
+  <rect class="accentB" x="42" y="842" width="150" height="82" rx="12"/>
+  <text class="label" x="54" y="876">Google TPU</text>
+  <text class="small" x="54" y="896">TPU VM path</text>
+  <text class="body" x="222" y="870"><tspan x="222" dy="0">create a single-host TPU VM</tspan></text>
+  <text class="body" x="732" y="870"><tspan x="732" dy="0">TPU VM, topology, quota,</tspan><tspan x="732" dy="20">serving host</tspan></text>
+  <text class="body" x="1192" y="870"><tspan x="1192" dy="0">tpu-info metrics for duty cycle,</tspan><tspan x="1192" dy="20">HBM, transfer latency</tspan></text>
+
+  <line class="rule" x1="42" y1="940" x2="1558" y2="940"/>
+  <rect class="accentB" x="42" y="950" width="150" height="82" rx="12"/>
+  <text class="label" x="54" y="984">Google TPU</text>
+  <text class="small" x="54" y="1004">queued</text>
+  <text class="small" x="54" y="1022">resource</text>
+  <text class="body" x="222" y="978"><tspan x="222" dy="0">create an availability-optimized</tspan><tspan x="222" dy="20">queued resource collection</tspan></text>
+  <text class="body" x="732" y="978"><tspan x="732" dy="0">collection object and</tspan><tspan x="732" dy="20">scheduling state</tspan></text>
+  <text class="body" x="1192" y="978"><tspan x="1192" dy="0">queued-resource status and</tspan><tspan x="1192" dy="20">tpu-info after attach</tspan></text>
+
+  <line class="rule" x1="42" y1="1048" x2="1558" y2="1048"/>
+  <rect class="accentA" x="42" y="1058" width="150" height="82" rx="12"/>
+  <text class="label" x="54" y="1092">HailoRT</text>
+  <text class="body" x="222" y="1086"><tspan x="222" dy="0">install the HailoRT runtime stack</tspan></text>
+  <text class="body" x="732" y="1086"><tspan x="732" dy="0">runtime library, CLI, driver,</tspan><tspan x="732" dy="20">Python API</tspan></text>
+  <text class="body" x="1192" y="1086"><tspan x="1192" dy="0">HailoRT CLI and device events</tspan></text>
+
+  <line class="rule" x1="42" y1="1156" x2="1558" y2="1156"/>
+  <rect class="accentA" x="42" y="1166" width="150" height="82" rx="12"/>
+  <text class="label" x="54" y="1200">hailo-apps</text>
+  <text class="body" x="222" y="1194"><tspan x="222" dy="0">run a hailo-detect-simple</tspan><tspan x="222" dy="20">entry point</tspan></text>
+  <text class="body" x="732" y="1194"><tspan x="732" dy="0">HailoNet / GStreamer pipeline</tspan></text>
+  <text class="body" x="1192" y="1194"><tspan x="1192" dy="0">pipeline stdout and stage logs</tspan></text>
+
+  <line class="rule" x1="42" y1="1264" x2="1558" y2="1264"/>
+  <rect class="accentC" x="42" y="1274" width="150" height="82" rx="12"/>
+  <text class="label" x="54" y="1308">Tenstorrent</text>
+  <text class="small" x="54" y="1328">TT-Forge</text>
+  <text class="body" x="222" y="1302"><tspan x="222" dy="0">start in TT-Forge and lower</tspan><tspan x="222" dy="20">to TT-MLIR</tspan></text>
+  <text class="body" x="732" y="1302"><tspan x="732" dy="0">TT-MLIR path and compiler</tspan><tspan x="732" dy="20">artifact</tspan></text>
+  <text class="body" x="1192" y="1302"><tspan x="1192" dy="0">tt-smi and TT-NN Visualizer</tspan></text>
+</svg>

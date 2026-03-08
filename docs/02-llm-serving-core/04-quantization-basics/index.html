@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Quantization Basics | LLM Serving 핵심</title>
+  <meta name="description" content="이번 챕터는 &quot;몇 비트가 더 작으냐&quot;보다 &quot;어떤 형식이 실제 서빙 경로를 끝까지 통과하느냐&quot;를 먼저 묻는다. 근거도 둘로 나눠서 본다. 메모리 예산과 품질 위험은 [식 1], [식 2], 그리고 양자화 오차를 시각화한 [I1]로 설명하고, backend 호환성은 서버 엔진 문맥의 [S1], offload의 [S2], compile 산출물의 [S3], device target의 [S4]로 설명한다. 이 분리를 지키면 &quot;INT4가 더 작으니 무조건 더 좋다&quot; 같은 단정이 왜 위험한지 보인다.">
+  <meta name="theme-color" content="#10182a">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+KR:wght@400;500;600;700&family=Space+Grotesk:wght@500;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../../assets/style.css">
+</head>
+<body class="page-chapter" data-page-kind="chapter" data-page-id="study/llm-serving-npu-roadmap/02-llm-serving-core/04-quantization-basics" data-root-prefix="../../">
+  <div class="reading-progress" data-reading-progress></div>
+  <header class="site-header">
+    <a class="brand" href="../../">
+      <span class="brand-kicker">GitHub Pages Study</span>
+      <strong>LLM Serving + NPU</strong>
+    </a>
+    <nav class="top-nav"><a class="top-nav-link" href="../../01-foundations/">기초와 성능 직관</a><a class="top-nav-link is-active" href="../">LLM Serving 핵심</a><a class="top-nav-link" href="../../03-llm-serving-advanced/">고급 Serving 패턴</a><a class="top-nav-link" href="../../04-serving-systems/">Serving 시스템 설계</a><a class="top-nav-link" href="../../05-npu-stack/">NPU 소프트웨어 스택</a><a class="top-nav-link" href="../../06-runtime-and-compiler/">런타임과 컴파일러</a><a class="top-nav-link" href="../../07-synthesis/">종합 정리와 최신 흐름</a></nav>
+    <div class="search-shell">
+      <input type="search" placeholder="챕터, 모듈, 키워드 검색" aria-label="검색" data-global-search>
+      <div class="search-results" data-search-results hidden></div>
+    </div>
+  </header>
+  <main class="page-frame">
+    
+    <section class="hero">
+      <div class="hero-copy">
+        <p class="eyebrow">LLM Serving 핵심</p>
+        <h1>Quantization Basics</h1>
+        <p class="hero-summary">이번 챕터는 &quot;몇 비트가 더 작으냐&quot;보다 &quot;어떤 형식이 실제 서빙 경로를 끝까지 통과하느냐&quot;를 먼저 묻는다. 근거도 둘로 나눠서 본다. 메모리 예산과 품질 위험은 [식 1], [식 2], 그리고 양자화 오차를 시각화한 [I1]로 설명하고, backend 호환성은 서버 엔진 문맥의 [S1], offload의 [S2], compile 산출물의 [S3], device target의 [S4]로 설명한다. 이 분리를 지키면 &quot;INT4가 더 작으니 무조건 더 좋다&quot; 같은 단정이 왜 위험한지 보인다.</p>
+      </div>
+      <div class="hero-stats">
+        <div class="stat-card"><strong>35-50 min</strong><span>reading time</span></div>
+        <div class="stat-card"><strong>2026-03-08</strong><span>updated</span></div>
+        <div class="stat-card"><button class="progress-toggle" type="button" data-progress-toggle data-progress-id="study/llm-serving-npu-roadmap/02-llm-serving-core/04-quantization-basics">완료로 표시</button></div>
+      </div>
+    </section>
+    
+    <div class="page-layout">
+      <section class="page-main content-shell">
+        
+    <article class="content-panel surface prose" data-reading-target>
+      <h1 id="quantization-basics">Quantization Basics</h1>
+<h2 id="수업-개요">수업 개요</h2>
+<p>이번 챕터는 &quot;몇 비트가 더 작으냐&quot;보다 &quot;어떤 형식이 실제 서빙 경로를 끝까지 통과하느냐&quot;를 먼저 묻는다. 근거도 둘로 나눠서 본다. 메모리 예산과 품질 위험은 [식 1], [식 2], 그리고 양자화 오차를 시각화한 [I1]로 설명하고, backend 호환성은 서버 엔진 문맥의 [S1], offload의 [S2], compile 산출물의 [S3], device target의 [S4]로 설명한다. 이 분리를 지키면 &quot;INT4가 더 작으니 무조건 더 좋다&quot; 같은 단정이 왜 위험한지 보인다.</p>
+<h2 id="학습-목표">학습 목표</h2>
+<ul><li>INT8, INT4, FP8의 weight 메모리 예산 차이를 직접 계산할 수 있다.</li><li>INT4가 품질과 latency에서 왜 더 공격적인 선택인지 식과 실행 경로 관점으로 설명할 수 있다.</li><li>서버 GPU와 NPU 배포에서 양자화 형식을 고르는 우선순서가 왜 달라지는지 말할 수 있다.</li></ul>
+<h2 id="수업-전에-생각할-질문">수업 전에 생각할 질문</h2>
+<ul><li>8B 모델을 10GB 남은 장치에 올려야 한다면, 어떤 형식이 수식상으로 먼저 후보가 되는가?</li><li>INT4 모델을 만들었는데 속도가 그대로라면, bit-width 외에 어떤 항목을 먼저 의심해야 하는가?</li><li>FP8을 &quot;중간값&quot;이 아니라 &quot;별도 후보군&quot;으로 봐야 하는 이유는 무엇인가?</li></ul>
+<h2 id="강의-스크립트">강의 스크립트</h2>
+<h3 id="장면-1-먼저-예산표를-펼친다">장면 1. 먼저 예산표를 펼친다</h3>
+<p><strong>교수자:</strong> 양자화를 설명할 때 제일 먼저 해야 할 일은 benchmark를 찾는 게 아니라 장치 예산을 계산하는 겁니다. weight 저장 공간은 비트폭에 거의 비례합니다.</p>
+<h4 id="식-1-weight-memory-budget">[식 1] Weight Memory Budget</h4>
+<div class="math-block">$$
+M_{\mathrm{weights}} \approx N_{\mathrm{params}} \times \frac{b}{8}
+$$</div>
+<p><strong>교수자:</strong> 8B 파라미터 모델을 예로 들면, FP16은 대략 16GB, INT8은 8GB, FP8도 8비트 계열이라 대략 8GB, INT4는 4GB 수준입니다. 이 계산만으로도 &quot;한 장치에 들어가는가&quot;, &quot;배치 여유가 생기는가&quot;를 빠르게 걸러낼 수 있습니다.</p>
+<p><strong>학습자:</strong> 그러면 숫자만 보면 INT4가 제일 좋아 보이는데요.</p>
+<p><strong>교수자:</strong> 메모리 예산만 보면 맞습니다. 하지만 그건 아직 절반만 본 겁니다. 수식이 알려 주는 것은 저장 공간이고, 서비스가 궁금해하는 것은 품질과 end-to-end latency입니다.</p>
+<h3 id="장면-2-품질-손실은-눈금-간격으로-읽는다">장면 2. 품질 손실은 눈금 간격으로 읽는다</h3>
+<p><strong>교수자:</strong> 품질 쪽에서는 &quot;칸이 몇 개냐&quot;를 보는 편이 더 정확합니다. 같은 범위를 더 적은 칸으로 나누면 한 칸의 폭이 커지고, 그만큼 오차 위험도 커집니다.</p>
+<h4 id="식-2-quantization-step-size">[식 2] Quantization Step Size</h4>
+<div class="math-block">$$
+\Delta = \frac{x_{\max} - x_{\min}}{2^b - 1}
+$$</div>
+<p><strong>교수자:</strong> 여기서 바로 정량 비교가 나옵니다. 같은 범위를 가정하면 INT8의 분모는 255이고, INT4의 분모는 15입니다. 즉 INT4의 눈금은 INT8보다 대략 17배 거칩니다. [I1]의 양자화 오차 그림을 함께 보면, 비트폭이 줄수록 원래 연속값이 더 거친 계단으로 투영된다는 점을 직관적으로 확인할 수 있습니다. 그래서 이 챕터에서는 &quot;INT4가 INT8보다 품질 리스크가 크다&quot;는 문장을 외부 backend 문서가 아니라 [식 2]와 [I1]에 직접 연결해서 읽습니다.</p>
+<p><strong>학습자:</strong> 그럼 FP8은 어디에 놓아야 하나요?</p>
+<p><strong>교수자:</strong> 이 챕터에서는 FP8을 &quot;8비트 예산을 유지하는 별도 후보군&quot;으로 둡니다. [식 1]상 메모리 예산은 INT8과 같은 8비트 계열이고, INT4처럼 4비트까지 공격적으로 내려가지는 않습니다. 다만 실제 품질 우위나 속도 우위는 backend와 모델 분포에 따라 달라지므로, FP8을 무조건적인 승자로 말하지 않고 &quot;지원될 때 테스트할 만한 8비트 후보&quot;로만 정리하는 것이 안전합니다.</p>
+<h3 id="장면-3-속도는-bit-width-하나로-닫히지-않는다">장면 3. 속도는 bit-width 하나로 닫히지 않는다</h3>
+<p><strong>학습자:</strong> 그런데 현업에서는 &quot;메모리가 줄면 당연히 빨라지는 것 아닌가&quot;라는 말도 많이 하잖아요.</p>
+<p><strong>교수자:</strong> 그 말이 맞는 구간도 있지만, 서비스 latency는 weight 읽기 시간 하나로 끝나지 않습니다. 실측할 때는 최소한 <code>L_e2e = L_kernel + L_dequant + L_layout + L_fallback</code>처럼 나눠 봐야 합니다. 이 식은 교과서 공식이라기보다 디버깅 체크리스트입니다.</p>
+<p><strong>교수자:</strong> 여기서 중요한 건 출처 역할 분리입니다. <code>dequantize</code>와 <code>layout</code>은 양자화 경로에서 추가될 수 있는 변환 항목이고, <code>fallback</code>은 backend 문서가 직접 가리키는 위험입니다. ONNX Runtime QNN 문서는 execution provider가 graph를 특정 backend로 넘기는 구조를 설명하므로, 지원되지 않는 연산이나 형식이 남아 있으면 일부 경로가 fallback될 수 있다는 사실을 받쳐 줍니다 [S2]. Qualcomm AI Hub compile examples는 모델을 장치용 산출물로 바꾸는 compile 단계 자체가 따로 있다는 점을 보여 줍니다 [S3]. OpenVINO NPU 문서는 device target과 실행 모드가 배포 경로에 직접 영향을 준다는 사실을 보여 줍니다 [S4]. 따라서 &quot;INT4인데 안 빨라졌다&quot;는 현상은 bit-width보다 offload 범위, compile 결과, device target부터 확인해야 합니다.</p>
+<h4 id="시각-자료-1-양자화-형식이-실제-실행-경로로-내려가는-순서">시각 자료 1. 양자화 형식이 실제 실행 경로로 내려가는 순서</h4>
+<pre class="mermaid">flowchart LR
+    A[&quot;형식 선택&lt;br/&gt;INT8 / INT4 / FP8&quot;] --&gt; B[&quot;메모리 계산&lt;br/&gt;[식 1]&quot;]
+    A --&gt; C[&quot;품질 위험 점검&lt;br/&gt;[식 2], [I1]&quot;]
+    A --&gt; D[&quot;execution provider 확인&lt;br/&gt;[S2]&quot;]
+    D --&gt; E[&quot;compile 산출물 확인&lt;br/&gt;[S3]&quot;]
+    E --&gt; F[&quot;device target 확인&lt;br/&gt;[S4]&quot;]
+    F --&gt; G[&quot;실측 latency 확인&lt;br/&gt;kernel / dequant / fallback&quot;]</pre>
+<p><strong>교수자:</strong> 이 그림의 핵심은 순서입니다. 품질과 메모리는 형식 자체로 먼저 따지고, 실제 속도는 backend 경로를 통과한 뒤에야 판단합니다.</p>
+<h3 id="장면-4-왜-서버에서는-8비트-계열부터-npu에서는-backend부터-보나">장면 4. 왜 서버에서는 8비트 계열부터, NPU에서는 backend부터 보나</h3>
+<p><strong>교수자:</strong> 이제 운영 판단으로 넘어가 봅시다. 여기서는 사실과 추론을 분리해서 말해야 합니다.</p>
+<p><strong>교수자:</strong> 사실 1. [식 1]만 보면 FP16 8B 모델은 16GB, 8비트 계열은 8GB, INT4는 4GB입니다. 사실 2. [식 2]만 보면 INT4는 같은 범위에서 INT8보다 훨씬 거친 눈금을 씁니다. 이 두 사실을 합치면, 품질 민감한 서버 서비스에서는 8비트 계열이 첫 기준선이 되기 쉽다는 운영적 추론이 나옵니다. 특히 vLLM 문서처럼 서버 서빙 엔진이 양자화 경로를 기능으로 제공하는 환경에서는 [S1] 8비트 계열 실험이 운영 기본선이 되기 쉽습니다. 여기서 [S1]은 &quot;서버 엔진 문맥&quot;을 받치는 출처이지, INT8이 보편적으로 최고라는 품질 논문이 아닙니다.</p>
+<p><strong>학습자:</strong> 그럼 서버에서는 INT8을 먼저 보고, FP8은 그다음 후보로 둔다는 뜻인가요?</p>
+<p><strong>교수자:</strong> 품질 보수성이 중요하고 backend 제약이 없지 않다면 그렇게 정리하는 편이 안전합니다. INT8은 FP16 대비 weight 메모리를 절반으로 줄이면서도, [식 2] 기준으로 4비트만큼 공격적으로 눈금을 넓히지 않습니다. FP8은 8비트 예산을 유지하는 다른 후보이므로, backend가 지원되고 품질 테스트에서 이득이 보일 때 비교군으로 올립니다. 반대로 메모리 압박이 매우 강하면 INT4를 볼 수 있지만, 그때는 품질과 fallback 비용을 더 빡빡하게 검증해야 합니다.</p>
+<p><strong>교수자:</strong> NPU 쪽은 순서가 더 엄격합니다. QNN EP는 어떤 graph를 backend로 넘길지 [S2], AI Hub는 어떤 compile 산출물을 만들어야 하는지 [S3], OpenVINO는 어떤 device target과 모드로 실행해야 하는지 [S4]를 설명합니다. 따라서 NPU-friendly quantization의 첫 질문은 &quot;가장 작은 형식이 무엇인가&quot;가 아니라 &quot;어떤 형식이 offload, compile, target을 통과하는가&quot;입니다.</p>
+<h4 id="시각-자료-2-서버-판단과-npu-판단의-출발점-차이">시각 자료 2. 서버 판단과 NPU 판단의 출발점 차이</h4>
+<pre class="mermaid">flowchart TD
+    A[&quot;서버 GPU 서빙&quot;] --&gt; B[&quot;메모리 예산 계산&lt;br/&gt;[식 1]&quot;]
+    B --&gt; C[&quot;품질 민감도 확인&lt;br/&gt;[식 2], [I1]&quot;]
+    C --&gt; D[&quot;8비트 계열 기본선 실험&lt;br/&gt;[S1]&quot;]
+    D --&gt; E[&quot;INT4는 메모리 압박이 강할 때 추가 검증&quot;]
+
+    F[&quot;NPU 배포&quot;] --&gt; G[&quot;EP 지원 확인&lt;br/&gt;[S2]&quot;]
+    G --&gt; H[&quot;compile 산출물 확인&lt;br/&gt;[S3]&quot;]
+    H --&gt; I[&quot;device target 확인&lt;br/&gt;[S4]&quot;]
+    I --&gt; J[&quot;통과한 형식 중 메모리/품질 비교&quot;]</pre>
+<h3 id="장면-5-디버깅은-숫자보다-경로를-먼저-본다">장면 5. 디버깅은 숫자보다 경로를 먼저 본다</h3>
+<p><strong>학습자:</strong> 팀원이 &quot;INT4로 바꿨는데 latency가 그대로예요&quot;라고 말하면 어떻게 보시나요?</p>
+<p><strong>교수자:</strong> 저는 네 단계로 봅니다.</p>
+<p><strong>교수자:</strong> 첫째, execution provider가 실제로 얼마나 offload했는지 봅니다. 이건 [S2]의 역할입니다.</p>
+<p><strong>교수자:</strong> 둘째, compile 산출물이 기대한 형식과 타깃 장치용으로 생성됐는지 봅니다. 이건 [S3]의 역할입니다.</p>
+<p><strong>교수자:</strong> 셋째, device target과 실행 모드가 의도한 NPU 경로인지 봅니다. 이건 [S4]의 역할입니다.</p>
+<p><strong>교수자:</strong> 넷째, 그 다음에야 구간별 latency를 나눠 봅니다. <code>L_kernel</code>은 줄었는데 <code>L_dequant</code>나 <code>L_fallback</code>이 늘었으면, bit-width 이득이 서비스 전체로 번지지 못한 겁니다.</p>
+<p><strong>학습자:</strong> 결국 &quot;INT4 모델 파일이 있다&quot;와 &quot;INT4 경로가 빠르다&quot;는 다른 말이네요.</p>
+<p><strong>교수자:</strong> 정확합니다. 전자는 아티팩트 상태이고, 후자는 실행 경로 상태입니다.</p>
+<h2 id="자주-헷갈리는-포인트">자주 헷갈리는 포인트</h2>
+<ul><li>INT4가 INT8보다 메모리를 더 많이 줄인다는 사실은 [식 1]의 결론이고, 더 빠르다는 결론은 아니다.</li><li>INT4의 품질 리스크가 더 높다는 말은 backend 문서가 아니라 [식 2]와 [I1]에서 직접 나온다.</li><li>FP8을 절충안으로 부를 때도 &quot;무조건 더 좋다&quot;가 아니라 &quot;8비트 예산을 유지하는 별도 후보군&quot;이라고만 말해야 안전하다.</li><li>[S2][S3][S4]는 품질 비교 출처가 아니다. 이 세 출처는 offload, compile, device target을 설명할 때만 쓰는 편이 정확하다.</li><li>서버에서의 기본선과 NPU에서의 기본선은 다르다. 서버는 메모리와 품질에서 출발하고, NPU는 backend 경로에서 출발한다.</li></ul>
+<h2 id="사례로-다시-보기">사례로 다시 보기</h2>
+<h3 id="사례-1-8b-고객지원-모델을-10gb-남은-서버-gpu에-올려야-한다">사례 1. 8B 고객지원 모델을 10GB 남은 서버 GPU에 올려야 한다</h3>
+<p><strong>교수자:</strong> 우선 [식 1]로 컷을 냅니다. FP16 16GB는 탈락, INT8과 FP8 계열 8GB는 후보, INT4 4GB도 후보입니다. 그다음 [식 2]를 적용하면, 같은 범위 기준 INT4는 INT8보다 훨씬 거친 눈금을 쓰므로 품질 위험이 더 큽니다. 그래서 &quot;품질이 크게 흔들리면 안 되는 고객지원 챗봇&quot;이라면 8비트 계열을 기본선으로 먼저 잡는 판단이 자연스럽습니다. vLLM 같은 서버 엔진 문맥의 [S1]은 이런 실험이 실제 서빙 설정 안에 들어온다는 점을 받쳐 줍니다.</p>
+<p><strong>학습자:</strong> 여기서 FP8 대신 INT8을 먼저 보는 이유는요?</p>
+<p><strong>교수자:</strong> 이 수업의 범위에서는 FP8을 별도 후보군으로 두되, backend와 품질 테스트로 닫으라고만 정리합니다. 그래서 운영 기준선으로는 단순하고 보수적인 INT8을 먼저 놓고, 필요하면 FP8을 비교군으로 추가하는 흐름이 설명상 깔끔합니다.</p>
+<h3 id="사례-2-온디바이스-회의-요약-앱에서-int4가-오히려-흔들린다">사례 2. 온디바이스 회의 요약 앱에서 INT4가 오히려 흔들린다</h3>
+<p><strong>교수자:</strong> 이번에는 NPU 배포입니다. 팀이 INT4 아티팩트를 만들었는데, 실행 로그를 보니 일부 연산은 offload되지 않고, compile 산출물도 장치별로 다르게 나오며, target 지정이 틀린 장비에서는 fallback이 늘었습니다. 이 상황에서는 &quot;INT4가 제일 작다&quot;는 사실보다 [S2][S3][S4]가 가리키는 실행 경로 완성도가 더 중요합니다. 그래서 실제 선택은 INT8일 수도 있고, backend가 받쳐 주면 FP8일 수도 있습니다. 핵심은 가장 작은 형식이 아니라 가장 덜 새는 경로입니다.</p>
+<h2 id="핵심-정리">핵심 정리</h2>
+<ul><li>[식 1]이 보여 주는 사실: weight 메모리는 비트폭에 비례해 줄어든다.</li><li>[식 2]와 [I1]이 보여 주는 사실: 같은 범위에서 INT4는 INT8보다 훨씬 거친 눈금을 쓰므로 품질 리스크가 더 크다.</li><li>운영적 추론: 품질 민감한 서버 서비스는 8비트 계열을 기본선으로 놓고, 메모리 압박이 매우 강할 때 INT4를 추가 검토하는 편이 안전하다.</li><li>backend 사실: [S2][S3][S4]는 offload, compile, device target을 확인하게 해 주며, NPU에서는 이 경로 검증이 bit-width 선택보다 앞선다.</li><li>실무 결론: NPU-friendly quantization은 단순한 bit-width 경쟁이 아니라, 통과 가능한 backend 경로를 먼저 찾는 일이다.</li></ul>
+<h2 id="복습-체크리스트">복습 체크리스트</h2>
+<ul><li>8B 모델의 FP16, INT8, FP8, INT4 weight 예산을 [식 1]로 계산할 수 있는가?</li><li>왜 INT4의 품질 리스크가 더 크다고 말하는지 [식 2]의 분모 차이까지 포함해 설명할 수 있는가?</li><li>&quot;INT4인데 안 빨랐다&quot;를 들었을 때 <code>execution provider</code>, <code>compile 산출물</code>, <code>device target</code>, <code>fallback</code> 순서로 점검할 수 있는가?</li><li>서버 GPU와 NPU 배포에서 형식 선택의 첫 질문이 왜 다른지 설명할 수 있는가?</li><li>FP8을 &quot;무조건 우월한 형식&quot;이 아니라 &quot;지원될 때 시험할 8비트 후보군&quot;으로 말할 수 있는가?</li></ul>
+<h2 id="대안과-비교">대안과 비교</h2>
+<p>| 형식 | 8B 기준 weight 예산 | 품질 위험을 읽는 직접 근거 | backend가 약할 때 생길 수 있는 문제 | 먼저 던질 질문 | | --- | --- | --- | --- | --- | | INT8 | 약 8GB | [식 2] 기준 4비트보다 촘촘한 눈금 | 일부 연산 미지원 시 fallback | 품질을 크게 해치지 않고 메모리를 절반 수준으로 줄일 수 있는가? | | INT4 | 약 4GB | [식 2] 기준 INT8보다 약 17배 거친 눈금 | dequantize, layout, fallback이 커져 end-to-end 이득이 줄 수 있음 | 메모리 압박이 정말 이 정도 공격성을 요구하는가? | | FP8 | 약 8GB | [식 1]상 8비트 예산, INT4만큼 공격적이지 않은 후보군 | backend가 지원하지 않으면 실험 자체가 막힘 | 지원되는 경로 안에서 8비트 후보를 더 비교해야 하는가? |</p>
+<div class="table-wrap"><table><thead><tr><th>양자화 미적용</th><th>약 16GB(FP16 가정)</th><th>품질 손실 최소</th><th>메모리 부족으로 배치/탑재가 막힘</th><th>현재 병목이 정말 precision인가?</th></tr></thead><tbody></tbody></table></div>
+<h2 id="참고-이미지">참고 이미지</h2>
+<h3 id="참고-이미지-1-quantization-error-block-diagram">참고 이미지 1. Quantization error block diagram</h3>
+<p><img src="./assets/img-01.png" alt="Quantization error block diagram"></p>
+<ul><li>[I1] 캡션: Quantization error block diagram</li><li>출처 번호: [I1]</li><li>왜 필요한가: 연속값이 계단형 표현으로 투영될 때 어떤 종류의 오차가 생기는지 보여 준다. [식 2]의 &quot;눈금 간격이 커질수록 오차 위험이 커진다&quot;는 설명을 직관으로 연결하는 역할이다.</li></ul>
+<h3 id="참고-이미지-2-비트폭-선택-요약표">참고 이미지 2. 비트폭 선택 요약표</h3>
+<p>로고 이미지는 설명 기여도가 낮아서 제외하고, 실제 의사결정에 쓰는 표로 대체한다.</p>
+<p>| 비교 축 | INT8 | INT4 | FP8 | | --- | --- | --- | --- | | 8B 기준 weight 예산 | 약 8GB | 약 4GB | 약 8GB | | 품질 위험을 읽는 직접 근거 | 8비트 계열 눈금 | INT8보다 더 거친 눈금 | 8비트 예산의 별도 후보군 | | latency에서 먼저 의심할 지점 | fallback 여부 | dequantize + fallback | backend 지원 경로 | | backend 확인 순서 | [S1] 서버 엔진 경로 | [S2][S3][S4] offload/compile/target | [S1][S2][S3][S4] 지원 여부 |</p>
+<div class="table-wrap"><table><thead><tr><th>수업용 한 줄 메모</th><th>서버 기본선 후보</th><th>메모리 압박이 강할 때</th><th>지원되면 비교할 8비트 후보</th></tr></thead><tbody></tbody></table></div>
+<h2 id="출처">출처</h2>
+<p>| 번호 | 제목 | 발행 주체 | 날짜 | URL | 이 챕터에서 맡는 역할 | | --- | --- | --- | --- | --- | --- | | [S1] | vLLM Documentation | vLLM project | 2026-01-07 | <a href="https://docs.vllm.ai/en/latest/" target="_blank" rel="noreferrer">https://docs.vllm.ai/en/latest/</a> | 서버 서빙 엔진 문맥에서 양자화 경로를 설명할 때 사용 | | [S2] | QNN Execution Provider | ONNX Runtime | 2026-03-08 (accessed) | <a href="https://onnxruntime.ai/docs/execution-providers/QNN-ExecutionProvider.html" target="_blank" rel="noreferrer">https://onnxruntime.ai/docs/execution-providers/QNN-ExecutionProvider.html</a> | execution provider와 offload/fallback 경로 설명 | | [S3] | Compile examples | Qualcomm AI Hub | 2026-03-08 (accessed) | <a href="https://app.aihub.qualcomm.com/docs/hub/compile_examples.html" target="_blank" rel="noreferrer">https://app.aihub.qualcomm.com/docs/hub/compile_examples.html</a> | compile 산출물과 배포 단계 설명 | | [S4] | NPU device | OpenVINO | 2026-03-08 (accessed) | <a href="https://docs.openvino.ai/2025/openvino-workflow/running-inference/inference-devices-and-modes/npu-device.html" target="_blank" rel="noreferrer">https://docs.openvino.ai/2025/openvino-workflow/running-inference/inference-devices-and-modes/npu-device.html</a> | device target과 NPU 실행 모드 설명 |</p>
+    </article>
+    <section class="content-panel surface quiz-panel">
+      <div class="section-heading">
+        <div>
+          <p class="eyebrow">Quiz</p>
+          <h2>복습 문제</h2>
+        </div>
+      </div>
+      <div class="prose">
+        <h1 id="quantization-basics-퀴즈">Quantization Basics 퀴즈</h1>
+<h2 id="객관식-1">객관식 1</h2>
+<p>8B 모델을 서버 GPU에 올리려는데 현재 비어 있는 메모리가 10GB이고, 서비스는 고객지원 챗봇이라 품질 흔들림에 민감하다. 본문 기준으로 가장 먼저 둘 기본선은 무엇인가?</p>
+<ol><li>FP16, 품질 손실이 없으니 무조건 우선이다</li><li>INT8, [식 1]상 예산을 맞추면서 INT4보다 덜 공격적인 8비트 계열이기 때문이다</li><li>INT4, 가장 작으니 다른 조건을 볼 필요가 없다</li><li>아무 형식이나 괜찮다. 서버에서는 backend를 보지 않아도 된다</li></ol>
+<h2 id="객관식-2">객관식 2</h2>
+<p>다음 중 NPU 배포에서 형식 선택 순서를 가장 정확히 설명한 것은 무엇인가?</p>
+<ol><li>먼저 가장 낮은 bit-width를 고르고, 안 되면 나중에 compile을 본다</li><li>먼저 device target, execution provider, compile 산출물 경로를 확인하고, 그다음 통과한 형식끼리 메모리와 품질을 비교한다</li><li>FP8은 항상 INT8보다 좋으므로 backend 확인 없이 바로 채택한다</li><li>INT4는 메모리를 가장 줄이므로 fallback이 있어도 항상 가장 빠르다</li></ol>
+<h2 id="객관식-3">객관식 3</h2>
+<p>같은 값 범위를 가정할 때 INT4가 INT8보다 품질 리스크가 더 크다고 설명하는 직접 근거로 가장 적절한 것은 무엇인가?</p>
+<ol><li>vLLM 문서가 INT4를 금지하기 때문이다</li><li>OpenVINO NPU 문서가 INT4 품질 수치를 제공하기 때문이다</li><li>[식 2]에서 INT4의 분모가 15, INT8의 분모가 255라서 INT4의 눈금이 훨씬 거칠기 때문이다</li><li>compile 예제가 INT4를 자동으로 FP16으로 바꿔 주기 때문이다</li></ol>
+<h2 id="짧은-서술형-1">짧은 서술형 1</h2>
+<p>[식 1]을 이용해 8B 모델의 FP16, INT8, FP8, INT4 weight 예산을 각각 계산하고, 이 계산이 초기 배포 판단에 왜 유용한지 3문장 이내로 설명하라.</p>
+<h2 id="짧은-서술형-2">짧은 서술형 2</h2>
+<p>&quot;INT4가 더 작으니 무조건 더 빠르다&quot;가 왜 틀릴 수 있는지 설명하라. 답변에는 <code>dequantize</code>, <code>fallback</code>, <code>execution provider</code> 중 최소 두 개를 포함하라.</p>
+<h2 id="심화-설명형-1">심화 설명형 1</h2>
+<p>다음 상황에서 어떤 형식을 우선 검토할지 쓰고 이유를 설명하라.</p>
+<ul><li>장치: 모바일 NPU</li><li>모델: 8B</li><li>메모리 예산: 9GB</li><li>backend 상태: INT8은 offload와 compile이 안정적이고, INT4는 일부 연산이 fallback되며, FP8은 target 미지원</li><li>품질 요구: 요약문 누락이 자주 나면 안 됨</li></ul>
+<p>답변에는 [식 1] 또는 [식 2] 중 하나 이상, 그리고 <code>backend 호환성</code>을 모두 포함하라.</p>
+<h2 id="심화-설명형-2">심화 설명형 2</h2>
+<p>한 팀이 &quot;INT4 아티팩트를 만들었으니 NPU latency는 반드시 줄어든다&quot;라고 주장한다. 본문 기준으로 이를 검증하는 절차를 4단계 이상으로 쓰라. 답변에는 <code>execution provider</code>, <code>compile 산출물</code>, <code>device target</code>, <code>실측 latency</code>, <code>fallback</code>을 모두 포함하라.</p><details class="answer-key"><summary>정답 및 해설 보기</summary><h2 id="정답-및-해설">정답 및 해설</h2>
+<ul><li>객관식 1 정답: 2. [식 1]상 8B 모델의 INT8은 약 8GB라 10GB 예산 안에 들어가고, [식 2] 관점에서는 INT4보다 덜 공격적인 8비트 계열이라 품질 민감 서비스의 기본선으로 두기 쉽다. 서버 엔진 문맥은 [S1]이 받친다.</li><li>객관식 2 정답: 2. NPU 배포에서는 형식 비교 전에 execution provider의 offload 경로 [S2], compile 산출물 [S3], device target [S4]을 먼저 확인해야 한다.</li><li>객관식 3 정답: 3. 품질 리스크 비교의 직접 근거는 backend 문서가 아니라 [식 2]다. 같은 범위를 가정하면 INT4의 눈금이 INT8보다 훨씬 거칠다.</li><li>짧은 서술형 1 예시 답안: 8B 모델이면 FP16은 약 16GB, INT8은 약 8GB, FP8도 약 8GB, INT4는 약 4GB다. 이 계산은 형식을 평가하기 전에 장치에 실을 수 있는 후보를 빠르게 거르는 데 유용하다. 그래서 실험 순서를 정할 때 첫 필터로 쓰기 좋다.</li><li>짧은 서술형 2 예시 답안: INT4는 weight 메모리를 줄이더라도 execution provider가 해당 경로를 충분히 offload하지 못하면 fallback이 생길 수 있다 [S2]. 또 dequantize 같은 추가 변환이 붙으면 kernel 이득이 end-to-end latency 개선으로 이어지지 않을 수 있다. 따라서 속도는 bit-width만으로 결정되지 않는다.</li><li>심화 설명형 1 해설 포인트: 좋은 답안은 INT8을 우선 검토한다. 이유는 [식 1]상 8GB로 예산을 맞추고, backend 문맥에서도 INT8만 offload와 compile이 안정적이기 때문이다 [S2][S3][S4]. 품질 요구가 높으므로, [식 2]상 더 공격적인 INT4를 fallback이 많은 상태로 쓰는 선택은 불리하다고 설명하면 좋다.</li><li>심화 설명형 2 해설 포인트: 좋은 답안은 1) execution provider가 실제로 어떤 연산을 맡는지 확인 [S2], 2) compile 산출물이 타깃 장치용으로 생성됐는지 확인 [S3], 3) device target과 실행 모드 확인 [S4], 4) fallback 발생 위치 추적, 5) kernel/dequant/fallback을 나눈 실측 latency 비교의 흐름을 가진다.</li></ul></details>
+      </div>
+    </section>
+    <nav class="pager">
+      <a class="pager-link" href="../03-continuous-batching/"><span>이전</span><strong>Continuous Batching</strong></a>
+      <a class="pager-link" href="../05-serving-stack-overview/"><span>다음</span><strong>Serving Stack Overview</strong></a>
+    </nav>
+    
+      </section>
+      <aside class="page-sidebar">
+    <div class="sidebar-panel surface">
+      <p class="eyebrow">On This Page</p>
+      <div class="toc" data-toc>
+        <a class="toc-link" href="#수업-개요">수업 개요</a><a class="toc-link" href="#학습-목표">학습 목표</a><a class="toc-link" href="#수업-전에-생각할-질문">수업 전에 생각할 질문</a><a class="toc-link" href="#강의-스크립트">강의 스크립트</a><a class="toc-link sub" href="#장면-1-먼저-예산표를-펼친다">장면 1. 먼저 예산표를 펼친다</a><a class="toc-link sub" href="#장면-2-품질-손실은-눈금-간격으로-읽는다">장면 2. 품질 손실은 눈금 간격으로 읽는다</a><a class="toc-link sub" href="#장면-3-속도는-bit-width-하나로-닫히지-않는다">장면 3. 속도는 bit width 하나로 닫히지 않는다</a><a class="toc-link sub" href="#장면-4-왜-서버에서는-8비트-계열부터-npu에서는-backend부터-보나">장면 4. 왜 서버에서는 8비트 계열부터, NPU에서는 backend부터 보나</a><a class="toc-link sub" href="#장면-5-디버깅은-숫자보다-경로를-먼저-본다">장면 5. 디버깅은 숫자보다 경로를 먼저 본다</a><a class="toc-link" href="#자주-헷갈리는-포인트">자주 헷갈리는 포인트</a><a class="toc-link" href="#사례로-다시-보기">사례로 다시 보기</a><a class="toc-link sub" href="#사례-1-8b-고객지원-모델을-10gb-남은-서버-gpu에-올려야-한다">사례 1. 8B 고객지원 모델을 10GB 남은 서버 GPU에 올려야 한다</a><a class="toc-link sub" href="#사례-2-온디바이스-회의-요약-앱에서-int4가-오히려-흔들린다">사례 2. 온디바이스 회의 요약 앱에서 INT4가 오히려 흔들린다</a><a class="toc-link" href="#핵심-정리">핵심 정리</a><a class="toc-link" href="#복습-체크리스트">복습 체크리스트</a><a class="toc-link" href="#대안과-비교">대안과 비교</a><a class="toc-link" href="#참고-이미지">참고 이미지</a><a class="toc-link sub" href="#참고-이미지-1-quantization-error-block-diagram">참고 이미지 1. Quantization error block diagram</a><a class="toc-link sub" href="#참고-이미지-2-비트폭-선택-요약표">참고 이미지 2. 비트폭 선택 요약표</a><a class="toc-link" href="#출처">출처</a>
+      </div>
+    </div>
+    </aside>
+    </div>
+  </main>
+  <script type="module" src="../../assets/app.js"></script>
+  <script type="module">
+    import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs';
+    mermaid.initialize({ startOnLoad: true, theme: 'neutral', securityLevel: 'loose' });
+  </script>
+  <script>
+    window.MathJax = {
+      tex: { inlineMath: [['$', '$'], ['\\(', '\\)']], displayMath: [['$$', '$$'], ['\\[', '\\]']] },
+      svg: { fontCache: 'global' }
+    };
+  </script>
+  <script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-svg.js" async></script>
+</body>
+</html>

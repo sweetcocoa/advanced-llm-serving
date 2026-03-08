@@ -1,0 +1,38 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="720" viewBox="0 0 1200 720">
+  <rect width="1200" height="720" fill="#fbf7ef"/>
+  <rect x="60" y="48" width="1080" height="624" rx="28" fill="#fffdf8" stroke="#202020" stroke-width="4"/>
+  <text x="90" y="108" font-family="Helvetica, Arial, sans-serif" font-size="34" font-weight="700" fill="#202020">Queue Fairness Snapshot</text>
+  <text x="90" y="146" font-family="Helvetica, Arial, sans-serif" font-size="20" fill="#444">Weight + aging protects fairness, while prompt cost limits long-prefill dominance.</text>
+  <rect x="90" y="188" width="1020" height="80" rx="18" fill="#e4f0db" stroke="#355834" stroke-width="3"/>
+  <text x="116" y="236" font-family="Helvetica, Arial, sans-serif" font-size="24" font-weight="700" fill="#1f3b1f">Admission gate</text>
+  <text x="330" y="236" font-family="Helvetica, Arial, sans-serif" font-size="21" fill="#244424">Accept only if predicted wait + service + handoff stays within tenant SLO.</text>
+  <text x="90" y="318" font-family="Helvetica, Arial, sans-serif" font-size="24" font-weight="700" fill="#202020">Interactive tenant</text>
+  <rect x="90" y="338" width="1020" height="88" rx="20" fill="#d9ecff" stroke="#2e6ea6" stroke-width="3"/>
+  <rect x="118" y="360" width="138" height="44" rx="12" fill="#2e6ea6"/>
+  <text x="150" y="389" font-family="Helvetica, Arial, sans-serif" font-size="20" font-weight="700" fill="#fff">weight 5</text>
+  <rect x="280" y="352" width="124" height="58" rx="14" fill="#5ba2e0"/>
+  <text x="303" y="388" font-family="Helvetica, Arial, sans-serif" font-size="22" font-weight="700" fill="#fff">chat-1</text>
+  <rect x="422" y="352" width="124" height="58" rx="14" fill="#5ba2e0"/>
+  <text x="445" y="388" font-family="Helvetica, Arial, sans-serif" font-size="22" font-weight="700" fill="#fff">chat-2</text>
+  <rect x="564" y="352" width="124" height="58" rx="14" fill="#5ba2e0"/>
+  <text x="587" y="388" font-family="Helvetica, Arial, sans-serif" font-size="22" font-weight="700" fill="#fff">chat-3</text>
+  <text x="730" y="389" font-family="Helvetica, Arial, sans-serif" font-size="21" fill="#224d73">Short prompts, low prefill cost, TTFT-sensitive.</text>
+  <text x="90" y="478" font-family="Helvetica, Arial, sans-serif" font-size="24" font-weight="700" fill="#202020">Batch tenant</text>
+  <rect x="90" y="498" width="1020" height="88" rx="20" fill="#fde4cf" stroke="#aa6a2f" stroke-width="3"/>
+  <rect x="118" y="520" width="138" height="44" rx="12" fill="#aa6a2f"/>
+  <text x="150" y="549" font-family="Helvetica, Arial, sans-serif" font-size="20" font-weight="700" fill="#fff">weight 2</text>
+  <rect x="280" y="512" width="192" height="58" rx="14" fill="#e59b56"/>
+  <text x="306" y="548" font-family="Helvetica, Arial, sans-serif" font-size="22" font-weight="700" fill="#fff">long-summary</text>
+  <rect x="492" y="512" width="168" height="58" rx="14" fill="#efb27c"/>
+  <text x="526" y="548" font-family="Helvetica, Arial, sans-serif" font-size="22" font-weight="700" fill="#fff">aging up</text>
+  <rect x="690" y="512" width="192" height="58" rx="14" fill="#c84133"/>
+  <text x="730" y="548" font-family="Helvetica, Arial, sans-serif" font-size="22" font-weight="700" fill="#fff">starvation risk</text>
+  <text x="910" y="548" font-family="Helvetica, Arial, sans-serif" font-size="20" fill="#7a4c21">Long prefill raises cost unless aging lifts priority.</text>
+  <path d="M 462 602 C 560 642, 670 642, 778 606" fill="none" stroke="#202020" stroke-width="4" marker-end="url(#arrow)"/>
+  <text x="448" y="646" font-family="Helvetica, Arial, sans-serif" font-size="20" fill="#202020">Without aging, short-job bias keeps skipping the long batch tenant.</text>
+  <defs>
+    <marker id="arrow" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth">
+      <path d="M0,0 L0,6 L9,3 z" fill="#202020"/>
+    </marker>
+  </defs>
+</svg>

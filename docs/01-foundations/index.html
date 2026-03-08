@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>기초와 성능 직관 | LLM Serving + NPU</title>
+  <meta name="description" content="Transformer inference의 기본 연산과 메모리 병목을 이해해 이후 serving/NPU 문서를 읽을 수 있는 공통 언어를 만든다.">
+  <meta name="theme-color" content="#10182a">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+KR:wght@400;500;600;700&family=Space+Grotesk:wght@500;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../assets/style.css">
+</head>
+<body class="page-module" data-page-kind="module" data-page-id="01-foundations" data-root-prefix="../">
+  <div class="reading-progress" data-reading-progress></div>
+  <header class="site-header">
+    <a class="brand" href="../">
+      <span class="brand-kicker">GitHub Pages Study</span>
+      <strong>LLM Serving + NPU</strong>
+    </a>
+    <nav class="top-nav"><a class="top-nav-link is-active" href="./">기초와 성능 직관</a><a class="top-nav-link" href="../02-llm-serving-core/">LLM Serving 핵심</a><a class="top-nav-link" href="../03-llm-serving-advanced/">고급 Serving 패턴</a><a class="top-nav-link" href="../04-serving-systems/">Serving 시스템 설계</a><a class="top-nav-link" href="../05-npu-stack/">NPU 소프트웨어 스택</a><a class="top-nav-link" href="../06-runtime-and-compiler/">런타임과 컴파일러</a><a class="top-nav-link" href="../07-synthesis/">종합 정리와 최신 흐름</a></nav>
+    <div class="search-shell">
+      <input type="search" placeholder="챕터, 모듈, 키워드 검색" aria-label="검색" data-global-search>
+      <div class="search-results" data-search-results hidden></div>
+    </div>
+  </header>
+  <main class="page-frame">
+    
+    <section class="hero">
+      <div class="hero-copy">
+        <p class="eyebrow">Module</p>
+        <h1>기초와 성능 직관</h1>
+        <p class="hero-summary">Transformer inference의 기본 연산과 메모리 병목을 이해해 이후 serving/NPU 문서를 읽을 수 있는 공통 언어를 만든다.</p>
+      </div>
+      <div class="hero-stats">
+        <div class="stat-card"><strong>4</strong><span>chapters</span></div>
+      </div>
+    </section>
+    
+    <div class="page-layout">
+      <section class="page-main content-shell">
+        
+    <article class="content-panel surface prose">
+      <h1 id="기초와-성능-직관">기초와 성능 직관</h1>
+<p>Transformer inference의 기본 연산과 메모리 병목을 이해해 이후 serving/NPU 문서를 읽을 수 있는 공통 언어를 만든다.</p>
+<h2 id="이-모듈을-마치면-설명할-수-있어야-하는-것">이 모듈을 마치면 설명할 수 있어야 하는 것</h2>
+<ul><li>prefill과 decode를 분리해 설명할 수 있다.</li><li>memory bandwidth와 arithmetic intensity가 latency를 어떻게 제한하는지 설명할 수 있다.</li><li>GPU와 NPU를 같은 추론 시스템의 다른 실행 장치로 비교할 수 있다.</li></ul>
+<h2 id="챕터-순서">챕터 순서</h2>
+<ul><li><a href="./01-transformer-inference/">Transformer Inference</a>: Transformer 추론 경로를 prefill, decode, attention, projection 관점에서 읽는다.</li><li><a href="./02-memory-bandwidth-latency/">Memory, Bandwidth, Latency</a>: latency가 FLOPs보다 memory movement에 더 민감해지는 이유를 정리한다.</li><li><a href="./03-gpu-vs-npu-mental-model/">GPU vs NPU Mental Model</a>: GPU와 NPU를 연산 장치가 아니라 실행 모델 차이로 비교한다.</li><li><a href="./04-llm-inference-metrics/">LLM Inference Metrics</a>: TTFT, TPOT, throughput, utilization을 같은 시스템 지표 체계로 묶는다.</li></ul>
+<h2 id="선행-관계">선행 관계</h2>
+<ul><li>같은 모듈에서는 위 순서를 따르는 것이 좋다.</li><li>다음 모듈로 넘어가기 전에 각 챕터 퀴즈를 먼저 풀어 본다.</li></ul>
+    </article>
+    <section class="content-panel surface">
+      <div class="section-heading">
+        <div>
+          <p class="eyebrow">Chapters</p>
+          <h2>기초와 성능 직관 안의 학습 단위</h2>
+        </div>
+        <input type="search" placeholder="챕터 필터" aria-label="챕터 필터" data-card-filter>
+      </div>
+      <div class="chapter-grid" data-card-container>
+        <a class="chapter-card" data-card-search="transformer inference 이 챕터는 transformer를 &quot;attention 식 하나&quot;로 소개하지 않고, 실제 요청이 prefill decode 를 지나며 어떤 계산과 어떤 메모리 읽기를 만들어 내는지 따라간다. 핵심 질문은 단순하다. 더 긴 문맥, 더 넓은 표현 공간, 더 자주 과거를 참조하는 모델 설정이 실제 품질을 얼마나 올리고, 그 대가로 prefill flops와 decode memory traffic을 얼마나 늘리느냐이다 [s1][s2]. 2026년 기준의 serving 문서가 prefix caching, paged attention, continuous batching 같은 기능을 별도 운영 항목으로 다루는 이유도 이 tradeoff가 여전히 현재형이기 때문이다 [s3]. 최신 runtime release note가 계속 갱신되는 사실 자체도, 추론 경로 최적화가 끝난 문제가 아니라는 보조 신호로 읽을 수 있다 [s4]. 기초와 성능 직관" data-progress-id="study/llm-serving-npu-roadmap/01-foundations/01-transformer-inference" href="01-transformer-inference/"><span class="chapter-module">기초와 성능 직관</span><h3>Transformer Inference</h3><p>이 챕터는 Transformer를 &quot;attention 식 하나&quot;로 소개하지 않고, 실제 요청이 prefill decode 를 지나며 어떤 계산과 어떤 메모리 읽기를 만들어 내는지 따라간다. 핵심 질문은 단순하다. 더 긴 문맥, 더 넓은 표현 공간, 더 자주 과거를 참조하는 모델 설정이 실제 품질을 얼마나 올리고, 그 대가로 prefill FLOPs와 decode memory traffic을…</p><div class="chapter-card-meta"><span>35-50 min</span><span>2026-03-08</span><span class="chapter-progress-state">미완료</span></div></a><a class="chapter-card" data-card-search="memory, bandwidth, latency 이 챕터는 transformer 입문을 반복하지 않고, 왜 flops를 줄였는데도 latency가 그대로인가 를 판단하는 틀을 만든다. self attention은 모델의 기본 구조를 설명해 주지만 [s1], 실제 지연은 종종 얼마나 계산했는가 보다 토큰 하나를 만들기 위해 몇 바이트를 읽고 썼는가 에 더 민감하다 [s2]. 그래서 이 장의 핵심은 개념 소개보다 진단 순서다. 먼저 compute를 볼지, 아니면 bytes moved를 다시 셀지 결정하는 기준을 세운다. 기초와 성능 직관" data-progress-id="study/llm-serving-npu-roadmap/01-foundations/02-memory-bandwidth-latency" href="02-memory-bandwidth-latency/"><span class="chapter-module">기초와 성능 직관</span><h3>Memory, Bandwidth, Latency</h3><p>이 챕터는 Transformer 입문을 반복하지 않고, 왜 FLOPs를 줄였는데도 latency가 그대로인가 를 판단하는 틀을 만든다. Self attention은 모델의 기본 구조를 설명해 주지만 [S1], 실제 지연은 종종 얼마나 계산했는가 보다 토큰 하나를 만들기 위해 몇 바이트를 읽고 썼는가 에 더 민감하다 [S2]. 그래서 이 장의 핵심은 개념 소개보다 진단 순서다. 먼저 comp…</p><div class="chapter-card-meta"><span>35-50 min</span><span>2026-03-08</span><span class="chapter-progress-state">미완료</span></div></a><a class="chapter-card" data-card-search="gpu vs npu mental model 이 챕터는 gpu와 npu를 성능표 두 칸으로 비교하지 않고, 어떤 블록을 어느 runtime에 맡길 것인가 라는 실행 모델 문제로 다룬다. transformer가 attention과 feed forward 블록을 반복한다는 사실은 [s1]이 준다. roofline은 그 블록이 계산보다 데이터 이동에 더 묶여 있을 수 있음을 보여 준다 [s2]. vllm 문서는 serving이 커널 하나가 아니라 scheduler, batching, kv cache를 포함한 runtime 문제라는 맥락을 준다 [s3]. aws neuron release note는 특정 npu runtime의 지원 범위가 버전과 기능 단위로 관리된다는 사례를 준다 [s4]. 이 네 가지를 합치면, 장치 선택의 핵심 질문은 누가 더 센가 보다 어디서 끊으면 handoff와 escape path가 폭발하는가 , 그리고 언제 전력 효율이 실제 배터리·발열 이득으로 남는가 가 된다. 기초와 성능 직관" data-progress-id="study/llm-serving-npu-roadmap/01-foundations/03-gpu-vs-npu-mental-model" href="03-gpu-vs-npu-mental-model/"><span class="chapter-module">기초와 성능 직관</span><h3>GPU vs NPU Mental Model</h3><p>이 챕터는 GPU와 NPU를 성능표 두 칸으로 비교하지 않고, 어떤 블록을 어느 runtime에 맡길 것인가 라는 실행 모델 문제로 다룬다. Transformer가 attention과 feed forward 블록을 반복한다는 사실은 [S1]이 준다. Roofline은 그 블록이 계산보다 데이터 이동에 더 묶여 있을 수 있음을 보여 준다 [S2]. vLLM 문서는 serving이 커널 하나가…</p><div class="chapter-card-meta"><span>35-50 min</span><span>2026-03-08</span><span class="chapter-progress-state">미완료</span></div></a><a class="chapter-card" data-card-search="llm inference metrics 이 챕터는 ttft , tpot , request throughput , output token throughput , utilization 을 따로 외우지 않고, 요청이 들어온 뒤 첫 토큰이 나오고 응답이 끝날 때까지의 시간축 위에 다시 배치한다. 출처 기반 사실은 네 가지다. transformer의 출력은 autoregressive하게 한 토큰씩 이어진다 [s1]. roofline은 성능을 peak flops 만이 아니라 bandwidth ceiling과 arithmetic intensity로도 읽게 만든다 [s2]. vllm 같은 serving runtime 문서는 scheduler, batching, kv cache 같은 실행 계층을 드러낸다 [s3]. 그리고 aws neuron 같은 벤더 runtime은 기능과 제약 변경을 release note 문맥으로 계속 공지한다 [s4]. 기초와 성능 직관" data-progress-id="study/llm-serving-npu-roadmap/01-foundations/04-llm-inference-metrics" href="04-llm-inference-metrics/"><span class="chapter-module">기초와 성능 직관</span><h3>LLM Inference Metrics</h3><p>이 챕터는 TTFT , TPOT , request throughput , output token throughput , utilization 을 따로 외우지 않고, 요청이 들어온 뒤 첫 토큰이 나오고 응답이 끝날 때까지의 시간축 위에 다시 배치한다. 출처 기반 사실은 네 가지다. Transformer의 출력은 autoregressive하게 한 토큰씩 이어진다 [S1]. Roofline은 성…</p><div class="chapter-card-meta"><span>35-50 min</span><span>2026-03-08</span><span class="chapter-progress-state">미완료</span></div></a>
+      </div>
+    </section>
+    
+      </section>
+      <aside class="page-sidebar">
+    <div class="sidebar-panel surface">
+      <p class="eyebrow">Progress</p>
+      <h3>진행 방식</h3>
+      <p>챕터 페이지의 완료 버튼은 브라우저 로컬 저장소에 기록됩니다.</p>
+    </div>
+    </aside>
+    </div>
+  </main>
+  <script type="module" src="../assets/app.js"></script>
+  <script type="module">
+    import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs';
+    mermaid.initialize({ startOnLoad: true, theme: 'neutral', securityLevel: 'loose' });
+  </script>
+  <script>
+    window.MathJax = {
+      tex: { inlineMath: [['$', '$'], ['\\(', '\\)']], displayMath: [['$$', '$$'], ['\\[', '\\]']] },
+      svg: { fontCache: 'global' }
+    };
+  </script>
+  <script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-svg.js" async></script>
+</body>
+</html>

@@ -1,0 +1,60 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="700" viewBox="0 0 1200 700" role="img" aria-labelledby="title desc">
+  <title id="title">OpenVINO benchmark interpretation with first request and request hint comparison</title>
+  <desc id="desc">A local teaching illustration that compares first-request latency, steady-state latency, and request performance hint changes for the OpenVINO diagnosis described in README Part 5.</desc>
+  <rect width="1200" height="700" fill="#f3eee4"/>
+  <rect x="28" y="28" width="1144" height="92" rx="22" fill="#123d38"/>
+  <text x="60" y="72" font-family="Arial, sans-serif" font-size="31" font-weight="700" fill="#ffffff">OpenVINO diagnosis: split first request from request-policy effects</text>
+  <text x="60" y="102" font-family="Arial, sans-serif" font-size="18" fill="#dcece7">README Part 5 uses this figure to decide whether the bottleneck is in layer time or in request orchestration.</text>
+
+  <rect x="40" y="148" width="524" height="506" rx="20" fill="#fffaf1" stroke="#d9ccb6" stroke-width="2"/>
+  <text x="68" y="192" font-family="Arial, sans-serif" font-size="26" font-weight="700" fill="#123d38">Before changing request policy</text>
+  <text x="68" y="222" font-family="Arial, sans-serif" font-size="18" fill="#374943">Counters look short, but the first request is not.</text>
+
+  <rect x="68" y="252" width="468" height="120" rx="16" fill="#eef7f3" stroke="#b9d7cc" stroke-width="2"/>
+  <text x="90" y="286" font-family="Arial, sans-serif" font-size="20" font-weight="700" fill="#123d38">Measured signals</text>
+  <text x="90" y="318" font-family="Arial, sans-serif" font-size="18" fill="#374943">benchmark layer sum: 14 ms</text>
+  <text x="90" y="346" font-family="Arial, sans-serif" font-size="18" fill="#374943">first request latency: 118 ms</text>
+
+  <text x="76" y="426" font-family="Arial, sans-serif" font-size="18" fill="#374943">first request</text>
+  <rect x="186" y="404" width="284" height="32" rx="10" fill="#d99c88"/>
+  <text x="482" y="426" font-family="Arial, sans-serif" font-size="18" fill="#7a3d29">118 ms</text>
+
+  <text x="76" y="482" font-family="Arial, sans-serif" font-size="18" fill="#374943">steady p50</text>
+  <rect x="186" y="460" width="110" height="32" rx="10" fill="#74b588"/>
+  <text x="308" y="482" font-family="Arial, sans-serif" font-size="18" fill="#1e4e2c">22 ms</text>
+
+  <text x="76" y="538" font-family="Arial, sans-serif" font-size="18" fill="#374943">single-request p95</text>
+  <rect x="186" y="516" width="130" height="32" rx="10" fill="#79b7dd"/>
+  <text x="328" y="538" font-family="Arial, sans-serif" font-size="18" fill="#164f79">26 ms</text>
+
+  <rect x="68" y="580" width="468" height="48" rx="14" fill="#123d38"/>
+  <text x="92" y="611" font-family="Arial, sans-serif" font-size="18" font-weight="700" fill="#ffffff">Reading: large gap between 14 ms and 118 ms means startup cost is still mixed in.</text>
+
+  <rect x="596" y="148" width="564" height="506" rx="20" fill="#fffdf8" stroke="#d9ccb6" stroke-width="2"/>
+  <text x="624" y="192" font-family="Arial, sans-serif" font-size="26" font-weight="700" fill="#123d38">After separating warmup and changing hints</text>
+  <text x="624" y="222" font-family="Arial, sans-serif" font-size="18" fill="#374943">The layer sum stays similar, but tail latency and throughput move with request policy.</text>
+
+  <rect x="624" y="252" width="226" height="152" rx="16" fill="#eef7f3" stroke="#b9d7cc" stroke-width="2"/>
+  <text x="648" y="286" font-family="Arial, sans-serif" font-size="20" font-weight="700" fill="#123d38">LATENCY, requests=1</text>
+  <text x="648" y="322" font-family="Arial, sans-serif" font-size="18" fill="#374943">layer sum: 14 ms</text>
+  <text x="648" y="350" font-family="Arial, sans-serif" font-size="18" fill="#374943">warm first request: 24 ms</text>
+  <text x="648" y="378" font-family="Arial, sans-serif" font-size="18" fill="#374943">single-request p95: 25 ms</text>
+
+  <rect x="892" y="252" width="226" height="152" rx="16" fill="#fff0e8" stroke="#e3bdae" stroke-width="2"/>
+  <text x="916" y="286" font-family="Arial, sans-serif" font-size="20" font-weight="700" fill="#8a4a21">THROUGHPUT, requests=4</text>
+  <text x="916" y="322" font-family="Arial, sans-serif" font-size="18" fill="#374943">layer sum: 15 ms</text>
+  <text x="916" y="350" font-family="Arial, sans-serif" font-size="18" fill="#374943">warm first request: 27 ms</text>
+  <text x="916" y="378" font-family="Arial, sans-serif" font-size="18" fill="#374943">single-request p95: 48 ms</text>
+
+  <text x="628" y="454" font-family="Arial, sans-serif" font-size="18" fill="#374943">4-client throughput</text>
+  <rect x="804" y="432" width="92" height="32" rx="10" fill="#74b588"/>
+  <text x="908" y="454" font-family="Arial, sans-serif" font-size="18" fill="#1e4e2c">42 req/s</text>
+
+  <text x="628" y="512" font-family="Arial, sans-serif" font-size="18" fill="#374943">4-client throughput</text>
+  <rect x="804" y="490" width="154" height="32" rx="10" fill="#d99c88"/>
+  <text x="970" y="512" font-family="Arial, sans-serif" font-size="18" fill="#7a3d29">69 req/s</text>
+
+  <rect x="624" y="556" width="494" height="72" rx="16" fill="#ebf4fb" stroke="#a2c6df" stroke-width="2"/>
+  <text x="648" y="588" font-family="Arial, sans-serif" font-size="20" font-weight="700" fill="#13547e">Part 5 decision</text>
+  <text x="648" y="616" font-family="Arial, sans-serif" font-size="18" fill="#374943">If layer sums stay flat while p95 and throughput move, tune request policy before hunting layers.</text>
+</svg>

@@ -1,0 +1,201 @@
+---
+title: "Windows ML"
+module: "런타임과 컴파일러"
+chapter: "Windows ML"
+format: "dialogue-lecture"
+dialogue_tone: "tutoring"
+estimated_reading_time: "35-50 min"
+prerequisites: ["이전 모듈의 README", "같은 모듈의 이전 챕터"]
+visuals:
+  formulas: 2
+  mermaid: 2
+  external_images: 2
+updated_at: "2026-03-08"
+source_count: 4
+---
+
+# Windows ML
+
+## 수업 개요
+이번 챕터는 Windows ML을 "Windows에서 로컬 AI 기능을 앱에 붙일 때 만나는 운영 계층"으로 본다. 핵심은 NPU라는 칩 이름이 아니라, 앱이 Windows ML을 호출했을 때 그 아래에서 ONNX Runtime 기반 실행 경로가 어떻게 연결되고, 어디서 CPU/GPU/NPU 선택과 fallback이 일어나는지를 읽는 것이다. Microsoft Learn은 Windows ML을 Windows의 on-device AI 경험을 위한 런타임 경로로 설명하고 있고, GenAI ONNX 모델 실행 예시도 별도로 제공한다. [S1] [S2]
+
+Copilot+ PC 확산 이후 이 주제가 더 중요해진 이유도 여기에 있다. 개발팀은 "Windows 앱 안에서 로컬 AI를 빨리 붙이고 싶다"는 요구를 받지만, 동시에 어떤 부분을 OS 통합에 맡기고 어떤 부분을 직접 튜닝할지 결정해야 한다. Windows ML은 이 선택의 가운데에 있다. [S1] [S4]
+
+## 학습 목표
+- Windows ML이 앱과 ONNX Runtime, execution provider, 장치 사이에서 어디에 놓이는지 설명할 수 있다.
+- Windows ML을 선택할 때 얻는 OS 통합 이점과 잃는 세밀한 튜닝 범위를 비교할 수 있다.
+- "NPU를 쓴다"는 말이 왜 end-to-end 성능 보장을 뜻하지 않는지 fallback과 graph coverage 관점에서 설명할 수 있다.
+
+## 수업 전에 생각할 질문
+- Windows용 로컬 AI 기능을 붙일 때, 나는 장치별 미세 조정보다 배포 일관성을 더 원하고 있는가?
+- ONNX로 내보낸 모델이 있다면, 그것이 곧바로 NPU 친화적 실행을 뜻한다고 생각하고 있지는 않은가?
+- 사용자는 "로컬에서 돈다"보다 "앱이 바로 반응한다"를 체감한다. 내 병목은 모델 계산 자체인가, 아니면 로드와 fallback인가?
+
+## 강의 스크립트
+### Part 1. Windows ML은 어디에 서 있는가
+**교수자:** Windows ML을 보면 많은 사람이 바로 "Windows 전용 AI API"라고만 받아들입니다. 그런데 실무에서는 그렇게 보면 절반만 본 겁니다. 이 챕터에서 봐야 할 포인트는 Windows ML이 앱 바로 아래에서 ONNX Runtime 기반 추론 경험을 묶어 준다는 점입니다. 앱은 Windows ML을 보고, Windows ML 아래에서는 ONNX Runtime과 장치별 실행 경로가 이어집니다. [S1]
+
+**학습자:** 그러면 이전 챕터의 ONNX Runtime QNN이랑 완전히 다른 세계는 아닌 거네요?
+
+**교수자:** 맞습니다. 완전히 다른 세계가 아니라, 추상화 위치가 다릅니다. 직접 ONNX Runtime과 execution provider를 다루면 vendor별 세밀한 제어를 더 많이 손에 쥘 수 있습니다. 반대로 Windows ML 쪽으로 오면 Windows 앱 관점의 통합성과 배포 일관성이 좋아집니다. 오늘의 tradeoff인 "OS 통합성과 세밀한 튜닝"이 바로 여기서 나옵니다. [S1] [S4]
+
+```mermaid
+flowchart LR
+    A["Windows 앱"] --> B["Windows ML"]
+    B --> C["ONNX Runtime 기반 실행"]
+    C --> D["Execution Provider"]
+    D --> E["CPU"]
+    D --> F["GPU"]
+    D --> G["NPU"]
+```
+
+**교수자:** 이 그림을 보면 Windows ML을 하나의 모델 포맷이나 가속기 이름으로 착각하면 안 된다는 걸 알 수 있습니다. 앱 개발자는 Windows ML을 호출하지만, 성능 문제를 파고들 때는 그 아래의 ONNX Runtime 계층과 장치별 분할 실행을 같이 봐야 합니다. [S1] [S4]
+
+**학습자:** 그러면 Windows ML을 쓰면 장치 선택이 자동이라서 성능 고민이 줄어드는 건가요?
+
+**교수자:** 줄어드는 고민도 있고, 새로 생기는 고민도 있습니다. 장점은 Windows 쪽 통합 경험이 좋아진다는 점입니다. 반면 어떤 op가 어느 장치로 갔는지, unsupported operator 때문에 어디서 fallback이 났는지 확인하는 일은 여전히 중요합니다. 추상화가 높아졌다고 병목이 사라지는 건 아닙니다. [S1] [S4]
+
+### Part 2. ONNX가 왜 Windows ML 문맥의 중심에 있는가
+**교수자:** Windows ML을 이해할 때 ONNX를 빼고 말하면 설명이 비어 버립니다. ONNX는 학습 프레임워크와 배포 런타임 사이의 교환 형식 역할을 하고, Windows ML의 GenAI 실행 문서도 ONNX 모델 경로를 전제로 설명합니다. 즉, Windows ML은 "Windows 앱에서 로컬 AI를 붙이는 표면"이고, ONNX는 "그 표면 아래로 모델을 전달하는 공용 계약"에 가깝습니다. [S2] [S3]
+
+**학습자:** PyTorch 모델이 있는데 왜 굳이 ONNX를 신경 써야 하죠?
+
+**교수자:** Windows 앱 관점에서는 학습 프레임워크 내부 표현보다 배포 시점의 안정적인 교환 형식이 더 중요할 때가 많습니다. ONNX로 모델을 정리해 두면 Windows ML과 ONNX Runtime 계열 경로에 태우기 쉬워집니다. 다만 여기서 자주 생기는 오해가 하나 있어요. ONNX로 export가 되었다는 사실만으로 실제 실행이 깔끔하다는 뜻은 아닙니다. operator 지원 범위, graph partition, 데이터 배치가 뒤에서 다시 문제를 만들 수 있습니다. [S3] [S4]
+
+#### 핵심 수식 1. 사용자가 체감하는 총 지연 시간
+$$
+T_{\mathrm{user}} = T_{\mathrm{load}} + T_{\mathrm{bind}} + T_{\mathrm{dispatch}} + T_{\mathrm{fallback}}
+$$
+
+**교수자:** Windows 앱에서 로컬 AI 기능을 켰을 때 사용자가 느끼는 지연은 순수 추론 시간 하나로 설명되지 않습니다. 모델 로드, 입력 바인딩, 장치 dispatch, 그리고 fallback 비용이 합쳐져 최종 반응 속도를 만듭니다. 짧은 요청이 많은 앱이라면 `T_load`와 `T_bind`가, unsupported op가 많은 모델이라면 `T_fallback`이 훨씬 더 아프게 보입니다. [S1] [S2] [S4]
+
+**학습자:** 그러면 Copilot+ PC에서 NPU가 있다고 해도 앱이 느릴 수 있겠네요?
+
+**교수자:** 그렇죠. "NPU가 있다"와 "지금 이 기능이 NPU 중심으로 효율적으로 돈다"는 다른 문장입니다. Windows ML은 on-device AI 경험을 제공하지만, 실제 체감 성능은 모델 구조와 fallback 경계에 의해 크게 달라집니다. [S1] [S4]
+
+### Part 3. 현장에서 자주 만나는 두 가지 사례
+**교수자:** 첫 번째 사례는 회의 요약 앱입니다. 사용자는 음성 기록과 짧은 로컬 요약을 기대합니다. 여기서 앱 팀이 원하는 것은 대개 세 가지입니다. Windows 배포 일관성, 로컬 실행, 그리고 특정 장치에서만 동작하지 않는 안정성입니다. 이런 상황에서는 Windows ML이 자연스러운 출발점이 됩니다. ONNX 모델을 준비하고 Windows 쪽 on-device 추론 경로에 태우기 쉬우니까요. [S1] [S2] [S3]
+
+**학습자:** 실패는 어디서 나나요?
+
+**교수자:** 짧은 요약 요청인데도 첫 실행이 유난히 굼뜨고, 어떤 PC에서는 체감 반응이 기대보다 떨어지는 경우가 있습니다. 이때 많은 팀이 모델 크기만 줄이려 합니다. 하지만 실제 원인이 모델 로드 반복, 입력 바인딩 오버헤드, 또는 일부 연산의 CPU fallback일 수 있습니다. 이 순서를 안 보면 엉뚱한 최적화를 하게 됩니다. [S1] [S4]
+
+**교수자:** 두 번째 사례는 카메라 보조 기능입니다. 예를 들어 로컬 캡션 생성이나 장면 설명처럼 응답이 자주 끊기고 짧은 burst로 들어오는 기능이죠. 이런 앱은 peak throughput보다 "짧은 시간 안에 바로 붙는 반응성"이 더 중요합니다. 여기서는 세밀한 vendor 튜닝보다 Windows 앱 통합 경험이 우선일 수 있습니다. 다만 여기서도 함정은 같습니다. 장치 이름이 아니라 end-to-end 경로를 봐야 합니다. [S1] [S2]
+
+#### 핵심 수식 2. 실효 offload 비율
+$$
+C_{\mathrm{effective}} = \frac{N_{\mathrm{device\ executed\ nodes}}}{N_{\mathrm{total\ nodes}}}
+$$
+
+**교수자:** 이 비율이 높을수록 장치 가속의 실효성이 커질 가능성이 높습니다. QNN execution provider 문맥에서 중요한 것도 결국 graph 중 얼마나 많은 부분이 해당 backend에 실렸는가입니다. Windows ML에서도 마찬가지입니다. 앱 팀이 "NPU 사용"이라는 한 줄만 보면 안 되고, 실제로 얼마나 많은 node가 가속 장치 쪽에서 처리되는지 따져야 합니다. [S4]
+
+**학습자:** 결국 Windows ML을 쓰더라도 그래프 커버리지를 봐야 한다는 말이군요.
+
+**교수자:** 정확합니다. 추상화 계층이 바뀌어도, 지원되지 않는 연산이 만들어 내는 fallback 문제는 사라지지 않습니다. [S4]
+
+### Part 4. 디버깅 순서는 어떻게 잡아야 하는가
+**학습자:** 그럼 실전에서는 어떤 순서로 확인해야 하나요? "Windows ML이 느리다"는 제보를 받으면요.
+
+**교수자:** 저는 네 단계로 봅니다.
+
+**교수자:** 첫째, 모델이 ONNX로 어떻게 정리되었는지 봅니다. export는 됐는데 실행에 불리한 graph가 나왔을 수 있습니다. [S3]
+
+**교수자:** 둘째, 앱에서 기대하는 사용 패턴을 봅니다. 한 번 길게 도는 기능인지, 짧게 자주 부르는 기능인지에 따라 `T_load`와 `T_dispatch`의 중요도가 달라집니다. [S1] [S2]
+
+**교수자:** 셋째, 실제 장치 실행 비율을 봅니다. 지원 op 범위 때문에 일부만 가속되고 나머지는 CPU로 빠졌다면, 표면상 "NPU 사용"은 의미가 없습니다. [S4]
+
+**교수자:** 넷째, 그다음에야 직접 ORT + EP 경로로 내려가서 더 세밀한 튜닝이 필요한지 판단합니다. 이 순서를 뒤집으면 처음부터 저수준 튜닝에 빠져서 Windows ML이 주는 통합 이점을 잃기 쉽습니다. [S1] [S4]
+
+```mermaid
+flowchart TD
+    A["Windows 앱에 로컬 AI 기능 추가"] --> B{"Windows 통합이 우선인가?"}
+    B -->|예| C["Windows ML로 시작"]
+    B -->|아니오, 특정 장치 튜닝 우선| D["직접 ONNX Runtime + EP 검토"]
+    C --> E{"주요 graph가 장치에서 실행되는가?"}
+    E -->|예| F["Windows ML 유지, 앱 수준 최적화"]
+    E -->|아니오| G["fallback 구간과 ONNX graph 재검토"]
+    D --> H["세밀한 제어 확보, 대신 이식성과 복잡도 증가"]
+```
+
+**교수자:** 이 흐름도는 제품 설계 회의에서 바로 써먹을 수 있습니다. 질문은 단순합니다. "우리는 Windows 통합성을 먼저 가져갈 것인가, 아니면 처음부터 vendor 중심 튜닝으로 내려갈 것인가?" 그리고 Windows ML을 골랐다면 "실제 graph coverage가 충분한가?"를 바로 확인해야 합니다. [S1] [S4]
+
+### Part 5. Windows ML과 직접 ORT 경로를 가르는 선택 기준
+**학습자:** 결국 언제 Windows ML을 고르고, 언제 직접 ONNX Runtime 경로를 고르는지가 핵심이네요.
+
+**교수자:** 그렇습니다. Windows ML이 잘 맞는 경우는 Windows 앱 안에서 로컬 AI 기능을 빠르게 붙이고, 배포와 통합을 안정적으로 가져가고 싶을 때입니다. 특히 Copilot+ PC처럼 Windows on-device AI 경험 자체가 중요한 장치군에서는 이 장점이 큽니다. [S1] [S2]
+
+**교수자:** 반대로 직접 ONNX Runtime과 execution provider를 더 만지는 쪽이 맞는 경우는 특정 NPU backend에 맞춘 세밀한 성능 조정이 최우선일 때입니다. QNN EP 문서가 보여 주듯 execution provider 레벨에서는 어떤 backend로 graph를 태울지 더 직접적으로 다루게 됩니다. 다만 그만큼 디버깅 범위도 넓어집니다. [S4]
+
+**학습자:** 그러면 Windows ML은 편하지만 느리고, 직접 ORT는 어렵지만 무조건 빠르다고 봐도 되나요?
+
+**교수자:** 그렇게 이분법으로 보면 틀립니다. Windows ML이 더 적합한 제품도 많고, 직접 ORT 경로로 내려가도 unsupported op 때문에 성능이 안 나올 수 있습니다. 핵심은 "누가 장치 선택과 통합의 복잡도를 떠안을 것인가"입니다. OS가 더 많이 떠안아 주면 배포 일관성이 좋아지고, 개발팀이 더 많이 떠안으면 세밀한 제어 가능성이 커집니다. [S1] [S4]
+
+### Part 6. 최신 문맥에서 왜 더 중요해졌는가
+**교수자:** 2026년 3월 8일 기준 문맥에서 Windows ML이 더 자주 언급되는 이유는 Copilot+ PC 같은 Windows on-device AI 경험이 제품 메시지의 중심으로 올라왔기 때문입니다. 이때 개발자는 단순히 "모델이 돈다"가 아니라 "Windows 앱 안에서 관리 가능한 방식으로 돈다"를 고민하게 됩니다. [S1] [S2]
+
+**학습자:** 그러면 이 챕터를 마치고 나서 가장 먼저 떠올라야 하는 질문은 뭔가요?
+
+**교수자:** 두 가지입니다. 첫째, 지금 내 기능은 OS 통합을 우선해야 하나, 세밀한 장치 튜닝을 우선해야 하나. 둘째, ONNX graph 중 실제로 얼마나 많은 부분이 원하는 장치에서 실행되는가. 이 두 질문이 바로 Windows ML 학습의 중심입니다. [S1] [S3] [S4]
+
+## 자주 헷갈리는 포인트
+- Windows ML과 ONNX Runtime은 경쟁 관계의 별도 세계가 아니라, Windows ML 아래에 ONNX Runtime 기반 실행 경로가 놓이는 관계로 봐야 한다. [S1]
+- ONNX export 성공은 배포의 시작일 뿐이다. 실제 성능은 operator 지원과 graph partition 결과에 크게 좌우된다. [S3] [S4]
+- "NPU 사용 가능"은 "대부분의 graph가 NPU에서 실행됨"과 다르다. 실효 offload 비율을 따로 봐야 한다. [S4]
+- 짧은 burst성 기능에서는 최고 처리량보다 모델 로드와 바인딩 비용이 더 큰 병목이 될 수 있다. [S1] [S2]
+- Windows ML을 택했다고 해서 디버깅이 없어지는 것은 아니다. 다만 디버깅 시작점이 앱 통합과 Windows 경로 쪽으로 이동할 뿐이다. [S1]
+
+## 사례로 다시 보기
+| 사례 | Windows ML이 잘 맞는 이유 | 먼저 의심할 실패 지점 | 더 낮은 계층으로 내려갈 시점 |
+| --- | --- | --- | --- |
+| 회의 요약 앱 | Windows 앱에 로컬 요약 기능을 붙이기 쉽고, ONNX 기반 GenAI 실행 흐름과 연결하기 좋다. [S1] [S2] | 첫 실행 로드 지연, 일부 stage의 fallback, 기대보다 낮은 체감 반응 [S2] [S4] | graph coverage가 낮아 직접 EP 수준 분석이 필요할 때 [S4] |
+| 카메라 보조 캡션 | 짧은 요청이 반복되는 Windows 기능에서 통합 배포 이점이 크다. [S1] | 장치가 있어도 체감 반응이 느린 경우, 실제로는 bind/dispatch 비용이 큰 경우 [S1] | 특정 장치별 튜닝이 제품 핵심 경쟁력이 될 때 [S4] |
+
+**학습자:** 두 사례 모두 결국 "어디서 느려지는지"를 장치 이름이 아니라 단계 이름으로 말해야 하네요.
+
+**교수자:** 맞습니다. Windows ML 챕터의 실전 감각은 거기서 나옵니다. 앱 팀이 받는 장애 제보를 "NPU 성능 문제"라고 뭉뚱그리지 않고, `load`, `bind`, `dispatch`, `fallback` 중 무엇이 문제인지 나누는 습관이 필요합니다.
+
+## 핵심 정리
+- Windows ML은 Windows 앱에서 로컬 AI 기능을 붙일 때 만나는 OS 통합 계층이며, 그 아래에는 ONNX Runtime 기반 실행 경로가 있다. [S1]
+- ONNX는 Windows ML 문맥에서 모델 교환 계약 역할을 한다. export 성공만으로 성능이 보장되지는 않는다. [S2] [S3]
+- 성능 판단은 "NPU 사용 여부"가 아니라 총 지연 시간과 실효 offload 비율로 봐야 한다. [S4]
+- Windows ML의 장점은 통합성과 배포 일관성이고, 비용은 세밀한 장치 튜닝 범위의 축소 가능성이다. [S1] [S4]
+- Copilot+ PC 문맥에서는 이 선택이 더 자주 제품 설계 문제로 올라온다. [S1] [S2]
+
+## 복습 체크리스트
+- Windows ML이 앱, ONNX Runtime, execution provider 사이에서 어떤 위치를 차지하는지 설명할 수 있는가?
+- `T_user = T_load + T_bind + T_dispatch + T_fallback` 식을 실제 장애 분석 순서로 풀어 설명할 수 있는가?
+- ONNX export 성공과 장치 친화적 실행이 왜 다른지 말할 수 있는가?
+- "NPU를 쓴다"와 "주요 graph가 NPU에서 돈다"를 구분해서 설명할 수 있는가?
+- 회의 요약 앱과 카메라 보조 기능 중 어떤 사례에서 Windows ML이 더 자연스러운 출발점인지 판단할 수 있는가?
+- Windows ML로 시작했다가 직접 ONNX Runtime + EP 경로로 내려가야 하는 순간을 설명할 수 있는가?
+
+## 대안과 비교
+| 비교 항목 | Windows ML | 직접 ONNX Runtime + Execution Provider |
+| --- | --- | --- |
+| 출발점 | Windows 앱 통합과 on-device AI 경험 [S1] | 특정 backend와 graph 실행 제어 [S4] |
+| 모델 관점 | ONNX 기반 경로를 통해 앱 쪽 배포를 단순화 [S2] [S3] | ONNX graph와 provider 특성을 더 직접 다룸 [S4] |
+| 장점 | OS 통합, 배포 일관성, Windows 제품 문맥과의 궁합 [S1] | 장치별 세밀한 조정 가능성, backend 중심 최적화 [S4] |
+| 비용 | 내부 장치 선택과 fallback을 더 세밀하게 만지기 어렵게 느껴질 수 있음 | 구현과 디버깅 복잡도 증가, vendor 경로 의존성 확대 |
+| 질문 방식 | "Windows 앱에서 이 기능을 안정적으로 붙일 수 있는가?" | "이 graph를 이 backend에서 얼마나 깊게 밀어 넣을 수 있는가?" |
+| 추천 상황 | 빠른 제품 통합, Copilot+ PC 계열 기능, 폭넓은 Windows 배포 [S1] [S2] | 특정 장치 성능이 핵심 경쟁력이고 저수준 분석을 감수할 때 [S4] |
+
+## 참고 이미지
+![Open Neural Network Exchange logo](./assets/img-01.svg)
+
+- [I1] 캡션: Open Neural Network Exchange logo
+- 출처 번호: [I1]
+- 왜 이 그림이 필요한지: Windows ML이 독립 모델 포맷이 아니라 ONNX 생태계 위에서 앱 배포 경로와 연결된다는 점을 시각적으로 상기시킨다.
+
+![OpenVINO AI visual](./assets/img-02.png)
+
+- [I2] 캡션: OpenVINO AI visual
+- 출처 번호: [I2]
+- 왜 이 그림이 필요한지: Windows ML을 더 넓은 on-device AI 런타임 생태계 속에서 바라보게 해 주며, OS 통합 경로와 vendor 중심 경로를 비교하는 감각을 보강한다.
+
+## 출처
+| 번호 | 제목 | 발행 주체 | 날짜 | URL | 사용 이유 |
+| --- | --- | --- | --- | --- | --- |
+| [S1] | Windows ML overview | Microsoft Learn | 2026-03-08 (accessed) | [https://learn.microsoft.com/en-us/windows/ai/new-windows-ml/overview](https://learn.microsoft.com/en-us/windows/ai/new-windows-ml/overview) | Windows on-device inference 런타임의 공식 개요 |
+| [S2] | Run GenAI ONNX models in Windows ML | Microsoft Learn | 2026-03-08 (accessed) | [https://learn.microsoft.com/pt-br/windows/ai/new-windows-ml/run-genai-onnx-models](https://learn.microsoft.com/pt-br/windows/ai/new-windows-ml/run-genai-onnx-models) | GenAI 모델의 Windows ML 실행 경로 |
+| [S3] | Open Neural Network Exchange | ONNX | 2026-03-08 (accessed) | [https://onnx.ai/](https://onnx.ai/) | ONNX graph와 operator ecosystem의 기본 맥락 |
+| [S4] | QNN Execution Provider | ONNX Runtime | 2026-03-08 (accessed) | [https://onnxruntime.ai/docs/execution-providers/QNN-ExecutionProvider.html](https://onnxruntime.ai/docs/execution-providers/QNN-ExecutionProvider.html) | QNN 기반 NPU offload와 실행 provider 구조 |

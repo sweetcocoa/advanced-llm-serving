@@ -1,0 +1,42 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="680" viewBox="0 0 1200 680" role="img" aria-labelledby="title desc">
+  <title id="title">AMD hybrid OGA stage map</title>
+  <desc id="desc">CPU orchestration, GPU prefill, handoff, and NPU decode stages for Ryzen AI OGA.</desc>
+  <rect width="1200" height="680" fill="#f6f0e5"/>
+  <rect x="60" y="80" width="220" height="180" rx="24" fill="#143642"/>
+  <text x="170" y="132" text-anchor="middle" font-size="34" font-family="Helvetica, Arial, sans-serif" fill="#f6f0e5">CPU</text>
+  <text x="170" y="176" text-anchor="middle" font-size="24" font-family="Helvetica, Arial, sans-serif" fill="#f6f0e5">tokenize</text>
+  <text x="170" y="210" text-anchor="middle" font-size="24" font-family="Helvetica, Arial, sans-serif" fill="#f6f0e5">session orchestration</text>
+  <text x="170" y="244" text-anchor="middle" font-size="24" font-family="Helvetica, Arial, sans-serif" fill="#f6f0e5">stream formatting</text>
+
+  <rect x="340" y="80" width="220" height="180" rx="24" fill="#c84c09"/>
+  <text x="450" y="132" text-anchor="middle" font-size="34" font-family="Helvetica, Arial, sans-serif" fill="#fff7f0">GPU</text>
+  <text x="450" y="176" text-anchor="middle" font-size="24" font-family="Helvetica, Arial, sans-serif" fill="#fff7f0">prefill burst</text>
+  <text x="450" y="210" text-anchor="middle" font-size="24" font-family="Helvetica, Arial, sans-serif" fill="#fff7f0">long prompt</text>
+  <text x="450" y="244" text-anchor="middle" font-size="24" font-family="Helvetica, Arial, sans-serif" fill="#fff7f0">first-token pressure</text>
+
+  <rect x="620" y="80" width="180" height="180" rx="24" fill="#f4b942"/>
+  <text x="710" y="132" text-anchor="middle" font-size="30" font-family="Helvetica, Arial, sans-serif" fill="#2c2416">handoff</text>
+  <text x="710" y="176" text-anchor="middle" font-size="22" font-family="Helvetica, Arial, sans-serif" fill="#2c2416">KV/state move</text>
+  <text x="710" y="208" text-anchor="middle" font-size="22" font-family="Helvetica, Arial, sans-serif" fill="#2c2416">sync cost</text>
+  <text x="710" y="240" text-anchor="middle" font-size="22" font-family="Helvetica, Arial, sans-serif" fill="#2c2416">boundary risk</text>
+
+  <rect x="860" y="80" width="260" height="180" rx="24" fill="#3c6e71"/>
+  <text x="990" y="132" text-anchor="middle" font-size="34" font-family="Helvetica, Arial, sans-serif" fill="#f4f9f9">NPU</text>
+  <text x="990" y="176" text-anchor="middle" font-size="24" font-family="Helvetica, Arial, sans-serif" fill="#f4f9f9">steady decode</text>
+  <text x="990" y="210" text-anchor="middle" font-size="24" font-family="Helvetica, Arial, sans-serif" fill="#f4f9f9">long-session energy</text>
+  <text x="990" y="244" text-anchor="middle" font-size="24" font-family="Helvetica, Arial, sans-serif" fill="#f4f9f9">thermal target</text>
+
+  <path d="M280 170 H328" stroke="#143642" stroke-width="10" fill="none"/>
+  <polygon points="328,170 306,156 306,184" fill="#143642"/>
+  <path d="M560 170 H608" stroke="#c84c09" stroke-width="10" fill="none"/>
+  <polygon points="608,170 586,156 586,184" fill="#c84c09"/>
+  <path d="M800 170 H848" stroke="#3c6e71" stroke-width="10" fill="none"/>
+  <polygon points="848,170 826,156 826,184" fill="#3c6e71"/>
+
+  <rect x="90" y="360" width="1020" height="220" rx="28" fill="#fffaf2" stroke="#d8c3a5" stroke-width="4"/>
+  <text x="130" y="414" font-size="32" font-family="Helvetica, Arial, sans-serif" fill="#143642">How this chapter reads AMD's hybrid workflow</text>
+  <text x="130" y="462" font-size="24" font-family="Helvetica, Arial, sans-serif" fill="#143642">1. Start from product goal: first-token speed or long-session battery.</text>
+  <text x="130" y="500" font-size="24" font-family="Helvetica, Arial, sans-serif" fill="#143642">2. Place prefill and decode separately, then ask how many handoffs remain.</text>
+  <text x="130" y="538" font-size="24" font-family="Helvetica, Arial, sans-serif" fill="#143642">3. Keep hybrid only when the decode-side energy win survives boundary cost.</text>
+  <text x="130" y="576" font-size="24" font-family="Helvetica, Arial, sans-serif" fill="#143642">4. Treat artifact/provider/OS concerns as follow-up layers, not the chapter center.</text>
+</svg>

@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>NPU 소프트웨어 스택 | LLM Serving + NPU</title>
+  <meta name="description" content="NPU를 칩이 아니라 graph lowering, quantization, runtime partitioning 관점으로 이해한다.">
+  <meta name="theme-color" content="#10182a">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+KR:wght@400;500;600;700&family=Space+Grotesk:wght@500;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../assets/style.css">
+</head>
+<body class="page-module" data-page-kind="module" data-page-id="05-npu-stack" data-root-prefix="../">
+  <div class="reading-progress" data-reading-progress></div>
+  <header class="site-header">
+    <a class="brand" href="../">
+      <span class="brand-kicker">GitHub Pages Study</span>
+      <strong>LLM Serving + NPU</strong>
+    </a>
+    <nav class="top-nav"><a class="top-nav-link" href="../01-foundations/">기초와 성능 직관</a><a class="top-nav-link" href="../02-llm-serving-core/">LLM Serving 핵심</a><a class="top-nav-link" href="../03-llm-serving-advanced/">고급 Serving 패턴</a><a class="top-nav-link" href="../04-serving-systems/">Serving 시스템 설계</a><a class="top-nav-link is-active" href="./">NPU 소프트웨어 스택</a><a class="top-nav-link" href="../06-runtime-and-compiler/">런타임과 컴파일러</a><a class="top-nav-link" href="../07-synthesis/">종합 정리와 최신 흐름</a></nav>
+    <div class="search-shell">
+      <input type="search" placeholder="챕터, 모듈, 키워드 검색" aria-label="검색" data-global-search>
+      <div class="search-results" data-search-results hidden></div>
+    </div>
+  </header>
+  <main class="page-frame">
+    
+    <section class="hero">
+      <div class="hero-copy">
+        <p class="eyebrow">Module</p>
+        <h1>NPU 소프트웨어 스택</h1>
+        <p class="hero-summary">NPU를 칩이 아니라 graph lowering, quantization, runtime partitioning 관점으로 이해한다.</p>
+      </div>
+      <div class="hero-stats">
+        <div class="stat-card"><strong>6</strong><span>chapters</span></div>
+      </div>
+    </section>
+    
+    <div class="page-layout">
+      <section class="page-main content-shell">
+        
+    <article class="content-panel surface prose">
+      <h1 id="npu-소프트웨어-스택">NPU 소프트웨어 스택</h1>
+<p>NPU를 칩이 아니라 graph lowering, quantization, runtime partitioning 관점으로 이해한다.</p>
+<h2 id="이-모듈을-마치면-설명할-수-있어야-하는-것">이 모듈을 마치면 설명할 수 있어야 하는 것</h2>
+<ul><li>NPU 친화적인 graph 형태와 비친화적 graph 형태를 구분할 수 있다.</li><li>QDQ/QOperator 관점에서 양자화 흐름을 설명할 수 있다.</li><li>execution provider가 offload 경계를 어떻게 만드는지 설명할 수 있다.</li><li>대표 NPU 벤더들의 공통점과 차이점을 실제 배포 사례로 비교할 수 있다.</li></ul>
+<h2 id="챕터-순서">챕터 순서</h2>
+<ul><li><a href="./01-npu-architecture-basics/">NPU Architecture Basics</a>: NPU의 SRAM, DMA, operator fusion 중심 사고방식을 만든다.</li><li><a href="./02-onnx-graph-and-lowering/">ONNX Graph and Lowering</a>: 모델이 ONNX graph를 거쳐 backend-specific lowering으로 내려가는 흐름을 본다.</li><li><a href="./03-npu-friendly-quantization/">NPU-Friendly Quantization</a>: QDQ/QOperator, calibration, import 가능한 quantized artifact 관점으로 NPU-friendly quantization을 본다.</li><li><a href="./04-runtime-and-execution-provider/">Runtime and Execution Provider</a>: execution provider와 runtime이 session creation, device target, artifact reuse를 어떻게 결정하는지 정리한다.</li><li><a href="./05-profiling-debugging-and-bottlenecks/">Profiling, Debugging, and Bottlenecks</a>: NPU workload에서 trace와 profiler로 실제 병목을 좁혀 가는 방법을 본다.</li><li><a href="./06-vendor-case-studies-and-comparison/">Vendor Case Studies and Comparison</a>: 대표 NPU 벤더들의 실제 배포 경로를 비교하면서 공통 개념과 차이점을 정리한다.</li></ul>
+<h2 id="선행-관계">선행 관계</h2>
+<ul><li>같은 모듈에서는 위 순서를 따르는 것이 좋다.</li><li>다음 모듈로 넘어가기 전에 각 챕터 퀴즈를 먼저 풀어 본다.</li></ul>
+    </article>
+    <section class="content-panel surface">
+      <div class="section-heading">
+        <div>
+          <p class="eyebrow">Chapters</p>
+          <h2>NPU 소프트웨어 스택 안의 학습 단위</h2>
+        </div>
+        <input type="search" placeholder="챕터 필터" aria-label="챕터 필터" data-card-filter>
+      </div>
+      <div class="chapter-grid" data-card-container>
+        <a class="chapter-card" data-card-search="npu architecture basics 이번 장은 npu를 스펙표로 외우기보다, runtime 문서가 직접 말하는 offload/target/cache 사실과 그 위에 얹는 수업용 해석을 분리해서 읽는 연습에 가깝다. [s2]와 [s4]는 npu offload, device target, compile/cache 경로를 설명하는 runtime 문서이고, [s3]는 같은 모델도 target runtime과 device에 맞춰 별도 artifact로 굳어질 수 있음을 보여 준다. 그 사실 위에서 이 장은 온칩에 얼마나 오래 머무는가 , 데이터를 다시 채우는 리듬이 얼마나 일정한가 , 여러 연산을 한 세그먼트로 오래 붙들 수 있는가 를 수업용 해석 프레임으로 쓴다 [합성] [s2] [s3] [s4]. npu 소프트웨어 스택" data-progress-id="study/llm-serving-npu-roadmap/05-npu-stack/01-npu-architecture-basics" href="01-npu-architecture-basics/"><span class="chapter-module">NPU 소프트웨어 스택</span><h3>NPU Architecture Basics</h3><p>이번 장은 NPU를 스펙표로 외우기보다, runtime 문서가 직접 말하는 offload/target/cache 사실과 그 위에 얹는 수업용 해석을 분리해서 읽는 연습에 가깝다. [S2]와 [S4]는 NPU offload, device target, compile/cache 경로를 설명하는 runtime 문서이고, [S3]는 같은 모델도 target runtime과 device에 맞춰 별도…</p><div class="chapter-card-meta"><span>35-50 min</span><span>2026-03-08</span><span class="chapter-progress-state">미완료</span></div></a><a class="chapter-card" data-card-search="onnx graph and lowering 이 챕터는 모델을 onnx로 내보냈다 와 실제 npu backend에 잘 내려갔다 사이에 있는 긴 구간을 해부한다. onnx는 연산과 그래프를 교환하기 위한 표준 인터페이스이지만 [s1], 실전 배포에서는 execution provider가 graph를 분할하고 [s2], compiler가 더 낮은 ir로 legalize하며 [s3], 최종적으로는 backend 전용 executable이나 runtime artifact로 굳힌다 [s4]. 2026년의 실무 감각으로 보면, 생산성을 가르는 것은 onnx export 성공 여부가 아니라 표준 graph에서 vendor compiler로 넘어가는 경계 를 얼마나 잘 읽는가이다. npu 소프트웨어 스택" data-progress-id="study/llm-serving-npu-roadmap/05-npu-stack/02-onnx-graph-and-lowering" href="02-onnx-graph-and-lowering/"><span class="chapter-module">NPU 소프트웨어 스택</span><h3>ONNX Graph and Lowering</h3><p>이 챕터는 모델을 ONNX로 내보냈다 와 실제 NPU backend에 잘 내려갔다 사이에 있는 긴 구간을 해부한다. ONNX는 연산과 그래프를 교환하기 위한 표준 인터페이스이지만 [S1], 실전 배포에서는 execution provider가 graph를 분할하고 [S2], compiler가 더 낮은 IR로 legalize하며 [S3], 최종적으로는 backend 전용 executable이나…</p><div class="chapter-card-meta"><span>35-50 min</span><span>2026-03-08</span><span class="chapter-progress-state">미완료</span></div></a><a class="chapter-card" data-card-search="npu-friendly quantization 이 챕터는 양자화를 몇 비트까지 줄였는가 보다 runtime이 그대로 읽을 수 있는 quantized artifact를 만들었는가 라는 질문으로 다시 본다. onnx runtime 문서는 양자화된 onnx 표현을 qoperator 와 qdq 로 나눠 설명하고 정적/동적 양자화를 구분한다 [s1]. openvino nncf 문서는 ptq, qat, calibration dataset, target device 를 함께 다룬다 [s2]. 여기에 qnn execution provider와 openvino npu 문서를 겹쳐 보면, 정확도가 괜찮은 양자화와 실제 npu 경로에 얹히는 양자화가 다를 수 있다는 점이 더 선명해진다 [s3][s4]. npu 소프트웨어 스택" data-progress-id="study/llm-serving-npu-roadmap/05-npu-stack/03-npu-friendly-quantization" href="03-npu-friendly-quantization/"><span class="chapter-module">NPU 소프트웨어 스택</span><h3>NPU-Friendly Quantization</h3><p>이 챕터는 양자화를 몇 비트까지 줄였는가 보다 runtime이 그대로 읽을 수 있는 quantized artifact를 만들었는가 라는 질문으로 다시 본다. ONNX Runtime 문서는 양자화된 ONNX 표현을 QOperator 와 QDQ 로 나눠 설명하고 정적/동적 양자화를 구분한다 [S1]. OpenVINO NNCF 문서는 PTQ, QAT, calibration dataset, tar…</p><div class="chapter-card-meta"><span>35-50 min</span><span>2026-03-08</span><span class="chapter-progress-state">미완료</span></div></a><a class="chapter-card" data-card-search="runtime and execution provider 이 챕터의 첫 질문은 세션 생성 시 runtime이 무엇을 확인하고, 이미 있는 artifact를 import할지 새로 compile할지를 어떻게 가르는가 이다. onnx는 runtime이 읽기 시작하는 공통 입력으로 graph, operator, opset import를 제공하고 [s1], qnn execution provider 문서는 provider options, quantized model 제약, dynamic shape 미지원, context binary cache를 세션 표면으로 드러낸다 [s2]. qualcomm ai hub compile examples는 같은 onnx라도 배포 전에 qnn context binary 나 precompiled qnn onnx 를 만들어 둘 수 있음을 보여 주고 [s3], openvino npu 문서는 compile model(..., &quot;npu&quot;) , ov::cache dir , device properties, auto/hetero 지원 문맥으로 같은 문제를 다룬다 [s4]. npu 소프트웨어 스택" data-progress-id="study/llm-serving-npu-roadmap/05-npu-stack/04-runtime-and-execution-provider" href="04-runtime-and-execution-provider/"><span class="chapter-module">NPU 소프트웨어 스택</span><h3>Runtime and Execution Provider</h3><p>이 챕터의 첫 질문은 세션 생성 시 runtime이 무엇을 확인하고, 이미 있는 artifact를 import할지 새로 compile할지를 어떻게 가르는가 이다. ONNX는 runtime이 읽기 시작하는 공통 입력으로 graph, operator, opset import를 제공하고 [S1], QNN Execution Provider 문서는 provider options, quantized…</p><div class="chapter-card-meta"><span>35-50 min</span><span>2026-03-08</span><span class="chapter-progress-state">미완료</span></div></a><a class="chapter-card" data-card-search="profiling, debugging, and bottlenecks 대시보드에는 npu activity가 분명히 찍히는데 p95 latency는 그대로인 장면이 있다. 이 장은 그런 상황에서 utilization 수치보다 먼저 trace의 partition, host fallback, cast/qdq, transfer 경계를 읽는 법을 다룬다 [s1][s2][s3]. 런타임이 추상화를 많이 제공할수록 사용은 쉬워지지만, 병목을 잡을 때는 어떤 구간이 host에 남았는지와 request 설정이 어떤 지연을 추가했는지를 더 직접적으로 확인해야 한다 [s4][s5]. npu 소프트웨어 스택" data-progress-id="study/llm-serving-npu-roadmap/05-npu-stack/05-profiling-debugging-and-bottlenecks" href="05-profiling-debugging-and-bottlenecks/"><span class="chapter-module">NPU 소프트웨어 스택</span><h3>Profiling, Debugging, and Bottlenecks</h3><p>대시보드에는 NPU activity가 분명히 찍히는데 p95 latency는 그대로인 장면이 있다. 이 장은 그런 상황에서 utilization 수치보다 먼저 trace의 partition, host fallback, cast/QDQ, transfer 경계를 읽는 법을 다룬다 [S1][S2][S3]. 런타임이 추상화를 많이 제공할수록 사용은 쉬워지지만, 병목을 잡을 때는 어떤 구간이 hos…</p><div class="chapter-card-meta"><span>35-50 min</span><span>2026-03-08</span><span class="chapter-progress-state">미완료</span></div></a><a class="chapter-card" data-card-search="vendor case studies and comparison 이 챕터의 비교 대상은 칩 이름이 아니라 배포 경로다. 2026년의 npu 문서는 대체로 공통 모델 계층 을 유지한 채, 그 아래에서 벤더별 compile artifact, runtime bundle, os abstraction, infra object가 갈라지는 구조를 보여 준다. 그래서 비교도 성능표보다 첫 action , 그 다음에 생기는 object , 운영 중 확인할 hook 를 같은 축에 놓고 해야 한다. [s1] [s3] [s4] [s5] [s8] [s10] [s18] npu 소프트웨어 스택" data-progress-id="study/llm-serving-npu-roadmap/05-npu-stack/06-vendor-case-studies-and-comparison" href="06-vendor-case-studies-and-comparison/"><span class="chapter-module">NPU 소프트웨어 스택</span><h3>Vendor Case Studies and Comparison</h3><p>이 챕터의 비교 대상은 칩 이름이 아니라 배포 경로다. 2026년의 NPU 문서는 대체로 공통 모델 계층 을 유지한 채, 그 아래에서 벤더별 compile artifact, runtime bundle, OS abstraction, infra object가 갈라지는 구조를 보여 준다. 그래서 비교도 성능표보다 첫 action , 그 다음에 생기는 object , 운영 중 확인할 hook 를…</p><div class="chapter-card-meta"><span>35-50 min</span><span>2026-03-08</span><span class="chapter-progress-state">미완료</span></div></a>
+      </div>
+    </section>
+    
+      </section>
+      <aside class="page-sidebar">
+    <div class="sidebar-panel surface">
+      <p class="eyebrow">Progress</p>
+      <h3>진행 방식</h3>
+      <p>챕터 페이지의 완료 버튼은 브라우저 로컬 저장소에 기록됩니다.</p>
+    </div>
+    </aside>
+    </div>
+  </main>
+  <script type="module" src="../assets/app.js"></script>
+  <script type="module">
+    import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs';
+    mermaid.initialize({ startOnLoad: true, theme: 'neutral', securityLevel: 'loose' });
+  </script>
+  <script>
+    window.MathJax = {
+      tex: { inlineMath: [['$', '$'], ['\\(', '\\)']], displayMath: [['$$', '$$'], ['\\[', '\\]']] },
+      svg: { fontCache: 'global' }
+    };
+  </script>
+  <script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-svg.js" async></script>
+</body>
+</html>

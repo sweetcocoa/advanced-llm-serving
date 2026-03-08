@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>런타임과 컴파일러 | LLM Serving + NPU</title>
+  <meta name="description" content="실제 제품 스택과 MLIR 계열 컴파일러를 연결해 온디바이스 추론과 backend 특화를 이해한다.">
+  <meta name="theme-color" content="#10182a">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+KR:wght@400;500;600;700&family=Space+Grotesk:wght@500;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../assets/style.css">
+</head>
+<body class="page-module" data-page-kind="module" data-page-id="06-runtime-and-compiler" data-root-prefix="../">
+  <div class="reading-progress" data-reading-progress></div>
+  <header class="site-header">
+    <a class="brand" href="../">
+      <span class="brand-kicker">GitHub Pages Study</span>
+      <strong>LLM Serving + NPU</strong>
+    </a>
+    <nav class="top-nav"><a class="top-nav-link" href="../01-foundations/">기초와 성능 직관</a><a class="top-nav-link" href="../02-llm-serving-core/">LLM Serving 핵심</a><a class="top-nav-link" href="../03-llm-serving-advanced/">고급 Serving 패턴</a><a class="top-nav-link" href="../04-serving-systems/">Serving 시스템 설계</a><a class="top-nav-link" href="../05-npu-stack/">NPU 소프트웨어 스택</a><a class="top-nav-link is-active" href="./">런타임과 컴파일러</a><a class="top-nav-link" href="../07-synthesis/">종합 정리와 최신 흐름</a></nav>
+    <div class="search-shell">
+      <input type="search" placeholder="챕터, 모듈, 키워드 검색" aria-label="검색" data-global-search>
+      <div class="search-results" data-search-results hidden></div>
+    </div>
+  </header>
+  <main class="page-frame">
+    
+    <section class="hero">
+      <div class="hero-copy">
+        <p class="eyebrow">Module</p>
+        <h1>런타임과 컴파일러</h1>
+        <p class="hero-summary">실제 제품 스택과 MLIR 계열 컴파일러를 연결해 온디바이스 추론과 backend 특화를 이해한다.</p>
+      </div>
+      <div class="hero-stats">
+        <div class="stat-card"><strong>5</strong><span>chapters</span></div>
+      </div>
+    </section>
+    
+    <div class="page-layout">
+      <section class="page-main content-shell">
+        
+    <article class="content-panel surface prose">
+      <h1 id="런타임과-컴파일러">런타임과 컴파일러</h1>
+<p>실제 제품 스택과 MLIR 계열 컴파일러를 연결해 온디바이스 추론과 backend 특화를 이해한다.</p>
+<h2 id="이-모듈을-마치면-설명할-수-있어야-하는-것">이 모듈을 마치면 설명할 수 있어야 하는 것</h2>
+<ul><li>ONNX Runtime QNN과 Windows ML의 역할 차이를 설명할 수 있다.</li><li>Ryzen AI, OpenVINO, Intel NPU stack의 포지션을 비교할 수 있다.</li><li>MLIR, StableHLO, IREE가 lowering pipeline에서 맡는 역할을 설명할 수 있다.</li></ul>
+<h2 id="챕터-순서">챕터 순서</h2>
+<ul><li><a href="./01-onnx-runtime-qnn/">ONNX Runtime QNN</a>: QNN EP가 graph를 Qualcomm backend로 넘기는 구조를 본다.</li><li><a href="./02-windows-ml/">Windows ML</a>: Windows ML이 ONNX Runtime 기반으로 on-device AI 경험을 묶는 방식을 본다.</li><li><a href="./03-ryzen-ai-oga/">Ryzen AI OGA</a>: AMD의 hybrid OGA 흐름과 NPU/GPU 협업 시나리오를 정리한다.</li><li><a href="./04-openvino-npu/">OpenVINO NPU</a>: OpenVINO에서 NPU target을 사용하는 경로와 한계를 본다.</li><li><a href="./05-mlir-stablehlo-iree/">MLIR, StableHLO, IREE</a>: 컴파일러 중간 표현이 왜 필요한지와 lowering이 어떻게 연결되는지 본다.</li></ul>
+<h2 id="선행-관계">선행 관계</h2>
+<ul><li>같은 모듈에서는 위 순서를 따르는 것이 좋다.</li><li>다음 모듈로 넘어가기 전에 각 챕터 퀴즈를 먼저 풀어 본다.</li></ul>
+    </article>
+    <section class="content-panel surface">
+      <div class="section-heading">
+        <div>
+          <p class="eyebrow">Chapters</p>
+          <h2>런타임과 컴파일러 안의 학습 단위</h2>
+        </div>
+        <input type="search" placeholder="챕터 필터" aria-label="챕터 필터" data-card-filter>
+      </div>
+      <div class="chapter-grid" data-card-container>
+        <a class="chapter-card" data-card-search="onnx runtime qnn snapdragon pc에서 qnnexecutionprovider 로그는 분명 보이는데, 첫 실행은 무겁고 반복 실행도 기대만큼 줄지 않는 경우가 있다. 이 챕터는 바로 그 장면을 읽는 법을 다룬다. qnn ep는 onnx runtime 안에서 onnx graph의 일부를 qualcomm qnn backend로 넘기는 execution provider다. 그래서 관심사는 &quot;npu를 썼다&quot;가 아니라 &quot;어떤 subgraph가 qnn으로 갔고, 어떤 경계에서 cpu fallback과 복사가 남았는가&quot;가 된다. [s1] 런타임과 컴파일러" data-progress-id="study/llm-serving-npu-roadmap/06-runtime-and-compiler/01-onnx-runtime-qnn" href="01-onnx-runtime-qnn/"><span class="chapter-module">런타임과 컴파일러</span><h3>ONNX Runtime QNN</h3><p>Snapdragon PC에서 QNNExecutionProvider 로그는 분명 보이는데, 첫 실행은 무겁고 반복 실행도 기대만큼 줄지 않는 경우가 있다. 이 챕터는 바로 그 장면을 읽는 법을 다룬다. QNN EP는 ONNX Runtime 안에서 ONNX graph의 일부를 Qualcomm QNN backend로 넘기는 execution provider다. 그래서 관심사는 &quot;NPU를 썼다&quot;가…</p><div class="chapter-card-meta"><span>35-50 min</span><span>2026-03-08</span><span class="chapter-progress-state">미완료</span></div></a><a class="chapter-card" data-card-search="windows ml 이번 챕터는 windows ml을 &quot;windows에서 로컬 ai 기능을 앱에 붙일 때 만나는 운영 계층&quot;으로 본다. 핵심은 npu라는 칩 이름이 아니라, 앱이 windows ml을 호출했을 때 그 아래에서 onnx runtime 기반 실행 경로가 어떻게 연결되고, 어디서 cpu/gpu/npu 선택과 fallback이 일어나는지를 읽는 것이다. microsoft learn은 windows ml을 windows의 on device ai 경험을 위한 런타임 경로로 설명하고 있고, genai onnx 모델 실행 예시도 별도로 제공한다. [s1] [s2] 런타임과 컴파일러" data-progress-id="study/llm-serving-npu-roadmap/06-runtime-and-compiler/02-windows-ml" href="02-windows-ml/"><span class="chapter-module">런타임과 컴파일러</span><h3>Windows ML</h3><p>이번 챕터는 Windows ML을 &quot;Windows에서 로컬 AI 기능을 앱에 붙일 때 만나는 운영 계층&quot;으로 본다. 핵심은 NPU라는 칩 이름이 아니라, 앱이 Windows ML을 호출했을 때 그 아래에서 ONNX Runtime 기반 실행 경로가 어떻게 연결되고, 어디서 CPU/GPU/NPU 선택과 fallback이 일어나는지를 읽는 것이다. Microsoft Learn은 Windows M…</p><div class="chapter-card-meta"><span>35-50 min</span><span>2026-03-08</span><span class="chapter-progress-state">미완료</span></div></a><a class="chapter-card" data-card-search="ryzen ai oga amd ryzen ai 문서는 이 주제를 아예 hybrid on device genai workflow 라고 부른다 [s1]. 이 챕터의 중심 질문도 같다. &quot;cpu, gpu, npu를 모두 쓸 수 있을 때 어느 단계를 어디에 두는가?&quot;다. 여기서 ryzen ai oga는 단일 장치 최대 활용법이 아니라, 단계별 역할 분담과 handoff 지점을 설계하는 제품 문제로 읽는 편이 정확하다 [s1]. 런타임과 컴파일러" data-progress-id="study/llm-serving-npu-roadmap/06-runtime-and-compiler/03-ryzen-ai-oga" href="03-ryzen-ai-oga/"><span class="chapter-module">런타임과 컴파일러</span><h3>Ryzen AI OGA</h3><p>AMD Ryzen AI 문서는 이 주제를 아예 Hybrid On Device GenAI workflow 라고 부른다 [S1]. 이 챕터의 중심 질문도 같다. &quot;CPU, GPU, NPU를 모두 쓸 수 있을 때 어느 단계를 어디에 두는가?&quot;다. 여기서 Ryzen AI OGA는 단일 장치 최대 활용법이 아니라, 단계별 역할 분담과 handoff 지점을 설계하는 제품 문제로 읽는 편이 정확하다 […</p><div class="chapter-card-meta"><span>35-50 min</span><span>2026-03-08</span><span class="chapter-progress-state">미완료</span></div></a><a class="chapter-card" data-card-search="openvino npu 이 챕터의 중심 질문은 단순하다. openvino에서 npu를 쓰려면 실제로 무엇을 호출하고, 어떤 제약 때문에 바로 막히며, 왜 첫 실행과 재실행 체감이 달라지는가다. openvino 문서는 compile model(..., &quot;npu&quot;) 같은 명시적 타깃 지정, auto 와 hetero 같은 장치 선택 모드, model caching, feil/fil, static shape only 제한, supported data types와 feature support 제약을 함께 설명한다 [s1]. 런타임과 컴파일러" data-progress-id="study/llm-serving-npu-roadmap/06-runtime-and-compiler/04-openvino-npu" href="04-openvino-npu/"><span class="chapter-module">런타임과 컴파일러</span><h3>OpenVINO NPU</h3><p>이 챕터의 중심 질문은 단순하다. OpenVINO에서 NPU를 쓰려면 실제로 무엇을 호출하고, 어떤 제약 때문에 바로 막히며, 왜 첫 실행과 재실행 체감이 달라지는가다. OpenVINO 문서는 compile model(..., &quot;NPU&quot;) 같은 명시적 타깃 지정, AUTO 와 HETERO 같은 장치 선택 모드, model caching, FEIL/FIL, static shape only 제…</p><div class="chapter-card-meta"><span>35-50 min</span><span>2026-03-08</span><span class="chapter-progress-state">미완료</span></div></a><a class="chapter-card" data-card-search="mlir, stablehlo, iree 같은 matmul + elementwise tail 블록도 어디까지를 stablehlo 같은 높은 수준의 의미 공간에 남기고, 어디서 mlir lower dialect와 target specific 단계로 내릴지에 따라 iree runtime이 보게 되는 dispatch 경계와 최종 artifact 구성이 달라질 수 있다 [합성: s1,s2,s3]. 이 챕터는 그 판단 기준을 먼저 세운다. 런타임과 컴파일러" data-progress-id="study/llm-serving-npu-roadmap/06-runtime-and-compiler/05-mlir-stablehlo-iree" href="05-mlir-stablehlo-iree/"><span class="chapter-module">런타임과 컴파일러</span><h3>MLIR, StableHLO, IREE</h3><p>같은 matmul + elementwise tail 블록도 어디까지를 StableHLO 같은 높은 수준의 의미 공간에 남기고, 어디서 MLIR lower dialect와 target specific 단계로 내릴지에 따라 IREE runtime이 보게 되는 dispatch 경계와 최종 artifact 구성이 달라질 수 있다 [합성: S1,S2,S3]. 이 챕터는 그 판단 기준을 먼저 세운다.</p><div class="chapter-card-meta"><span>35-50 min</span><span>2026-03-08</span><span class="chapter-progress-state">미완료</span></div></a>
+      </div>
+    </section>
+    
+      </section>
+      <aside class="page-sidebar">
+    <div class="sidebar-panel surface">
+      <p class="eyebrow">Progress</p>
+      <h3>진행 방식</h3>
+      <p>챕터 페이지의 완료 버튼은 브라우저 로컬 저장소에 기록됩니다.</p>
+    </div>
+    </aside>
+    </div>
+  </main>
+  <script type="module" src="../assets/app.js"></script>
+  <script type="module">
+    import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs';
+    mermaid.initialize({ startOnLoad: true, theme: 'neutral', securityLevel: 'loose' });
+  </script>
+  <script>
+    window.MathJax = {
+      tex: { inlineMath: [['$', '$'], ['\\(', '\\)']], displayMath: [['$$', '$$'], ['\\[', '\\]']] },
+      svg: { fontCache: 'global' }
+    };
+  </script>
+  <script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-svg.js" async></script>
+</body>
+</html>

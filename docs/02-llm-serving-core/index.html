@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>LLM Serving 핵심 | LLM Serving + NPU</title>
+  <meta name="description" content="서빙 엔진이 요청을 받아 토큰을 생성하기까지 필요한 cache, batching, quantization, stack 구성을 본다.">
+  <meta name="theme-color" content="#10182a">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+KR:wght@400;500;600;700&family=Space+Grotesk:wght@500;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../assets/style.css">
+</head>
+<body class="page-module" data-page-kind="module" data-page-id="02-llm-serving-core" data-root-prefix="../">
+  <div class="reading-progress" data-reading-progress></div>
+  <header class="site-header">
+    <a class="brand" href="../">
+      <span class="brand-kicker">GitHub Pages Study</span>
+      <strong>LLM Serving + NPU</strong>
+    </a>
+    <nav class="top-nav"><a class="top-nav-link" href="../01-foundations/">기초와 성능 직관</a><a class="top-nav-link is-active" href="./">LLM Serving 핵심</a><a class="top-nav-link" href="../03-llm-serving-advanced/">고급 Serving 패턴</a><a class="top-nav-link" href="../04-serving-systems/">Serving 시스템 설계</a><a class="top-nav-link" href="../05-npu-stack/">NPU 소프트웨어 스택</a><a class="top-nav-link" href="../06-runtime-and-compiler/">런타임과 컴파일러</a><a class="top-nav-link" href="../07-synthesis/">종합 정리와 최신 흐름</a></nav>
+    <div class="search-shell">
+      <input type="search" placeholder="챕터, 모듈, 키워드 검색" aria-label="검색" data-global-search>
+      <div class="search-results" data-search-results hidden></div>
+    </div>
+  </header>
+  <main class="page-frame">
+    
+    <section class="hero">
+      <div class="hero-copy">
+        <p class="eyebrow">Module</p>
+        <h1>LLM Serving 핵심</h1>
+        <p class="hero-summary">서빙 엔진이 요청을 받아 토큰을 생성하기까지 필요한 cache, batching, quantization, stack 구성을 본다.</p>
+      </div>
+      <div class="hero-stats">
+        <div class="stat-card"><strong>5</strong><span>chapters</span></div>
+      </div>
+    </section>
+    
+    <div class="page-layout">
+      <section class="page-main content-shell">
+        
+    <article class="content-panel surface prose">
+      <h1 id="llm-serving-핵심">LLM Serving 핵심</h1>
+<p>서빙 엔진이 요청을 받아 토큰을 생성하기까지 필요한 cache, batching, quantization, stack 구성을 본다.</p>
+<h2 id="이-모듈을-마치면-설명할-수-있어야-하는-것">이 모듈을 마치면 설명할 수 있어야 하는 것</h2>
+<ul><li>continuous batching과 PagedAttention의 역할을 연결해서 설명할 수 있다.</li><li>prefill과 decode에서 자원이 다르게 소모되는 이유를 설명할 수 있다.</li><li>vLLM, TensorRT-LLM, ONNX Runtime/TGI의 포지션 차이를 설명할 수 있다.</li></ul>
+<h2 id="챕터-순서">챕터 순서</h2>
+<ul><li><a href="./01-prefill-vs-decode/">Prefill vs Decode</a>: 한 요청이 왜 두 개의 다른 workload로 나뉘는지 이해한다.</li><li><a href="./02-kv-cache-and-paged-attention/">KV Cache and PagedAttention</a>: KV cache가 왜 필수인지, 그리고 PagedAttention이 fragmentation을 어떻게 낮추는지 본다.</li><li><a href="./03-continuous-batching/">Continuous Batching</a>: continuous batching이 throughput과 latency를 동시에 개선하는 이유를 본다.</li><li><a href="./04-quantization-basics/">Quantization Basics</a>: INT8, INT4, FP8 양자화가 latency와 품질에 주는 영향을 정리한다.</li><li><a href="./05-serving-stack-overview/">Serving Stack Overview</a>: API layer부터 runtime, kernel, observability까지 serving stack의 계층을 정리한다.</li></ul>
+<h2 id="선행-관계">선행 관계</h2>
+<ul><li>같은 모듈에서는 위 순서를 따르는 것이 좋다.</li><li>다음 모듈로 넘어가기 전에 각 챕터 퀴즈를 먼저 풀어 본다.</li></ul>
+    </article>
+    <section class="content-panel surface">
+      <div class="section-heading">
+        <div>
+          <p class="eyebrow">Chapters</p>
+          <h2>LLM Serving 핵심 안의 학습 단위</h2>
+        </div>
+        <input type="search" placeholder="챕터 필터" aria-label="챕터 필터" data-card-filter>
+      </div>
+      <div class="chapter-grid" data-card-container>
+        <a class="chapter-card" data-card-search="prefill vs decode 이번 챕터는 &quot;모델이 응답한다&quot;를 두 조각으로 잘라 보는 수업이다. 사용자가 보낸 입력 전체를 읽어 상태를 만드는 구간이 prefill , 그 상태를 바탕으로 다음 토큰을 한 개씩 이어 붙이는 반복 구간이 decode 다. 둘을 분리해서 보면 왜 어떤 서비스는 첫 글자가 늦고, 어떤 서비스는 시작은 빠른데 길게 생성할수록 답답해지는지 설명할 수 있다. vllm 계열 자료는 serving 효율을 메모리 관리와 스케줄링 관점에서 다루고 [s1][s2], nvidia tensorrt llm 자료는 kv cache 재사용과 분리형 serving이 이 문제를 어떻게 운영 설계로 연결하는지 보여 준다 [s3][s4]. llm serving 핵심" data-progress-id="study/llm-serving-npu-roadmap/02-llm-serving-core/01-prefill-vs-decode" href="01-prefill-vs-decode/"><span class="chapter-module">LLM Serving 핵심</span><h3>Prefill vs Decode</h3><p>이번 챕터는 &quot;모델이 응답한다&quot;를 두 조각으로 잘라 보는 수업이다. 사용자가 보낸 입력 전체를 읽어 상태를 만드는 구간이 prefill , 그 상태를 바탕으로 다음 토큰을 한 개씩 이어 붙이는 반복 구간이 decode 다. 둘을 분리해서 보면 왜 어떤 서비스는 첫 글자가 늦고, 어떤 서비스는 시작은 빠른데 길게 생성할수록 답답해지는지 설명할 수 있다. vLLM 계열 자료는 serving 효…</p><div class="chapter-card-meta"><span>35-50 min</span><span>2026-03-08</span><span class="chapter-progress-state">미완료</span></div></a><a class="chapter-card" data-card-search="kv cache and pagedattention 이번 챕터는 &quot;왜 서빙 엔진이 kv cache를 붙잡고 사는가&quot;를 메모리 관점에서 해부하는 수업이다. decode 단계에서 과거 토큰의 key/value를 다시 계산하지 않기 위해 kv cache가 필요하고, 그 cache가 커질수록 이번에는 메모리 낭비와 fragmentation이 새 병목으로 등장한다. vllm의 pagedattention은 이 문제를 운영체제의 paging과 비슷한 방식으로 풀어, 시퀀스의 논리적 연속성과 물리 메모리의 연속성을 분리한다 [s1][s2]. 2026년 기준 최신 serving 엔진이 cache reuse와 cache placement를 별도 최적화 대상으로 다루는 이유도 여기서 이어진다 [s3][s4]. llm serving 핵심" data-progress-id="study/llm-serving-npu-roadmap/02-llm-serving-core/02-kv-cache-and-paged-attention" href="02-kv-cache-and-paged-attention/"><span class="chapter-module">LLM Serving 핵심</span><h3>KV Cache and PagedAttention</h3><p>이번 챕터는 &quot;왜 서빙 엔진이 KV cache를 붙잡고 사는가&quot;를 메모리 관점에서 해부하는 수업이다. decode 단계에서 과거 토큰의 key/value를 다시 계산하지 않기 위해 KV cache가 필요하고, 그 cache가 커질수록 이번에는 메모리 낭비와 fragmentation이 새 병목으로 등장한다. vLLM의 PagedAttention은 이 문제를 운영체제의 paging과 비슷한 방…</p><div class="chapter-card-meta"><span>35-50 min</span><span>2026-03-08</span><span class="chapter-progress-state">미완료</span></div></a><a class="chapter-card" data-card-search="continuous batching 이번 챕터는 &quot;배치를 크게 잡으면 throughput이 오르고, 작게 잡으면 latency가 내려간다&quot;는 단순한 상식을 깨는 데서 출발한다. llm decode는 요청마다 한 토큰씩 전진하므로, 이미 끝난 요청의 빈자리를 다음 요청으로 바로 메우면 장비가 덜 논다. 그래서 현대 서빙 엔진은 정적인 request level batch보다 token level scheduler에 가까운 구조를 택한다 [s1][s2]. 다만 이 선택은 공짜가 아니다. scheduler는 prefill과 decode를 섞어 다뤄야 하고, kv cache와 prefix reuse, placement까지 함께 고려해야 한다 [s2][s3][s4]. llm serving 핵심" data-progress-id="study/llm-serving-npu-roadmap/02-llm-serving-core/03-continuous-batching" href="03-continuous-batching/"><span class="chapter-module">LLM Serving 핵심</span><h3>Continuous Batching</h3><p>이번 챕터는 &quot;배치를 크게 잡으면 throughput이 오르고, 작게 잡으면 latency가 내려간다&quot;는 단순한 상식을 깨는 데서 출발한다. LLM decode는 요청마다 한 토큰씩 전진하므로, 이미 끝난 요청의 빈자리를 다음 요청으로 바로 메우면 장비가 덜 논다. 그래서 현대 서빙 엔진은 정적인 request level batch보다 token level scheduler에 가까운 구조를…</p><div class="chapter-card-meta"><span>35-50 min</span><span>2026-03-08</span><span class="chapter-progress-state">미완료</span></div></a><a class="chapter-card" data-card-search="quantization basics 이번 챕터는 &quot;몇 비트가 더 작으냐&quot;보다 &quot;어떤 형식이 실제 서빙 경로를 끝까지 통과하느냐&quot;를 먼저 묻는다. 근거도 둘로 나눠서 본다. 메모리 예산과 품질 위험은 [식 1], [식 2], 그리고 양자화 오차를 시각화한 [i1]로 설명하고, backend 호환성은 서버 엔진 문맥의 [s1], offload의 [s2], compile 산출물의 [s3], device target의 [s4]로 설명한다. 이 분리를 지키면 &quot;int4가 더 작으니 무조건 더 좋다&quot; 같은 단정이 왜 위험한지 보인다. llm serving 핵심" data-progress-id="study/llm-serving-npu-roadmap/02-llm-serving-core/04-quantization-basics" href="04-quantization-basics/"><span class="chapter-module">LLM Serving 핵심</span><h3>Quantization Basics</h3><p>이번 챕터는 &quot;몇 비트가 더 작으냐&quot;보다 &quot;어떤 형식이 실제 서빙 경로를 끝까지 통과하느냐&quot;를 먼저 묻는다. 근거도 둘로 나눠서 본다. 메모리 예산과 품질 위험은 [식 1], [식 2], 그리고 양자화 오차를 시각화한 [I1]로 설명하고, backend 호환성은 서버 엔진 문맥의 [S1], offload의 [S2], compile 산출물의 [S3], device target의 [S4]로 설…</p><div class="chapter-card-meta"><span>35-50 min</span><span>2026-03-08</span><span class="chapter-progress-state">미완료</span></div></a><a class="chapter-card" data-card-search="serving stack overview 이 챕터는 서빙 스택을 제품 이름 목록으로 외우지 않고, 장애 티켓이 어느 계층으로 흘러가야 하는지 보여 주는 운영 지도처럼 정리한다. 2026년 기준으로 많은 팀은 위로는 openai compatible api를 요구하고, 아래로는 pagedattention, kv cache reuse, disaggregated serving 같은 backend specific 최적화를 검토한다. 따라서 핵심 질문은 &quot;무엇이 더 고성능인가&quot; 하나가 아니라 &quot;어느 계층까지 공통화하고, 어느 계층부터 직접 책임질 것인가&quot;다. [s1] [s2] [s3] [s4] llm serving 핵심" data-progress-id="study/llm-serving-npu-roadmap/02-llm-serving-core/05-serving-stack-overview" href="05-serving-stack-overview/"><span class="chapter-module">LLM Serving 핵심</span><h3>Serving Stack Overview</h3><p>이 챕터는 서빙 스택을 제품 이름 목록으로 외우지 않고, 장애 티켓이 어느 계층으로 흘러가야 하는지 보여 주는 운영 지도처럼 정리한다. 2026년 기준으로 많은 팀은 위로는 OpenAI compatible API를 요구하고, 아래로는 PagedAttention, KV cache reuse, disaggregated serving 같은 backend specific 최적화를 검토한다. 따라서…</p><div class="chapter-card-meta"><span>35-50 min</span><span>2026-03-08</span><span class="chapter-progress-state">미완료</span></div></a>
+      </div>
+    </section>
+    
+      </section>
+      <aside class="page-sidebar">
+    <div class="sidebar-panel surface">
+      <p class="eyebrow">Progress</p>
+      <h3>진행 방식</h3>
+      <p>챕터 페이지의 완료 버튼은 브라우저 로컬 저장소에 기록됩니다.</p>
+    </div>
+    </aside>
+    </div>
+  </main>
+  <script type="module" src="../assets/app.js"></script>
+  <script type="module">
+    import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs';
+    mermaid.initialize({ startOnLoad: true, theme: 'neutral', securityLevel: 'loose' });
+  </script>
+  <script>
+    window.MathJax = {
+      tex: { inlineMath: [['$', '$'], ['\\(', '\\)']], displayMath: [['$$', '$$'], ['\\[', '\\]']] },
+      svg: { fontCache: 'global' }
+    };
+  </script>
+  <script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-svg.js" async></script>
+</body>
+</html>

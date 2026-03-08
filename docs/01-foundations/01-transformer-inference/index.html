@@ -1,0 +1,215 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Transformer Inference | 기초와 성능 직관</title>
+  <meta name="description" content="이 챕터는 Transformer를 &quot;attention 식 하나&quot;로 소개하지 않고, 실제 요청이 prefill decode 를 지나며 어떤 계산과 어떤 메모리 읽기를 만들어 내는지 따라간다. 핵심 질문은 단순하다. 더 긴 문맥, 더 넓은 표현 공간, 더 자주 과거를 참조하는 모델 설정이 실제 품질을 얼마나 올리고, 그 대가로 prefill FLOPs와 decode memory traffic을 얼마나 늘리느냐이다 [S1][S2]. 2026년 기준의 serving 문서가 prefix caching, paged attention, continuous batching 같은 기능을 별도 운영 항목으로 다루는 이유도 이 tradeoff가 여전히 현재형이기 때문이다 [S3]. 최신 runtime release note가 계속 갱신되는 사실 자체도, 추론 경로 최적화가 끝난 문제가 아니라는 보조 신호로 읽을 수 있다 [S4].">
+  <meta name="theme-color" content="#10182a">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+KR:wght@400;500;600;700&family=Space+Grotesk:wght@500;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../../assets/style.css">
+</head>
+<body class="page-chapter" data-page-kind="chapter" data-page-id="study/llm-serving-npu-roadmap/01-foundations/01-transformer-inference" data-root-prefix="../../">
+  <div class="reading-progress" data-reading-progress></div>
+  <header class="site-header">
+    <a class="brand" href="../../">
+      <span class="brand-kicker">GitHub Pages Study</span>
+      <strong>LLM Serving + NPU</strong>
+    </a>
+    <nav class="top-nav"><a class="top-nav-link is-active" href="../">기초와 성능 직관</a><a class="top-nav-link" href="../../02-llm-serving-core/">LLM Serving 핵심</a><a class="top-nav-link" href="../../03-llm-serving-advanced/">고급 Serving 패턴</a><a class="top-nav-link" href="../../04-serving-systems/">Serving 시스템 설계</a><a class="top-nav-link" href="../../05-npu-stack/">NPU 소프트웨어 스택</a><a class="top-nav-link" href="../../06-runtime-and-compiler/">런타임과 컴파일러</a><a class="top-nav-link" href="../../07-synthesis/">종합 정리와 최신 흐름</a></nav>
+    <div class="search-shell">
+      <input type="search" placeholder="챕터, 모듈, 키워드 검색" aria-label="검색" data-global-search>
+      <div class="search-results" data-search-results hidden></div>
+    </div>
+  </header>
+  <main class="page-frame">
+    
+    <section class="hero">
+      <div class="hero-copy">
+        <p class="eyebrow">기초와 성능 직관</p>
+        <h1>Transformer Inference</h1>
+        <p class="hero-summary">이 챕터는 Transformer를 &quot;attention 식 하나&quot;로 소개하지 않고, 실제 요청이 prefill decode 를 지나며 어떤 계산과 어떤 메모리 읽기를 만들어 내는지 따라간다. 핵심 질문은 단순하다. 더 긴 문맥, 더 넓은 표현 공간, 더 자주 과거를 참조하는 모델 설정이 실제 품질을 얼마나 올리고, 그 대가로 prefill FLOPs와 decode memory traffic을 얼마나 늘리느냐이다 [S1][S2]. 2026년 기준의 serving 문서가 prefix caching, paged attention, continuous batching 같은 기능을 별도 운영 항목으로 다루는 이유도 이 tradeoff가 여전히 현재형이기 때문이다 [S3]. 최신 runtime release note가 계속 갱신되는 사실 자체도, 추론 경로 최적화가 끝난 문제가 아니라는 보조 신호로 읽을 수 있다 [S4].</p>
+      </div>
+      <div class="hero-stats">
+        <div class="stat-card"><strong>35-50 min</strong><span>reading time</span></div>
+        <div class="stat-card"><strong>2026-03-08</strong><span>updated</span></div>
+        <div class="stat-card"><button class="progress-toggle" type="button" data-progress-toggle data-progress-id="study/llm-serving-npu-roadmap/01-foundations/01-transformer-inference">완료로 표시</button></div>
+      </div>
+    </section>
+    
+    <div class="page-layout">
+      <section class="page-main content-shell">
+        
+    <article class="content-panel surface prose" data-reading-target>
+      <h1 id="transformer-inference">Transformer Inference</h1>
+<h2 id="수업-개요">수업 개요</h2>
+<p>이 챕터는 Transformer를 &quot;attention 식 하나&quot;로 소개하지 않고, 실제 요청이 <code>prefill -&amp;gt; decode</code>를 지나며 어떤 계산과 어떤 메모리 읽기를 만들어 내는지 따라간다. 핵심 질문은 단순하다. 더 긴 문맥, 더 넓은 표현 공간, 더 자주 과거를 참조하는 모델 설정이 실제 품질을 얼마나 올리고, 그 대가로 prefill FLOPs와 decode memory traffic을 얼마나 늘리느냐이다 [S1][S2]. 2026년 기준의 serving 문서가 prefix caching, paged attention, continuous batching 같은 기능을 별도 운영 항목으로 다루는 이유도 이 tradeoff가 여전히 현재형이기 때문이다 [S3]. 최신 runtime release note가 계속 갱신되는 사실 자체도, 추론 경로 최적화가 끝난 문제가 아니라는 보조 신호로 읽을 수 있다 [S4].</p>
+<h2 id="학습-목표">학습 목표</h2>
+<ul><li><code>prefill</code>과 <code>decode</code>를 서로 다른 비용 구조로 설명할 수 있다.</li><li>self-attention을 설명할 때 <code>QKV projection</code>, <code>output projection</code>, <code>FFN</code>, <code>KV cache</code>를 함께 묶어 말할 수 있다.</li><li>더 긴 문맥, 더 많은 head, 더 큰 hidden/FFN이 어떤 품질 이득을 주고 어떤 비용을 늘리는지 서비스 관점에서 비교할 수 있다.</li><li>&quot;느리다&quot;는 불만을 TTFT 문제와 TPOT 문제로 분리해 진단 순서를 세울 수 있다.</li></ul>
+<h2 id="수업-전에-생각할-질문">수업 전에 생각할 질문</h2>
+<ul><li>코드 질의봇에서 긴 저장소 prefix를 계속 넣는 것은 언제 가치가 크고, 언제 prefill 낭비가 될까?</li><li>말하기 튜터에서 긴 대화 이력을 유지하면 피드백 품질은 얼마나 좋아지고, decode 비용은 어디까지 감수할 만할까?</li><li>attention head나 hidden size를 키우면 모델은 무엇을 더 잘할 수 있고, 어떤 비용표가 즉시 바뀔까?</li></ul>
+<h2 id="강의-스크립트">강의 스크립트</h2>
+<h3 id="part-1-요청-하나를-prefill-과-decode-로-갈라-본다">Part 1. 요청 하나를 <code>prefill</code>과 <code>decode</code>로 갈라 본다</h3>
+<p><strong>학습자:</strong> Transformer 추론이라고 하면 attention score 계산부터 떠오르는데, 실무에서도 거기서 시작하나요?</p>
+<p><strong>교수자:</strong> 실무에서는 더 앞단에서 시작합니다. &quot;지금 느린 구간이 prefill인가, decode인가&quot;부터 나눕니다. prefill은 입력 프롬프트 전체를 한 번에 통과시키는 구간이고, decode는 새 토큰을 하나씩 만들며 과거를 계속 참조하는 구간입니다.</p>
+<p><strong>학습자:</strong> 같은 모델인데도 진단표가 달라진다는 말이군요.</p>
+<p><strong>교수자:</strong> 그렇습니다. <code>저장소 코드 질의봇</code>은 긴 파일 묶음을 처음 읽을 때 prefill이 두드러집니다. 반면 <code>실시간 말하기 튜터</code>는 세션이 이어질수록 decode가 길어지며 과거 대화의 K/V를 계속 읽습니다. 둘 다 Transformer지만 사용자가 느끼는 지연의 성질이 다릅니다.</p>
+<pre class="mermaid">flowchart LR
+    A[입력 토큰] --&gt; B[Embedding]
+    B --&gt; C{어느 단계인가?}
+    C --&gt;|Prefill| D[전체 입력에 대한\nQKV projection]
+    D --&gt; E[Attention]
+    E --&gt; F[O projection + FFN]
+    F --&gt; G[초기 KV cache 작성]
+    C --&gt;|Decode| H[새 토큰 1개에 대한\nQKV projection]
+    H --&gt; I[기존 KV cache 읽기]
+    I --&gt; J[Attention]
+    J --&gt; K[O projection + FFN]
+    K --&gt; L[다음 토큰 출력]
+    G --&gt; L</pre>
+<p><strong>교수자:</strong> 이 그림에서 먼저 봐야 할 것은 &quot;attention이 있는가&quot;가 아닙니다. 무엇을 새로 계산하고, 무엇을 저장해 두었다가 반복해서 읽는가입니다.</p>
+<h3 id="part-2-attention은-중심이지만-비용표-전체는-아니다">Part 2. attention은 중심이지만, 비용표 전체는 아니다</h3>
+<p><strong>학습자:</strong> 그래도 Transformer의 상징은 attention 아닌가요?</p>
+<p><strong>교수자:</strong> 상징은 맞습니다. 다만 추론 비용을 attention score 계산 하나로 환원하면 레이어의 절반이 사라집니다. 각 레이어는 hidden state를 받아 <code>Q</code>, <code>K</code>, <code>V</code>로 투영하고, attention 출력을 다시 합친 뒤 FFN까지 거칩니다 [S1].</p>
+<h4 id="핵심-수식-1-scaled-dot-product-attention">핵심 수식 1. Scaled Dot-Product Attention</h4>
+<div class="math-block">$$
+\mathrm{Attention}(Q, K, V) = \mathrm{softmax}\left(\frac{QK^\top}{\sqrt{d_k}}\right)V
+$$</div>
+<p><strong>교수자:</strong> 이 식은 토큰 간 상호작용을 설명합니다. 그런데 서비스 지연을 따질 때는 곧바로 옆 질문이 붙어야 합니다. &quot;<code>Q/K/V</code>를 만들 projection 비용은 얼마인가?&quot;, &quot;attention 뒤의 output projection과 FFN은 얼마나 큰가?&quot;, &quot;기존 <code>K/V</code>를 다시 계산하지 않고 cache에서 읽는 대가가 얼마나 큰가?&quot; 같은 질문이죠.</p>
+<p><strong>학습자:</strong> 그러면 attention은 관계를 정하고, projection과 FFN은 그 관계를 실제 표현력으로 바꾸는 블록이라고 볼 수 있겠네요.</p>
+<p><strong>교수자:</strong> 그 표현이 좋습니다. 추론 품질은 이 블록들의 합으로 나오고, 추론 비용도 마찬가지입니다.</p>
+<h3 id="part-3-prefill은-큰-계산을-몰아서-하고-decode는-긴-과거를-계속-읽는다">Part 3. prefill은 큰 계산을 몰아서 하고, decode는 긴 과거를 계속 읽는다</h3>
+<p><strong>학습자:</strong> 두 단계의 비용 차이를 한 번에 잡는 기준이 있나요?</p>
+<p><strong>교수자:</strong> 거친 감각은 있습니다. prefill은 긴 입력 전체를 한 번에 흘려 보내므로 attention과 projection, FFN이 함께 커집니다. decode는 새 토큰 하나만 계산하지만 과거 <code>K/V</code>를 계속 참조하므로 토큰당 읽는 바이트가 문맥 길이와 함께 불어납니다 [S1][S2].</p>
+<h4 id="핵심-수식-2-prefill과-decode의-거친-비용-감각">핵심 수식 2. prefill과 decode의 거친 비용 감각</h4>
+<div class="math-block">$$
+\mathrm{Prefill\ FLOPs}\sim O(L \cdot T_{ctx}^{2} \cdot d_{model} + L \cdot T_{ctx} \cdot d_{model} \cdot d_{ff}),
+\qquad
+\mathrm{Decode\ Bytes/token}\approx 2 \cdot L \cdot T_{ctx} \cdot H_{kv} \cdot d_{head} \cdot b
+$$</div>
+<p><strong>교수자:</strong> 왼쪽은 문맥 길이와 모델 폭이 prefill 계산량을 키우는 방향을, 오른쪽은 문맥 길이와 KV 구조가 decode memory traffic을 키우는 방향을 보여 줍니다. 정확한 회계 장부가 아니라, 어느 항이 어디서 불어나는지 잡는 지도라고 생각하면 됩니다.</p>
+<p><strong>학습자:</strong> 결국 첫 토큰 지연은 왼쪽 표를, 후반 토큰 지연은 오른쪽 표를 먼저 의심하면 되겠네요.</p>
+<p><strong>교수자:</strong> 맞습니다. TTFT가 문제면 prefill, TPOT이 문제면 decode 쪽으로 질문이 이동합니다.</p>
+<h3 id="part-4-표현력이-공짜는-아니다">Part 4. 표현력이 공짜는 아니다</h3>
+<p><strong>학습자:</strong> 여기서 말하는 tradeoff가 &quot;표현력과 계산량&quot;인데, 실제로 무엇을 키우면 어떤 이득이 생기나요?</p>
+<p><strong>교수자:</strong> 네 가지를 분리해서 보는 편이 좋습니다.</p>
+<ul><li>더 긴 문맥: 오래전 지시, 긴 문서 근거, 저장소 전역 참조를 유지하기 쉽다. 대신 prefill에서는 더 긴 입력 전체를 처리해야 하고, decode에서는 더 긴 KV를 매 토큰 읽는다.</li><li>더 많은 head 또는 더 넓은 head: 서로 다른 관계를 병렬로 볼 여지가 생긴다. 코드 참조, 장거리 의존성, 포맷 규칙 같은 패턴을 분리해 잡는 데 유리할 수 있다. 대신 projection 크기와 attention 상태가 함께 커진다.</li><li>더 큰 hidden/FFN: 더 풍부한 중간 표현과 더 강한 변환 능력을 준다. 애매한 요구를 정리하거나 복합 규칙을 합성하는 품질이 좋아질 수 있다. 대신 prefill의 projection/FFN FLOPs가 크게 늘고, 가중치 읽기 비용도 무거워진다.</li><li>더 자주 과거를 참조하는 사용 방식: 말하기 튜터나 긴 상담 세션처럼 최근뿐 아니라 몇 분 전 피드백까지 계속 꺼내 쓰면 일관성은 좋아질 수 있다. 하지만 decode에서는 토큰당 cache read가 더 자주 길게 발생한다.</li></ul>
+<p><strong>학습자:</strong> 그러면 &quot;긴 문맥이 좋다&quot;는 말만으로는 부족하겠네요. 어디서 제품 가치가 생기는지까지 써야 하니까요.</p>
+<p><strong>교수자:</strong> 정확합니다. <code>코드 질의봇</code>은 긴 prefix 재사용이 제품 가치와 바로 연결됩니다. 파일 경로, 심볼, 에러 로그가 같은 세션에서 반복되기 때문이죠. 여기서는 긴 문맥의 가치가 크고, prefix caching 같은 기법으로 prefill 낭비도 줄일 수 있습니다 [S3]. 반대로 <code>말하기 튜터</code>는 40턴 전 발화를 끝까지 들고 가는 것이 정말 필요한지 따져야 합니다. 최근 피드백 6~8턴만으로 품질이 충분하다면, 긴 문맥 유지가 늘리는 decode 비용이 더 클 수 있습니다.</p>
+<h3 id="part-5-제품-가치를-기준으로-병목을-읽는다">Part 5. 제품 가치를 기준으로 병목을 읽는다</h3>
+<p><strong>학습자:</strong> 병목 진단만이 아니라 제품 가치까지 같이 보라는 말이 인상적입니다.</p>
+<p><strong>교수자:</strong> 운영에서는 그 둘을 분리하면 안 됩니다. 예를 들어 <code>사내 코드 질의봇</code>은 긴 저장소 prefix가 답의 정확도를 실제로 끌어올립니다. 심볼 정의와 호출 위치를 한 번에 잡아야 하기 때문입니다. 이때는 긴 문맥이 만든 prefill 비용을 감수할 이유가 있습니다. 대신 공통 prefix를 재사용해 같은 비용을 매번 다시 내지 않도록 해야 합니다 [S3].</p>
+<p><strong>교수자:</strong> 반대로 <code>실시간 말하기 튜터</code>는 세션 전체를 무조건 길게 들고 가는 것보다, 최근 교정 포인트와 발음 습관 요약만 유지하는 편이 더 낫기도 합니다. 아주 긴 문맥이 피드백 품질을 조금 올려도, 후반 decode가 눈에 띄게 느려지면 사용자는 바로 체감합니다.</p>
+<p><strong>학습자:</strong> 결국 &quot;병목이 어디냐&quot;와 &quot;그 병목이 사는 이유가 제품 가치냐&quot;를 같이 물어야 하네요.</p>
+<p><strong>교수자:</strong> 네. 같은 비용 증가라도 제품 가치를 직접 만들면 감수할 수 있고, 가치가 약하면 줄여야 합니다.</p>
+<pre class="mermaid">flowchart TD
+    A[표현력 강화 아이디어] --&gt; B{제품 가치가 큰가?}
+    B --&gt;|예| C{비용 증가는 주로 어디서 터지나?}
+    B --&gt;|아니오| D[문맥 축약 또는 모델 폭 축소 검토]
+    C --&gt;|Prefill| E[긴 입력 재사용 가능한가?]
+    E --&gt;|예| F[prefix caching, batching 검토]
+    E --&gt;|아니오| G[입력 구조 재설계]
+    C --&gt;|Decode| H[긴 과거 참조가 정말 필요한가?]
+    H --&gt;|예| I[KV 경로와 paging 최적화]
+    H --&gt;|아니오| J[요약 메모리, 최근 창 유지]</pre>
+<h3 id="part-6-엔진-문서와-release-note를-같이-보는-이유">Part 6. 엔진 문서와 release note를 같이 보는 이유</h3>
+<p><strong>학습자:</strong> 이 챕터는 기초인데도 왜 엔진 문서가 들어오나요?</p>
+<p><strong>교수자:</strong> 수식만 보면 Transformer 추론이 고정된 절차처럼 보이기 쉽기 때문입니다. 하지만 실제 serving 엔진은 prefix caching, paged attention, continuous batching처럼 같은 모델을 다른 실행 경로로 돌립니다 [S3]. 이 기능들은 논문 바깥의 디테일이 아니라, 바로 앞에서 본 <code>prefill 낭비</code>와 <code>decode cache traffic</code>을 줄이기 위한 장치입니다.</p>
+<p><strong>학습자:</strong> 그럼 [S4]는 어떤 역할인가요?</p>
+<p><strong>교수자:</strong> [S4]는 구체 알고리즘의 근거라기보다 최신성 보조 근거입니다. 2026년에도 런타임 릴리스 노트가 계속 갱신된다는 사실 자체가, 배포 경로와 실행 최적화가 여전히 현재형 운영 문제라는 점을 보여 줍니다. 이 챕터에서 일반화의 근거는 [S1][S2][S3]이고, [S4]는 &quot;지금도 이 영역이 움직이고 있다&quot;는 수준으로만 읽는 편이 안전합니다.</p>
+<h2 id="자주-헷갈리는-포인트">자주 헷갈리는 포인트</h2>
+<ul><li>attention이 Transformer의 핵심 개념인 것과, serving 병목의 최댓값이 항상 attention인 것은 다르다.</li><li>긴 문맥은 품질을 올릴 수 있지만, 같은 문맥 길이가 prefill과 decode에서 다른 방식으로 비용을 늘린다.</li><li>head 수나 hidden size를 키우면 표현력은 늘 수 있지만, 그 이득이 실제 제품 가치로 이어지는지 따져야 한다.</li><li>KV cache는 재계산을 줄이기 위한 장치이면서, decode에서 memory traffic을 늘리는 원인이기도 하다.</li><li>&quot;모델이 느리다&quot;는 한 문장만으로는 부족하다. 첫 토큰이 느린지, 후반 토큰이 느린지, 그리고 그 비용이 제품 가치와 연결되는지를 함께 적어야 한다.</li></ul>
+<h2 id="사례로-다시-보기">사례로 다시 보기</h2>
+<h3 id="사례-1-모노레포-코드-질의봇">사례 1. 모노레포 코드 질의봇</h3>
+<p>여러 디렉터리의 파일 경로, 에러 로그, 테스트 실패 메시지를 함께 넣어야 정확한 답이 나온다. 긴 문맥이 실제 제품 가치를 만든다. 대신 같은 저장소 prefix가 반복되므로, 이 서비스는 긴 문맥 자체를 포기하기보다 prefill 중복을 줄이는 방향이 낫다 [S3].</p>
+<h3 id="사례-2-실시간-말하기-튜터">사례 2. 실시간 말하기 튜터</h3>
+<p>오답 교정의 일관성을 위해 최근 교정 히스토리가 필요하다. 하지만 세션 전체를 길게 유지할수록 decode에서 KV cache read가 쌓여 후반 토큰이 느려질 수 있다. 여기서는 &quot;긴 문맥이 정말 피드백 품질을 얼마나 올리는가&quot;를 먼저 측정해야 한다.</p>
+<h3 id="사례-3-계약-검토-요약-도구">사례 3. 계약 검토 요약 도구</h3>
+<p>긴 조항을 함께 보며 요약과 차이점을 설명해야 하므로 hidden/FFN이 충분히 커서 복합 조건을 정리하는 능력이 중요할 수 있다. 다만 이 선택은 prefill의 projection/FFN 비용을 크게 키운다. 정확도 개선이 미미하면 모델 폭 확장은 과한 투자다.</p>
+<h3 id="사례-4-사내-faq-챗봇의-흔한-오진">사례 4. 사내 FAQ 챗봇의 흔한 오진</h3>
+<p>&quot;답이 어색하니 head 수를 늘리자&quot;는 제안이 나왔지만, 실제 문제는 제품 문맥이 짧고 질문도 단순해서 표현력 부족이 아니었다. 이 경우는 더 많은 head보다 프롬프트 정리와 요청 경로 고정비 축소가 먼저다.</p>
+<h2 id="핵심-정리">핵심 정리</h2>
+<ul><li>Transformer 추론은 <code>prefill</code>과 <code>decode</code>로 나눠 봐야 병목이 보인다.</li><li>self-attention만으로는 부족하다. projection, FFN, KV cache를 같이 봐야 실제 비용 구조가 드러난다 [S1].</li><li>더 긴 문맥, 더 많은 head, 더 큰 hidden/FFN은 표현력을 늘릴 수 있지만, 그 대가로 prefill FLOPs와 decode memory traffic도 함께 늘어난다 [S1][S2].</li><li>제품 가치가 큰 표현력 강화는 유지하되, prefix caching·paged attention·batching 같은 엔진 기능으로 비용을 줄이는 접근이 실무적이다 [S3].</li><li>[S4]는 특정 결론을 직접 증명하는 자료라기보다, 2026년에도 런타임 최적화가 계속 업데이트되는 현재형 주제라는 최신성 보조 근거다.</li></ul>
+<h2 id="복습-체크리스트">복습 체크리스트</h2>
+<ul><li class="task-item unchecked"><span class="task-box" aria-hidden="true"></span><code>prefill</code>과 <code>decode</code>를 TTFT/TPOT과 연결해 설명할 수 있다.</li><li class="task-item unchecked"><span class="task-box" aria-hidden="true"></span>attention 설명 뒤에 <code>QKV projection</code>, <code>output projection</code>, <code>FFN</code>을 빠뜨리지 않고 말할 수 있다.</li><li class="task-item unchecked"><span class="task-box" aria-hidden="true"></span>긴 문맥, head 수, hidden/FFN 확대가 어떤 품질 이득과 비용 증가를 만드는지 사례와 함께 설명할 수 있다.</li><li class="task-item unchecked"><span class="task-box" aria-hidden="true"></span>코드 질의봇과 말하기 튜터에서 긴 문맥의 제품 가치가 왜 다를 수 있는지 설명할 수 있다.</li><li class="task-item unchecked"><span class="task-box" aria-hidden="true"></span>prefix caching이나 paged attention 같은 엔진 기능을 볼 때, 그것이 prefill 절감용인지 decode cache 절감용인지 구분할 수 있다.</li></ul>
+<h2 id="대안과-비교">대안과 비교</h2>
+<p>| 선택 | 기대되는 표현력 이득 | 주로 늘어나는 비용 | 병목이 자주 드러나는 곳 | 실제 제품 가치 판단 기준 | 먼저 볼 완화책 | | --- | --- | --- | --- | --- | --- | | 더 긴 문맥 | 긴 문서 근거 유지, 멀리 떨어진 단서 연결, 저장소 전역 참조 | prefill 입력 처리량 증가, decode KV read 증가 | TTFT와 긴 세션 TPOT 모두 | 코드 질의봇처럼 장거리 참조가 정확도에 직접 기여하는가 | prefix reuse, 문맥 요약, 최근 창 분리 [S3] | | 더 많은/넓은 head | 서로 다른 관계 패턴을 병렬로 포착할 여지 증가 | projection 크기, attention 상태, cache 구조 부담 | prefill 계산량과 decode cache 크기 | 규칙 충돌이나 장거리 의존성 처리가 실제 오답 원인인가 | head 확장 전 오류 유형 분석 | | 더 큰 hidden/FFN | 복합 규칙 합성, 미묘한 표현 구분, 추론 여지 확대 | projection/FFN FLOPs 증가, 가중치 읽기 부담 증가 | 특히 prefill | 계약 검토처럼 복잡한 조건 조합이 핵심 가치인가 | 모델 폭 확장 전 프롬프트/데이터 품질 점검 | | 과거를 더 자주 참조하는 운용 | 대화 일관성, 개인화, 누적 피드백 유지 | decode 토큰당 cache read 증가 | 긴 세션 TPOT | 말하기 튜터에서 오래된 피드백이 현재 품질을 실제로 얼마나 올리는가 | 세션 요약 메모리, 최근 N턴 유지 |</p>
+<div class="table-wrap"><table><thead><tr><th>공통 prefix 재사용</th><th>표현력 유지한 채 동일 맥락 반복 비용 절감</th><th>구현 복잡도와 cache 관리 비용</th><th>prefill</th><th>저장소/정책 문서처럼 반복 prefix가 많은가</th><th>prefix caching, request grouping [S3]</th></tr></thead><tbody></tbody></table></div>
+<h2 id="참고-이미지">참고 이미지</h2>
+<p><img src="./assets/img-01.png" alt="Roofline model"></p>
+<ul><li>캡션: Roofline model</li><li>출처 번호: [I1]</li><li>왜 이 그림이 필요한지: prefill과 decode를 같은 &quot;느림&quot;으로 묶지 않고, 어떤 구간이 compute 쪽 압박을 받고 어떤 구간이 bandwidth 쪽 압박을 받는지 시각적으로 붙잡게 해 준다 [S2].</li></ul>
+<p><img src="./assets/img-02.png" alt="vLLM logo"></p>
+<ul><li>캡션: vLLM logo</li><li>출처 번호: [I2]</li><li>왜 이 그림이 필요한지: 제공된 자산 중 실제 serving 엔진 맥락을 가리키는 외부 이미지다. 본문에서 paged attention과 prefix caching은 Mermaid로 직접 설명하고, 이 이미지는 그 기능들이 문서화된 엔진 세계로 이어진다는 연결 표식으로 사용한다 [S3].</li></ul>
+<h2 id="출처">출처</h2>
+<p>| 번호 | 제목 | 발행 주체 | 날짜 | URL | 사용 이유 | | --- | --- | --- | --- | --- | --- | | [S1] | Attention Is All You Need | Google Research / arXiv | 2017-06-12 | <a href="https://arxiv.org/abs/1706.03762" target="_blank" rel="noreferrer">https://arxiv.org/abs/1706.03762</a> | self-attention, multi-head 구조, projection과 autoregressive 추론의 기본 구조를 설명하는 기준 출처 | | [S2] | Roofline: an insightful visual performance model for multicore architectures | Communications of the ACM | 2009-04-01 | <a href="https://dl.acm.org/doi/10.1145/1498765.1498785" target="_blank" rel="noreferrer">https://dl.acm.org/doi/10.1145/1498765.1498785</a> | prefill/decode를 compute 압박과 bandwidth 압박으로 나눠 읽는 성능 모델의 기준 출처 | | [S3] | vLLM Documentation | vLLM project | 2026-01-07 | <a href="https://docs.vllm.ai/en/latest/" target="_blank" rel="noreferrer">https://docs.vllm.ai/en/latest/</a> | prefix caching, paged attention, batching 같은 serving 기능을 추론 경로와 연결하기 위한 기준선 | | [S4] | AWS Neuron release notes 2.26.0 | AWS Neuron | 2026-03-08 (accessed) | <a href="https://awsdocs-neuron.readthedocs-hosted.com/en/v2.26.1/release-notes/2.26.0/" target="_blank" rel="noreferrer">https://awsdocs-neuron.readthedocs-hosted.com/en/v2.26.1/release-notes/2.26.0/</a> | 2026년에도 추론 런타임과 배포 경로가 계속 업데이트되는 현재형 영역임을 보여 주는 최신성 보조 근거 |</p>
+    </article>
+    <section class="content-panel surface quiz-panel">
+      <div class="section-heading">
+        <div>
+          <p class="eyebrow">Quiz</p>
+          <h2>복습 문제</h2>
+        </div>
+      </div>
+      <div class="prose">
+        <h1 id="transformer-inference-quiz">Transformer Inference Quiz</h1>
+<h2 id="객관식-1">객관식 1</h2>
+<p><code>모노레포 코드 질의봇</code>에서 저장소 구조와 에러 로그를 길게 붙여 넣은 뒤 첫 답변이 늦다. 이때 가장 먼저 세워야 할 진단 가설은 무엇인가?</p>
+<ol><li>decode에서 KV cache read가 폭증했으니 후반 토큰만 측정하면 된다.</li><li>prefill에서 긴 입력 전체에 대한 projection, attention, FFN 비용이 커졌을 가능성을 먼저 본다.</li><li>첫 토큰 지연은 항상 네트워크 문제이므로 모델 내부는 볼 필요가 없다.</li><li>attention은 상징적 개념일 뿐이므로 tokenizer만 바꾸면 된다.</li></ol>
+<h2 id="객관식-2">객관식 2</h2>
+<p>다음 중 <code>표현력과 계산량</code> tradeoff를 가장 올바르게 읽은 선택지는 무엇인가?</p>
+<ol><li>말하기 튜터는 긴 문맥이 있으면 무조건 더 좋으니, 세션 전체를 끝까지 유지하고 decode 비용은 나중에 본다.</li><li>코드 질의봇은 긴 prefix가 정확도에 직접 기여할 수 있으므로 긴 문맥을 유지할 가치가 있지만, 같은 prefix가 반복된다면 prefill 재사용을 먼저 검토한다.</li><li>hidden/FFN을 키우면 품질만 좋아지고 prefill 비용은 거의 바뀌지 않는다.</li><li>head 수를 늘리면 decode cache read는 항상 줄어든다.</li></ol>
+<h2 id="객관식-3">객관식 3</h2>
+<p>어떤 팀이 &quot;오답이 있으니 head 수를 늘리자&quot;고 제안했다. 이 제안을 바로 실행하기 전에 가장 먼저 확인해야 할 질문은 무엇인가?</p>
+<ol><li>head 수를 늘리면 tokenizer vocabulary도 커지는가?</li><li>현재 오답이 정말 관계 표현력 부족 때문인지, 아니면 프롬프트 구조나 입력 누락 때문인지?</li><li>head 수 증가는 prefill에만 영향을 주고 decode에는 전혀 영향이 없는가?</li><li>모델 크기를 늘리면 network latency가 자동으로 줄어드는가?</li></ol>
+<h2 id="짧은-서술형-1">짧은 서술형 1</h2>
+<p><code>attention</code>만 보고 Transformer 추론 병목을 판단하면 왜 오진하기 쉬운가? 2~3문장으로 설명하라. 답안에는 <code>projection</code>과 <code>FFN</code>을 반드시 포함하라.</p>
+<h2 id="짧은-서술형-2">짧은 서술형 2</h2>
+<p><code>실시간 말하기 튜터</code>에서 긴 대화 이력을 계속 유지할지 결정하려고 한다. 품질 향상 축과 비용 증가 축을 함께 넣어 3~4문장으로 설명하라. 답안에는 <code>decode</code>, <code>KV cache</code>, <code>피드백 품질</code>을 반드시 포함하라.</p>
+<h2 id="심화-설명형-1">심화 설명형 1</h2>
+<p>두 서비스가 있다.</p>
+<ul><li>서비스 A: <code>사내 코드 질의봇</code>, 저장소 공통 prefix와 긴 에러 로그를 자주 재사용한다.</li><li>서비스 B: <code>실시간 말하기 튜터</code>, 최근 교정 문맥이 중요하지만 세션이 길어질수록 응답 후반이 느려진다.</li></ul>
+<p>두 서비스 모두 긴 문맥이 품질에 도움이 될 수 있다. 그런데 왜 같은 방식으로 문맥을 확장하면 안 되는지 설명하라. 답안에는 <code>prefill</code>, <code>decode</code>, <code>TTFT</code>, <code>TPOT</code>, <code>제품 가치</code>를 포함하라.</p>
+<h2 id="심화-설명형-2">심화 설명형 2</h2>
+<p>어떤 팀이 계약 검토 도구의 품질을 높이기 위해 hidden size와 FFN 크기를 키우는 방안을 검토 중이다. 이 선택이 언제 타당하고 언제 과한지 설명하라. 답안에는 <code>표현력</code>, <code>projection</code>, <code>FFN</code>, <code>prefill</code>, <code>비용</code>을 포함하라.</p><details class="answer-key"><summary>정답 및 해설 보기</summary><h2 id="정답-및-해설">정답 및 해설</h2>
+<h3 id="객관식-정답">객관식 정답</h3>
+<ul><li>객관식 1: 2번</li><li>객관식 2: 2번</li><li>객관식 3: 2번</li></ul>
+<h3 id="객관식-해설">객관식 해설</h3>
+<ul><li>객관식 1: 첫 답변 지연은 prefill과 직접 연결된다. 긴 입력이 들어오면 QKV projection, attention, FFN이 큰 텐서에 대해 한꺼번에 수행되므로 이 경로를 먼저 봐야 한다.</li><li>객관식 2: 긴 문맥은 품질을 올릴 수 있지만 비용도 키운다. 코드 질의봇은 장거리 저장소 참조가 실제 가치로 이어지므로 긴 prefix를 유지할 이유가 있지만, 반복 prefix는 재사용으로 상쇄하는 것이 합리적이다 [S3].</li><li>객관식 3: head 수 증가는 표현력 강화 수단일 뿐 자동 정답이 아니다. 현재 문제가 관계 표현력 부족인지, 아니면 프롬프트 구조와 입력 설계 문제인지 먼저 분리해야 한다.</li></ul>
+<h3 id="서술형-예시-답안">서술형 예시 답안</h3>
+<ul><li>짧은 서술형 1 예시: attention 공식은 토큰 간 상호작용을 설명하지만, 실제 추론 레이어의 비용 전부를 대변하지는 않는다. <code>projection</code>으로 <code>Q/K/V</code>를 만들고 결과를 다시 합치는 과정, 그리고 <code>FFN</code>의 큰 변환 비용까지 함께 보지 않으면 prefill 병목을 잘못 읽기 쉽다.</li><li>짧은 서술형 2 예시: 긴 대화 이력을 유지하면 <code>피드백 품질</code>과 일관성이 좋아질 수 있다. 하지만 <code>decode</code> 단계에서는 과거가 길어질수록 <code>KV cache</code>를 더 많이 읽어야 하므로 후반 토큰 비용이 커진다. 그래서 오래된 발화가 현재 교정 품질을 실제로 얼마나 올리는지 측정한 뒤, 최근 창 유지나 요약 메모리와 비교해야 한다.</li></ul>
+<h3 id="심화-설명형-채점-포인트">심화 설명형 채점 포인트</h3>
+<ul><li>심화 설명형 1: 서비스 A는 긴 문맥이 저장소 참조 정확도라는 <code>제품 가치</code>에 직접 연결되므로 <code>prefill</code> 비용을 감수할 이유가 크다. 대신 공통 prefix가 반복되므로 TTFT를 줄이기 위해 재사용 전략을 먼저 볼 수 있어야 한다. 서비스 B는 최근 문맥이 중요하지만 세션 전체를 길게 유지하면 <code>decode</code>와 <code>TPOT</code>이 악화될 수 있으므로, 긴 문맥의 가치와 후반 latency를 함께 평가해야 한다.</li><li>심화 설명형 2: <code>표현력</code>을 높이기 위해 hidden size와 FFN을 키우면 복합 조건을 합성하는 능력이 좋아질 수 있다. 그러나 그 대가로 <code>projection</code>과 <code>FFN</code> 계산량이 커져 특히 <code>prefill</code> 비용이 증가한다. 따라서 계약 검토처럼 복잡한 규칙 조합이 실제 품질 차이를 만드는 경우에는 타당하지만, 프롬프트 정리만으로 해결될 문제라면 과한 비용 투자다.</li></ul></details>
+      </div>
+    </section>
+    <nav class="pager">
+      <span class="pager-link is-empty"></span>
+      <a class="pager-link" href="../02-memory-bandwidth-latency/"><span>다음</span><strong>Memory, Bandwidth, Latency</strong></a>
+    </nav>
+    
+      </section>
+      <aside class="page-sidebar">
+    <div class="sidebar-panel surface">
+      <p class="eyebrow">On This Page</p>
+      <div class="toc" data-toc>
+        <a class="toc-link" href="#수업-개요">수업 개요</a><a class="toc-link" href="#학습-목표">학습 목표</a><a class="toc-link" href="#수업-전에-생각할-질문">수업 전에 생각할 질문</a><a class="toc-link" href="#강의-스크립트">강의 스크립트</a><a class="toc-link sub" href="#part-1-요청-하나를-prefill-과-decode-로-갈라-본다">Part 1. 요청 하나를 prefill 과 decode 로 갈라 본다</a><a class="toc-link sub" href="#part-2-attention은-중심이지만-비용표-전체는-아니다">Part 2. attention은 중심이지만, 비용표 전체는 아니다</a><a class="toc-link sub" href="#part-3-prefill은-큰-계산을-몰아서-하고-decode는-긴-과거를-계속-읽는다">Part 3. prefill은 큰 계산을 몰아서 하고, decode는 긴 과거를 계속 읽는다</a><a class="toc-link sub" href="#part-4-표현력이-공짜는-아니다">Part 4. 표현력이 공짜는 아니다</a><a class="toc-link sub" href="#part-5-제품-가치를-기준으로-병목을-읽는다">Part 5. 제품 가치를 기준으로 병목을 읽는다</a><a class="toc-link sub" href="#part-6-엔진-문서와-release-note를-같이-보는-이유">Part 6. 엔진 문서와 release note를 같이 보는 이유</a><a class="toc-link" href="#자주-헷갈리는-포인트">자주 헷갈리는 포인트</a><a class="toc-link" href="#사례로-다시-보기">사례로 다시 보기</a><a class="toc-link sub" href="#사례-1-모노레포-코드-질의봇">사례 1. 모노레포 코드 질의봇</a><a class="toc-link sub" href="#사례-2-실시간-말하기-튜터">사례 2. 실시간 말하기 튜터</a><a class="toc-link sub" href="#사례-3-계약-검토-요약-도구">사례 3. 계약 검토 요약 도구</a><a class="toc-link sub" href="#사례-4-사내-faq-챗봇의-흔한-오진">사례 4. 사내 FAQ 챗봇의 흔한 오진</a><a class="toc-link" href="#핵심-정리">핵심 정리</a><a class="toc-link" href="#복습-체크리스트">복습 체크리스트</a><a class="toc-link" href="#대안과-비교">대안과 비교</a><a class="toc-link" href="#참고-이미지">참고 이미지</a><a class="toc-link" href="#출처">출처</a>
+      </div>
+    </div>
+    </aside>
+    </div>
+  </main>
+  <script type="module" src="../../assets/app.js"></script>
+  <script type="module">
+    import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs';
+    mermaid.initialize({ startOnLoad: true, theme: 'neutral', securityLevel: 'loose' });
+  </script>
+  <script>
+    window.MathJax = {
+      tex: { inlineMath: [['$', '$'], ['\\(', '\\)']], displayMath: [['$$', '$$'], ['\\[', '\\]']] },
+      svg: { fontCache: 'global' }
+    };
+  </script>
+  <script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-svg.js" async></script>
+</body>
+</html>

@@ -1,0 +1,38 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="720" viewBox="0 0 1200 720" role="img" aria-labelledby="title desc">
+  <title id="title">Provider and Device Policy Excerpt</title>
+  <desc id="desc">Local excerpt visual reconstructed from QNN Execution Provider and OpenVINO NPU device documentation.</desc>
+  <rect width="1200" height="720" fill="#f3efe7"/>
+  <rect x="32" y="32" width="1136" height="656" rx="24" fill="#fffaf3" stroke="#d8cab0" stroke-width="2"/>
+  <text x="72" y="92" font-family="Courier New, monospace" font-size="30" font-weight="700" fill="#3c2e22">Session policy surface: provider options vs device name</text>
+  <text x="72" y="126" font-family="Courier New, monospace" font-size="18" fill="#6a5744">Reconstructed from S2 and S4. Direct facts only; the center note is synthesis.</text>
+
+  <rect x="64" y="164" width="488" height="456" rx="18" fill="#1f2430"/>
+  <text x="92" y="208" font-family="Courier New, monospace" font-size="24" font-weight="700" fill="#f5d76e">QNN EP excerpt [S2]</text>
+  <text x="92" y="250" font-family="Courier New, monospace" font-size="20" fill="#d8dee9">session = ort.InferenceSession(</text>
+  <text x="92" y="282" font-family="Courier New, monospace" font-size="20" fill="#d8dee9">  "model.onnx",</text>
+  <text x="92" y="314" font-family="Courier New, monospace" font-size="20" fill="#d8dee9">  providers=["QNNExecutionProvider"],</text>
+  <text x="92" y="346" font-family="Courier New, monospace" font-size="20" fill="#d8dee9">  provider_options=[{</text>
+  <text x="92" y="378" font-family="Courier New, monospace" font-size="20" fill="#d8dee9">    "backend_path": "QnnHtp.dll",</text>
+  <text x="92" y="410" font-family="Courier New, monospace" font-size="20" fill="#d8dee9">    "device_id": "0"</text>
+  <text x="92" y="442" font-family="Courier New, monospace" font-size="20" fill="#d8dee9">  }]</text>
+  <text x="92" y="474" font-family="Courier New, monospace" font-size="20" fill="#d8dee9">)</text>
+  <text x="92" y="530" font-family="Courier New, monospace" font-size="18" fill="#8bd5ca">HTP backend: default backend</text>
+  <text x="92" y="560" font-family="Courier New, monospace" font-size="18" fill="#8bd5ca">HTP backend: quantized models only</text>
+  <text x="92" y="590" font-family="Courier New, monospace" font-size="18" fill="#8bd5ca">QNN EP: no dynamic shape support</text>
+
+  <rect x="648" y="164" width="488" height="456" rx="18" fill="#202b1d"/>
+  <text x="676" y="208" font-family="Courier New, monospace" font-size="24" font-weight="700" fill="#f7d488">OpenVINO NPU excerpt [S4]</text>
+  <text x="676" y="250" font-family="Courier New, monospace" font-size="20" fill="#e5f1db">compiled_model = core.compile_model(</text>
+  <text x="676" y="282" font-family="Courier New, monospace" font-size="20" fill="#e5f1db">  model,</text>
+  <text x="676" y="314" font-family="Courier New, monospace" font-size="20" fill="#e5f1db">  "NPU"</text>
+  <text x="676" y="346" font-family="Courier New, monospace" font-size="20" fill="#e5f1db">)</text>
+  <text x="676" y="402" font-family="Courier New, monospace" font-size="18" fill="#a8e6a1">Supported NPU properties:</text>
+  <text x="676" y="432" font-family="Courier New, monospace" font-size="18" fill="#a8e6a1">ov::cache_dir</text>
+  <text x="676" y="462" font-family="Courier New, monospace" font-size="18" fill="#a8e6a1">ov::hint::performance_mode</text>
+  <text x="676" y="492" font-family="Courier New, monospace" font-size="18" fill="#a8e6a1">ov::hint::execution_mode</text>
+  <text x="676" y="548" font-family="Courier New, monospace" font-size="18" fill="#a8e6a1">NPU: supported by AUTO modes</text>
+  <text x="676" y="578" font-family="Courier New, monospace" font-size="18" fill="#a8e6a1">HETERO: partially supported</text>
+
+  <rect x="470" y="628" width="260" height="38" rx="12" fill="#d56f38"/>
+  <text x="497" y="653" font-family="Courier New, monospace" font-size="18" font-weight="700" fill="#fffaf3">[synthesis] policy set before first run</text>
+</svg>

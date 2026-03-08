@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>GPU vs NPU Mental Model | 기초와 성능 직관</title>
+  <meta name="description" content="이 챕터는 GPU와 NPU를 성능표 두 칸으로 비교하지 않고, 어떤 블록을 어느 runtime에 맡길 것인가 라는 실행 모델 문제로 다룬다. Transformer가 attention과 feed forward 블록을 반복한다는 사실은 [S1]이 준다. Roofline은 그 블록이 계산보다 데이터 이동에 더 묶여 있을 수 있음을 보여 준다 [S2]. vLLM 문서는 serving이 커널 하나가 아니라 scheduler, batching, KV cache를 포함한 runtime 문제라는 맥락을 준다 [S3]. AWS Neuron release note는 특정 NPU runtime의 지원 범위가 버전과 기능 단위로 관리된다는 사례를 준다 [S4]. 이 네 가지를 합치면, 장치 선택의 핵심 질문은 누가 더 센가 보다 어디서 끊으면 handoff와 escape path가 폭발하는가 , 그리고 언제 전력 효율이 실제 배터리·발열 이득으로 남는가 가 된다.">
+  <meta name="theme-color" content="#10182a">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+KR:wght@400;500;600;700&family=Space+Grotesk:wght@500;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../../assets/style.css">
+</head>
+<body class="page-chapter" data-page-kind="chapter" data-page-id="study/llm-serving-npu-roadmap/01-foundations/03-gpu-vs-npu-mental-model" data-root-prefix="../../">
+  <div class="reading-progress" data-reading-progress></div>
+  <header class="site-header">
+    <a class="brand" href="../../">
+      <span class="brand-kicker">GitHub Pages Study</span>
+      <strong>LLM Serving + NPU</strong>
+    </a>
+    <nav class="top-nav"><a class="top-nav-link is-active" href="../">기초와 성능 직관</a><a class="top-nav-link" href="../../02-llm-serving-core/">LLM Serving 핵심</a><a class="top-nav-link" href="../../03-llm-serving-advanced/">고급 Serving 패턴</a><a class="top-nav-link" href="../../04-serving-systems/">Serving 시스템 설계</a><a class="top-nav-link" href="../../05-npu-stack/">NPU 소프트웨어 스택</a><a class="top-nav-link" href="../../06-runtime-and-compiler/">런타임과 컴파일러</a><a class="top-nav-link" href="../../07-synthesis/">종합 정리와 최신 흐름</a></nav>
+    <div class="search-shell">
+      <input type="search" placeholder="챕터, 모듈, 키워드 검색" aria-label="검색" data-global-search>
+      <div class="search-results" data-search-results hidden></div>
+    </div>
+  </header>
+  <main class="page-frame">
+    
+    <section class="hero">
+      <div class="hero-copy">
+        <p class="eyebrow">기초와 성능 직관</p>
+        <h1>GPU vs NPU Mental Model</h1>
+        <p class="hero-summary">이 챕터는 GPU와 NPU를 성능표 두 칸으로 비교하지 않고, 어떤 블록을 어느 runtime에 맡길 것인가 라는 실행 모델 문제로 다룬다. Transformer가 attention과 feed forward 블록을 반복한다는 사실은 [S1]이 준다. Roofline은 그 블록이 계산보다 데이터 이동에 더 묶여 있을 수 있음을 보여 준다 [S2]. vLLM 문서는 serving이 커널 하나가 아니라 scheduler, batching, KV cache를 포함한 runtime 문제라는 맥락을 준다 [S3]. AWS Neuron release note는 특정 NPU runtime의 지원 범위가 버전과 기능 단위로 관리된다는 사례를 준다 [S4]. 이 네 가지를 합치면, 장치 선택의 핵심 질문은 누가 더 센가 보다 어디서 끊으면 handoff와 escape path가 폭발하는가 , 그리고 언제 전력 효율이 실제 배터리·발열 이득으로 남는가 가 된다.</p>
+      </div>
+      <div class="hero-stats">
+        <div class="stat-card"><strong>35-50 min</strong><span>reading time</span></div>
+        <div class="stat-card"><strong>2026-03-08</strong><span>updated</span></div>
+        <div class="stat-card"><button class="progress-toggle" type="button" data-progress-toggle data-progress-id="study/llm-serving-npu-roadmap/01-foundations/03-gpu-vs-npu-mental-model">완료로 표시</button></div>
+      </div>
+    </section>
+    
+    <div class="page-layout">
+      <section class="page-main content-shell">
+        
+    <article class="content-panel surface prose" data-reading-target>
+      <h1 id="gpu-vs-npu-mental-model">GPU vs NPU Mental Model</h1>
+<h2 id="수업-개요">수업 개요</h2>
+<p>이 챕터는 GPU와 NPU를 성능표 두 칸으로 비교하지 않고, <code>어떤 블록을 어느 runtime에 맡길 것인가</code>라는 실행 모델 문제로 다룬다. Transformer가 attention과 feed-forward 블록을 반복한다는 사실은 [S1]이 준다. Roofline은 그 블록이 계산보다 데이터 이동에 더 묶여 있을 수 있음을 보여 준다 [S2]. vLLM 문서는 serving이 커널 하나가 아니라 scheduler, batching, KV cache를 포함한 runtime 문제라는 맥락을 준다 [S3]. AWS Neuron release note는 특정 NPU runtime의 지원 범위가 버전과 기능 단위로 관리된다는 사례를 준다 [S4]. 이 네 가지를 합치면, 장치 선택의 핵심 질문은 <code>누가 더 센가</code>보다 <code>어디서 끊으면 handoff와 escape path가 폭발하는가</code>, 그리고 <code>언제 전력 효율이 실제 배터리·발열 이득으로 남는가</code>가 된다.</p>
+<h2 id="학습-목표">학습 목표</h2>
+<ul><li>GPU와 NPU를 연산 장치 이름이 아니라 서로 다른 실행 계약으로 설명할 수 있다.</li><li><code>[S3]가 직접 말하는 runtime 사실</code>과 <code>교수자가 거기서 끌어낸 설계 해석</code>을 구분할 수 있다.</li><li><code>stable block</code>, <code>variable decode</code>, <code>unsupported-op escape path</code>를 기준으로 partition을 고를 수 있다.</li><li>sustained decode 길이, thermal budget, battery target, compile amortization, handoff 횟수, escape 확률을 함께 적어 <code>유연성</code>과 <code>전력 효율</code>을 동시에 평가할 수 있다.</li><li>hybrid 구성이 빨라 보이는데도 실제 latency와 총 시스템 전력이 함께 나빠지는 경계를 설명할 수 있다.</li></ul>
+<h2 id="수업-전에-생각할-질문">수업 전에 생각할 질문</h2>
+<ul><li>같은 Transformer 블록인데 왜 어떤 부분은 NPU 후보이고 어떤 부분은 GPU에 남겨 두는가?</li><li><code>NPU가 있으니 저전력으로 끝내자</code>라는 말은 어느 지점부터 위험해지는가?</li><li>hybrid가 실패하는 가장 흔한 이유는 장치 성능 부족일까, 아니면 partition 경계일까?</li></ul>
+<h2 id="강의-스크립트">강의 스크립트</h2>
+<h3 id="part-1-출처가-직접-말하는-것과-강의-해석을-먼저-나눈다">Part 1. 출처가 직접 말하는 것과 강의 해석을 먼저 나눈다</h3>
+<p><strong>학습자:</strong> GPU와 NPU를 비교하는 챕터인데, 왜 장치 설명보다 출처 해석부터 시작하나요?</p>
+<p><strong>교수자:</strong> 이 챕터는 그 구분을 먼저 해야 안전합니다. [S1]이 직접 주는 사실은 Transformer가 attention과 feed-forward 같은 반복 블록으로 구성된다는 점입니다. [S2]가 직접 주는 사실은 성능이 <code>peak FLOPs</code>만이 아니라 arithmetic intensity와 bandwidth ceiling에도 묶인다는 점입니다.</p>
+<p><strong>교수자:</strong> [S3]가 직접 주는 사실은 serving이 scheduler, batching, KV cache 같은 runtime 층을 가진다는 맥락입니다. [S4]가 직접 주는 사실은 특정 NPU runtime의 지원 범위와 기능이 release note로 관리된다는 점입니다. 여기까지는 출처의 직접 영역입니다.</p>
+<p><strong>학습자:</strong> 그럼 &quot;GPU는 기준선&quot;, &quot;NPU는 정적 블록 담당&quot; 같은 문장은요?</p>
+<p><strong>교수자:</strong> 그건 강의 해석입니다. 이 챕터는 위 사실들을 바탕으로, <code>변동성이 큰 decode loop는 한 runtime에 오래 남기고</code>, <code>shape가 안정적이며 지원 범위가 확인된 블록만 다른 장치 후보로 올려 보자</code>는 설계 규칙을 제안합니다. 해석과 사실을 섞지 않는 게 중요합니다.</p>
+<h3 id="part-2-장치-비교표보다-먼저-그릴-것은-partition-선이다">Part 2. 장치 비교표보다 먼저 그릴 것은 partition 선이다</h3>
+<p><strong>학습자:</strong> 그래도 실무에서는 결국 GPU냐 NPU냐를 결정해야 하잖아요.</p>
+<p><strong>교수자:</strong> 그래서 더더욱 partition 선부터 그립니다. Transformer 블록은 겉보기에는 반복되지만, serving 중에는 모든 블록이 같은 성격으로 실행되지 않습니다. 일부는 같은 길이와 같은 shape로 반복되고, 일부는 decode 종료 시점이 매번 달라집니다 [S1][S3].</p>
+<p><strong>교수자:</strong> NPU 후보를 찾을 때도 먼저 묻는 건 &quot;이 블록이 빨라 보이나?&quot;가 아닙니다. <code>shape가 안정적인가</code>, <code>지원 안 되는 연산이 끼면 어디로 escape하는가</code>, <code>경계를 몇 번 넘는가</code>를 먼저 묻습니다. 그다음에야 장치 이득을 계산합니다.</p>
+<h4 id="수식-1-블록-성격을-먼저-가르는-최소-식">수식 1. 블록 성격을 먼저 가르는 최소 식</h4>
+<div class="math-block">$$
+\mathrm{AI}=\frac{\mathrm{FLOPs}}{\mathrm{Bytes\ moved}}
+$$</div>
+<p>이 식은 장치 비교를 시작하기 전에, 지금 보는 블록이 계산보다 메모리 이동에 더 묶여 있는지 묻게 만든다 [S2]. 같은 matmul이 보여도 <code>bytes moved</code>가 길게 따라붙는 경로라면, 장치를 바꾸는 것보다 경계 횟수를 줄이는 편이 더 중요할 수 있다.</p>
+<pre class="mermaid">flowchart TD
+    A[블록 하나를 고른다] --&gt; B{입력 길이와 shape가\n여러 요청에서 거의 같은가?}
+    B -- 아니오 --&gt; C[같은 runtime에 남길 후보]
+    B -- 예 --&gt; D{지원 연산과 graph 경로를\n한 번에 확인할 수 있는가?}
+    D -- 아니오 --&gt; C
+    D -- 예 --&gt; E{decode loop 안쪽인가?}
+    E -- 예 --&gt; F[잘못 자를 가능성 큼\nper-token handoff 위험]
+    E -- 아니오 --&gt; G[NPU 후보로 올려 본다]
+    G --&gt; H[escape path와 handoff 횟수 계산]
+    F --&gt; H
+    C --&gt; H</pre>
+<p><strong>학습자:</strong> decode 안쪽이냐 바깥쪽이냐가 그렇게 중요합니까?</p>
+<p><strong>교수자:</strong> 이 챕터에서는 그게 핵심입니다. decode loop 안쪽에서 장치를 자주 바꾸면, 작은 연산 이득이 경계 비용에 바로 잡아먹힙니다.</p>
+<h3 id="part-3-나쁜-cut은-블록이-아니라-토큰마다-경계를-넘긴다">Part 3. 나쁜 cut은 블록이 아니라 토큰마다 경계를 넘긴다</h3>
+<p><strong>학습자:</strong> 구체적으로 어떤 cut이 나쁜가요?</p>
+<p><strong>교수자:</strong> 예를 들어 회의 요약기에서 <code>고정 길이 chunk 요약 prefill</code>은 NPU 후보처럼 보일 수 있습니다. 그런데 그 뒤의 <code>최종 답변 decode</code>를 토큰마다 GPU와 NPU 사이에서 오가게 자르면, 설계는 거의 실패합니다.</p>
+<p><strong>학습자:</strong> 왜요? decode에도 똑같이 matmul이 있잖아요.</p>
+<p><strong>교수자:</strong> matmul이 있다는 사실만으로는 충분하지 않습니다. decode는 종료 시점이 가변적이고, 토큰마다 cache 상태가 달라지고, 작은 작업이 매우 많이 반복됩니다 [S1][S3]. 이때 per-token handoff가 붙으면 장치 내부 이득보다 경계 오버헤드가 더 커질 수 있습니다.</p>
+<h4 id="수식-2-partition은-경계-비용까지-합산해서-본다">수식 2. partition은 경계 비용까지 합산해서 본다</h4>
+<div class="math-block">$$
+T_{\mathrm{partition}}=\sum_i T_i + N_{\mathrm{handoff}} \cdot t_{\mathrm{handoff}} + N_{\mathrm{escape}} \cdot t_{\mathrm{escape}}
+$$</div>
+<p>여기서 중요한 것은 <code>N_handoff</code>와 <code>N_escape</code>다. 장치별 단품 시간이 좋아 보여도, 잘못 자른 partition은 경계를 자주 넘기면서 총 시간을 악화시킨다. [S4]를 이 식의 일반론 근거로 쓰면 과장이다. 다만 [S4]는 <code>지원 제약이 실제로 release note 수준에서 관리된다</code>는 사례를 주므로, <code>N_escape</code>를 설계 초반에 적어 두라는 해석에는 도움을 준다.</p>
+<pre class="mermaid">sequenceDiagram
+    participant App as App
+    participant NPU as NPU runtime
+    participant GPU as GPU runtime
+    App-&gt;&gt;NPU: stable prefill block
+    alt all ops supported
+        NPU--&gt;&gt;GPU: handoff once
+        GPU-&gt;&gt;GPU: keep decode loop local
+    else unsupported op discovered
+        NPU--&gt;&gt;GPU: escape early
+        GPU-&gt;&gt;GPU: run remaining path without bouncing back
+    end
+    Note over GPU,NPU: 좋은 cut은 escape가 드물고 decode loop가 한 장치에 남는다</pre>
+<p><strong>학습자:</strong> 그러면 hybrid의 핵심은 &quot;둘 다 쓴다&quot;가 아니라 &quot;한 번 넘기고 오래 머문다&quot;네요.</p>
+<p><strong>교수자:</strong> 맞습니다. hybrid가 맞는 설계라도, 토큰마다 왕복하면 사실상 나쁜 hybrid입니다.</p>
+<h3 id="part-4-사례-추적-노트북-회의-요약기를-어디서-끊을-것인가">Part 4. 사례 추적: 노트북 회의 요약기를 어디서 끊을 것인가</h3>
+<p><strong>학습자:</strong> 하나의 사례를 끝까지 보고 싶습니다. 어디서 끊으면 손해가 나는지요.</p>
+<p><strong>교수자:</strong> 노트북 회의 요약기를 보죠. 입력 전처리 단계가 회의록을 <code>512-token chunk</code>로 잘라 반복 요약하고, 마지막에 전체 회의에 대한 자유 형식 요약을 생성한다고 가정합시다.</p>
+<p><strong>학습자:</strong> 첫 번째 chunk 요약 경로는 shape가 꽤 안정적이겠네요.</p>
+<p><strong>교수자:</strong> 그렇습니다. 그래서 이 챕터의 설계 해석에서는 그 블록을 NPU 후보로 올립니다. 반대로 마지막 자유 형식 요약 decode는 길이가 흔들리고, 사용자가 중간 편집을 넣을 수도 있으니 GPU 기준선으로 남기는 편이 안전합니다. 여기서 중요한 이유는 단지 latency가 아닙니다. 짧고 가변적인 decode에서는 <code>GPU -&amp;gt; NPU</code> 전환 때 드는 동기화와 fallback 비용이 배터리 이득보다 먼저 커질 수 있기 때문입니다.</p>
+<p><strong>교수자:</strong> 중요한 건 중간 경계입니다. chunk 요약 결과를 모두 모은 뒤 최종 decode를 시작하기 전에 한 번 handoff하는 건 검토할 수 있습니다. 하지만 최종 decode 중간에 특정 projection만 NPU로 보내는 cut은 거의 항상 나쁩니다. 작고 잦은 왕복이 생기기 때문입니다.</p>
+<p><strong>학습자:</strong> unsupported op가 chunk 요약 블록 안에서 나오면요?</p>
+<p><strong>교수자:</strong> 그때는 escape를 일찍 결정합니다. NPU에 조금 돌리다가 다시 GPU로, 다시 NPU로 튀는 식은 피합니다. escape가 필요하면 한 번 빠져서 남은 경로를 같은 runtime에 두는 쪽이 낫습니다. [S4]는 바로 이런 지원 제약이 실제 배포에서 버전별로 관리된다는 점을 보여 주는 벤더 사례입니다.</p>
+<h3 id="part-5-이-챕터에서-쓰는-결정표">Part 5. 이 챕터에서 쓰는 결정표</h3>
+<p><strong>학습자:</strong> 결국 어떤 표를 만들어야 하나요?</p>
+<p><strong>교수자:</strong> 장치 이름 표가 아니라 아래 같은 partition 결정표를 만듭니다. 여기서 <code>유연성</code>은 shape 변동, decode 길이 변동, escape 대응 편의성으로 보고, <code>전력 효율</code>은 긴 decode 길이, 열 예산, 배터리 목표가 실제로 남는지로 봅니다.</p>
+<p>| 블록 | 유연성 점수에 중요한 것 | 전력 효율 점수에 중요한 것 | 추천 배치 | 왜 그렇게 보나 | | --- | --- | --- | --- | --- | | 512-token chunk 요약 prefill | shape 변동이 작고 escape 확률을 미리 점검 가능 | compile amortization이 되고 handoff가 한 번이면 이득을 남길 수 있음 | NPU 후보 | 반복 shape라 NPU cut을 검토할 수 있고, 열 예산이 빡빡한 노트북에서는 배터리 이득도 기대할 수 있다 | | chunk 결과 합치기 | 유연성은 높지만 cut 추가 가치가 작음 | 계산량이 짧아 전력 이득을 남기기 어려움 | GPU/CPU 유지 | 경계 하나 더 만드는 순간 handoff 비용이 전력·latency 이득을 같이 잠식한다 | | 최종 자유 형식 decode | 종료 시점과 cache 상태가 흔들려 유연성이 중요 [S3] | sustained decode가 충분히 길지 않으면 NPU 이득이 손실되기 쉬움 | GPU 기준선 | 길이 변동이 큰 경로는 GPU가 덜 효율적이어도 전체 시스템 비용이 더 낮을 수 있다 | | decode 중 projection 일부만 분리 | escape와 fallback 대응이 복잡해짐 | per-token handoff가 누적돼 전력 이득이 거의 사라짐 | 피함 | 작은 블록 가속보다 왕복 비용과 열 증가가 더 빨리 누적된다 |</p>
+<div class="table-wrap"><table><thead><tr><th>unsupported op 발생 후 잔여 경로</th><th>유연성이 최우선</th><th>전력 효율보다 단순한 종료 경로가 중요</th><th>escape 후 한 장치 유지</th><th>왕복 fallback보다 단순한 경로가 latency와 총 전력을 함께 덜 망친다</th></tr></thead><tbody></tbody></table></div>
+<p><strong>학습자:</strong> 이 표는 성능표보다 훨씬 설계 문서 같네요.</p>
+<p><strong>교수자:</strong> 그게 목적입니다. 이 챕터의 mental model은 벤치마크 캡처보다 partition 표를 먼저 쓰는 습관입니다.</p>
+<h3 id="part-6-서버-챗봇과-비교하면-같은-규칙이-더-선명해진다">Part 6. 서버 챗봇과 비교하면 같은 규칙이 더 선명해진다</h3>
+<p><strong>학습자:</strong> 회의 요약기 말고 서버 챗봇은 다르게 보나요?</p>
+<p><strong>교수자:</strong> 네. 다중 사용자 챗봇은 긴 질문과 짧은 질문이 섞이고, 종료 시점이 더 불규칙합니다. 그래서 강의 해석상 GPU 기준선을 더 강하게 잡고 시작합니다. 이유는 GPU가 항상 더 효율적이라서가 아니라, 유연성이 높은 경로를 한 runtime에 오래 두는 편이 handoff와 fallback으로 생기는 전력 낭비를 막기 쉽기 때문입니다.</p>
+<p><strong>교수자:</strong> 반대로 회의 요약기는 정해진 chunk 전처리처럼 안정 블록을 찾기 쉬워서 hybrid 후보가 더 자연스럽습니다. 그리고 edge 음성 비서처럼 thermal budget이 작은 제품은 이 차이가 더 커집니다. wake-word 이후 짧은 intent decode만 반복되는 경로라면 NPU 후보를 억지로 늘리기보다, 고정 feature extraction 블록만 NPU에 두고 가변 답변 생성은 GPU/CPU에 남기는 편이 총 전력과 응답 안정성을 같이 지키기 쉽습니다.</p>
+<h2 id="자주-헷갈리는-포인트">자주 헷갈리는 포인트</h2>
+<ul><li><code>[S3]가 직접 말하는 사실</code>과 <code>교수자의 해석</code>은 다르다. [S3]는 serving runtime 맥락을 주고, &quot;변동 decode는 GPU 기준선으로 보자&quot;는 문장은 이 챕터의 설계 해석이다.</li><li><code>[S4]</code>는 특정 NPU runtime 사례다. 이를 근거로 &quot;모든 NPU는 이렇다&quot;라고 일반화하면 과장이다.</li><li>NPU 후보 블록은 <code>연산이 큰 블록</code>이 아니라 <code>shape가 안정적이고 escape가 드문 블록</code>에 가깝다.</li><li>hybrid 실패의 대표 원인은 장치 부족이 아니라 <code>decode loop 안쪽을 잘못 자른 cut</code>이다.</li><li><code>전력 효율</code>은 NPU 사용 비율과 동의어가 아니다. 짧은 decode, 잦은 handoff, 높은 escape 확률이면 NPU cut이 오히려 총 전력과 발열을 악화시킬 수 있다.</li><li>Roofline은 이 챕터의 주연이 아니다. 다만 <code>bytes moved</code>가 큰 경로에서는 장치 변경보다 경계 축소가 더 중요할 수 있다는 경고판 역할을 한다 [S2].</li></ul>
+<h2 id="사례로-다시-보기">사례로 다시 보기</h2>
+<h3 id="사례-1-회의-요약기에서-좋은-cut">사례 1. 회의 요약기에서 좋은 cut</h3>
+<ul><li>회의록을 고정 길이 chunk로 나눈다.</li><li>같은 프롬프트로 반복하는 chunk 요약 prefill만 NPU 후보로 올린다.</li><li>최종 자유 형식 decode는 GPU에 남긴다.</li><li>unsupported op가 나오면 GPU로 일찍 escape하고, 남은 경로를 한 runtime에서 유지한다.</li></ul>
+<h3 id="사례-2-회의-요약기에서-나쁜-cut">사례 2. 회의 요약기에서 나쁜 cut</h3>
+<ul><li>최종 decode 중 일부 projection만 NPU로 분리한다.</li><li>토큰마다 GPU와 NPU가 왕복한다.</li><li>작은 블록 가속 이득보다 handoff와 fallback이 커진다.</li><li>결과적으로 hybrid를 썼는데도 latency와 배터리 둘 다 나빠질 수 있다.</li></ul>
+<h3 id="사례-3-gpu가-덜-효율적이어도-더-싸게-끝나는-경우">사례 3. GPU가 덜 효율적이어도 더 싸게 끝나는 경우</h3>
+<ul><li>사용자가 자주 편집하는 모바일 PC copilot처럼 decode 길이와 종료 시점이 계속 흔들린다.</li><li>이때 GPU가 순수 전력 효율은 낮아 보여도, 한 runtime에 오래 두면 handoff와 escape 대응 비용을 줄여 총 시스템 비용이 더 낮아질 수 있다.</li><li>즉 <code>유연성</code>이 <code>명목상 NPU 효율</code>을 이기는 구간이 실제로 존재한다.</li></ul>
+<h3 id="사례-4-edge-음성-비서와의-대비">사례 4. edge 음성 비서와의 대비</h3>
+<ul><li>챗봇은 요청 길이와 종료 시점이 더 흔들린다.</li><li>wake-word 이후 feature extraction처럼 고정 길이 블록은 NPU 후보가 될 수 있지만, 짧은 intent decode는 handoff를 감수할 만큼 길지 않을 수 있다.</li><li>그래서 안정 블록을 찾기 전까지는 GPU 기준선으로 두는 해석이 더 보수적이다.</li><li>여기서도 핵심은 &quot;GPU가 무조건 빠르다&quot;가 아니라 &quot;경계를 성급히 늘리지 않는다&quot;이다.</li></ul>
+<h2 id="핵심-정리">핵심 정리</h2>
+<ul><li>GPU vs NPU 비교는 장치 우열표보다 partition 설계 문제에 가깝다.</li><li>[S1]은 반복 블록 구조를, [S2]는 <code>AI</code>와 bandwidth ceiling을, [S3]는 serving runtime 맥락을, [S4]는 특정 NPU runtime의 지원 제약 사례를 제공한다.</li><li>이 출처들을 바탕으로 한 강의 해석은 간단하다. <code>stable block만 후보로 분리하고, variable decode는 한 runtime에 남기며, unsupported-op escape path를 먼저 적어라.</code></li><li><code>유연성</code>은 shape 변동, decode 길이 변동, escape 대응 편의성으로 읽고, <code>전력 효율</code>은 긴 decode, battery target, thermal budget, compile amortization이 실제로 남는지로 읽는다.</li><li>좋은 hybrid는 장치를 많이 쓰는 설계가 아니라 <code>handoff가 적고 escape가 드문 설계</code>다.</li><li>나쁜 hybrid는 보통 decode loop 안쪽을 잘못 자른다.</li></ul>
+<h2 id="복습-체크리스트">복습 체크리스트</h2>
+<ul><li class="task-item unchecked"><span class="task-box" aria-hidden="true"></span>[S3]의 runtime 맥락과 교수자의 설계 해석을 구분해 말할 수 있다.</li><li class="task-item unchecked"><span class="task-box" aria-hidden="true"></span>[S4]를 NPU 일반론이 아니라 특정 runtime 지원 사례로 설명할 수 있다.</li><li class="task-item unchecked"><span class="task-box" aria-hidden="true"></span>partition 표를 만들 때 <code>shape 안정성</code>, <code>decode loop 내부 여부</code>, <code>escape path</code>를 함께 적을 수 있다.</li><li class="task-item unchecked"><span class="task-box" aria-hidden="true"></span>per-token handoff가 왜 작은 블록 이득을 무너뜨리는지 설명할 수 있다.</li><li class="task-item unchecked"><span class="task-box" aria-hidden="true"></span>회의 요약기 사례에서 좋은 cut과 나쁜 cut을 구별할 수 있다.</li></ul>
+<h2 id="대안과-비교">대안과 비교</h2>
+<p>| 선택 | 잘 맞는 출발 조건 | 기대 이점 | 먼저 적어야 할 위험 | | --- | --- | --- | --- | | GPU 중심 | decode 길이와 종료 시점이 자주 흔들리는 경로 | runtime을 자주 바꾸지 않고 변동성을 흡수하기 쉽다 | <code>bytes moved</code>가 큰데도 장치만 바꾸려는 오판 | | NPU 중심 | 같은 shape의 안정 블록이 길게 반복되고 thermal budget이 빡빡한 경로 | compile 가능한 반복 구간의 효율과 전력 이득을 노릴 수 있다 | 지원 범위 미확인, escape path 부재, 짧은 세션이라 amortization 실패 |</p>
+<div class="table-wrap"><table><thead><tr><th>Hybrid</th><th>안정 블록과 가변 decode가 명확히 분리되고 handoff가 적은 파이프라인</th><th>안정 블록의 효율과 가변 블록의 유연성을 함께 가져간다</th><th>decode loop 안쪽 cut, per-token handoff, 잦은 fallback, 전력 이득 상쇄</th></tr></thead><tbody></tbody></table></div>
+<h2 id="참고-이미지">참고 이미지</h2>
+<p><img src="./assets/img-01.png" alt="Roofline model"></p>
+<ul><li>캡션: Roofline model</li><li>출처 번호: [I1]</li><li>왜 필요한가: 이 챕터의 주제는 장치 비교지만, block-level 판단에서 <code>AI</code>와 <code>bytes moved</code>를 무시하면 잘못된 partition이 나오기 쉽다. 그래서 Roofline 이미지는 본문 전체가 아니라 <code>경계 비용이 계산 이득을 덮을 수 있다</code>는 보조 경고판으로만 사용한다 [S2].</li></ul>
+<p><img src="./assets/img-02.svg" alt="GPU/NPU partition and escape path"></p>
+<ul><li>캡션: GPU/NPU partition and escape path</li><li>출처 번호: [I2], [S3], [S4]</li><li>왜 필요한가: vLLM 로고처럼 장식 역할을 하는 그림 대신, 이 챕터의 실제 판단 기준인 <code>stable block</code>, <code>handoff once</code>, <code>unsupported-op escape</code>, <code>bad cut inside decode</code>를 한 장에 묶는다. [S3]의 runtime 맥락과 [S4]의 지원 제약 사례를 일반화하지 않고, 강의 해석이 어디서 시작되는지도 같이 표시한다.</li></ul>
+<h2 id="출처">출처</h2>
+<p>| 번호 | 제목 | 발행 주체 | 날짜 | URL | 사용 이유 | | --- | --- | --- | --- | --- | --- | | [S1] | Attention Is All You Need | Google Research / arXiv | 2017-06-12 | https://arxiv.org/abs/1706.03762 | Transformer의 반복 블록 구조와 autoregressive 생성 경로의 기본 배경 | | [S2] | Roofline: an insightful visual performance model for multicore architectures | Communications of the ACM | 2009-04-01 | https://dl.acm.org/doi/10.1145/1498765.1498785 | arithmetic intensity, bandwidth ceiling, 경계 비용 해석의 보조 기준 | | [S3] | vLLM Documentation | vLLM project | 2026-01-07 | https://docs.vllm.ai/en/latest/ | serving이 scheduler, batching, KV cache를 포함한 runtime 문제라는 맥락 | | [S4] | AWS Neuron release notes 2.26.0 | AWS Neuron | 2026-03-08 (accessed) | https://awsdocs-neuron.readthedocs-hosted.com/en/v2.26.1/release-notes/2.26.0/ | 특정 NPU runtime의 지원 범위와 제약이 버전 기준으로 관리된다는 사례 |</p>
+    </article>
+    <section class="content-panel surface quiz-panel">
+      <div class="section-heading">
+        <div>
+          <p class="eyebrow">Quiz</p>
+          <h2>복습 문제</h2>
+        </div>
+      </div>
+      <div class="prose">
+        <h1 id="gpu-vs-npu-mental-model-퀴즈">GPU vs NPU Mental Model 퀴즈</h1>
+<h2 id="객관식-1">객관식 1</h2>
+<p>노트북 회의 요약기에서 다음 중 이 챕터의 관점에 가장 맞는 partition은 무엇인가?</p>
+<ol><li><code>512-token chunk 요약 prefill</code>은 NPU 후보로 두고, <code>최종 자유 형식 decode</code>는 GPU에 남긴다.</li><li><code>최종 자유 형식 decode</code>의 각 토큰마다 projection 일부를 NPU로 보냈다가 다시 GPU로 받는다.</li><li>지원 범위를 확인하지 않은 채 모든 블록을 우선 NPU로 옮기고, 실패하면 중간마다 fallback을 붙인다.</li><li>장치 경계가 많을수록 세밀한 최적화가 가능하니 최대한 잘게 나눈다.</li></ol>
+<h2 id="객관식-2">객관식 2</h2>
+<p>다음 중 <code>[S3]</code>와 <code>[S4]</code>의 관계를 가장 정확히 설명한 것은 무엇인가?</p>
+<ol><li><code>[S3]</code>와 <code>[S4]</code>는 둘 다 GPU가 항상 기준선이라고 직접 선언한다.</li><li><code>[S3]</code>는 serving runtime 맥락을, <code>[S4]</code>는 특정 NPU runtime 지원 제약 사례를 제공하며, 그 위의 partition 규칙은 강의 해석이다.</li><li><code>[S4]</code>는 모든 NPU의 공통 성질을 증명하고, <code>[S3]</code>는 hybrid 증가 추세를 통계로 제시한다.</li><li><code>[S3]</code>와 <code>[S4]</code>는 둘 다 장치 성능표만 제공하므로 partition 판단에는 거의 도움이 없다.</li></ol>
+<h2 id="객관식-3">객관식 3</h2>
+<p>다음 중 <code>나쁜 cut</code>의 전형적인 신호는 무엇인가?</p>
+<ol><li>안정적인 shape를 가진 블록을 decode loop 바깥에서 한 번만 handoff한다.</li><li>unsupported op가 나오면 일찍 escape한 뒤 남은 경로를 한 runtime에 둔다.</li><li>작은 블록 이득을 위해 decode loop 안쪽에서 장치를 토큰마다 왕복한다.</li><li>shape 안정성, escape path, handoff 횟수를 표로 적고 비교한다.</li></ol>
+<h2 id="짧은-서술형-1">짧은 서술형 1</h2>
+<p>왜 <code>final decode</code>를 GPU에 남기고, <code>stable prefill block</code>만 NPU 후보로 두는 해석이 이 챕터에서 더 안전한가? 답변에는 <code>shape 안정성</code>, <code>decode loop</code>, <code>handoff</code>를 반드시 포함하라.</p>
+<h2 id="짧은-서술형-2">짧은 서술형 2</h2>
+<p><code>[S4]</code>를 사용할 때 왜 &quot;NPU 일반론&quot;이 아니라 &quot;특정 runtime 지원/제약 사례&quot;로만 다뤄야 하는지 설명하라. 답변에는 <code>release note</code>, <code>지원 범위</code>, <code>강의 해석</code>을 반드시 포함하라.</p>
+<h2 id="심화-설명형-1">심화 설명형 1</h2>
+<p>다음 상황에서 partition 결정표를 어떻게 작성할지 설명하라.</p>
+<ul><li>환경: 노트북 회의 요약기</li><li>파이프라인: <code>512-token chunk</code> 반복 요약 후, 최종 자유 형식 요약 생성</li><li>목표: 발열을 줄이되, 요약 문장 생성 latency가 튀지 않게 유지</li></ul>
+<p>답변 조건:</p>
+<ul><li><code>chunk 요약 prefill</code>, <code>최종 decode</code>, <code>unsupported-op escape path</code>를 모두 다룰 것</li><li>어디서 handoff를 허용하고 어디서는 피해야 하는지 말할 것</li><li><code>[S3]</code>의 runtime 맥락과 <code>[S4]</code>의 지원 제약 사례가 각각 어디에 쓰이는지 구분할 것</li></ul>
+<h2 id="심화-설명형-2">심화 설명형 2</h2>
+<p>다중 사용자 서버 챗봇에서 &quot;GPU를 기준선으로 두고 시작한다&quot;는 말을 어떻게 방어적으로 설명할 수 있는가? 아래 조건을 만족해 답하라.</p>
+<ul><li>이 문장이 <code>출처의 직접 사실</code>이 아니라 <code>강의 해석</code>임을 먼저 밝힐 것</li><li><code>요청 길이 변동</code>, <code>decode 종료 시점</code>, <code>경계 축소</code>를 포함할 것</li><li>NPU를 완전히 배제하지 말고, 어떤 블록이 생기면 다시 검토할지 적을 것</li></ul><details class="answer-key"><summary>정답 및 해설 보기</summary><h2 id="정답-및-해설">정답 및 해설</h2>
+<ul><li>객관식 1 정답: 1. 이 챕터의 핵심은 안정 블록만 분리하고 가변 decode는 한 runtime에 오래 남기는 것이다. <code>512-token chunk</code>처럼 shape가 반복되는 prefill은 후보가 될 수 있지만, 자유 형식 decode를 토큰마다 왕복시키는 것은 나쁜 cut이다.</li><li>객관식 2 정답: 2. [S3]는 serving runtime 맥락, [S4]는 특정 NPU runtime의 지원 제약 사례를 준다. &quot;stable block만 분리하자&quot; 같은 partition 규칙은 그 위에서 세운 강의 해석이다.</li><li>객관식 3 정답: 3. decode loop 안쪽에서 장치를 토큰마다 왕복하면 작은 블록 이득보다 handoff 비용이 더 커질 수 있다. 이 챕터는 이런 경우를 대표적인 bad cut으로 본다.</li><li>짧은 서술형 1 해설 포인트: stable prefill block은 shape 안정성이 높아 NPU 후보가 될 수 있지만, final decode는 loop 내부에서 길이와 종료 시점이 계속 흔들린다. 그래서 decode를 한 runtime에 두어 handoff를 줄이는 해석이 더 안전하다. 여기서 중요한 비교 축은 장치 이름이 아니라 <code>shape 안정성</code>과 <code>handoff 횟수</code>다.</li><li>짧은 서술형 2 해설 포인트: [S4]는 release note이므로 특정 runtime의 지원 범위와 제약이 어떻게 관리되는지 보여 주는 사례다. 이 문서 하나로 모든 NPU의 일반 성질을 단정하면 과장이다. 따라서 [S4]는 &quot;escape path를 미리 적어 두라&quot;는 강의 해석을 보조하는 수준으로만 써야 한다.</li><li>심화 설명형 1 채점 포인트: <code>chunk 요약 prefill</code>은 shape 안정성이 높으므로 NPU 후보로 둘 수 있다. <code>최종 decode</code>는 가변적이어서 GPU에 남기는 편이 안전하다. unsupported op가 나오면 일찍 escape해 남은 경로를 한 runtime에서 유지해야 하며, handoff는 decode 시작 전처럼 횟수가 적은 지점에서만 허용하는 답변이 적절하다. [S3]는 runtime 맥락, [S4]는 지원 제약 사례로 구분해 써야 한다.</li><li>심화 설명형 2 채점 포인트: &quot;GPU를 기준선으로 둔다&quot;는 말은 [S3]가 직접 선언한 문장이 아니라, 요청 길이 변동과 decode 종료 시점 변동이 큰 환경에서 경계를 성급히 늘리지 않기 위한 강의 해석이라고 밝혀야 한다. 동시에 shape가 안정적인 반복 블록이 식별되면 그때 NPU 후보를 다시 검토해야 한다고 적어야 균형이 맞다.</li></ul></details>
+      </div>
+    </section>
+    <nav class="pager">
+      <a class="pager-link" href="../02-memory-bandwidth-latency/"><span>이전</span><strong>Memory, Bandwidth, Latency</strong></a>
+      <a class="pager-link" href="../04-llm-inference-metrics/"><span>다음</span><strong>LLM Inference Metrics</strong></a>
+    </nav>
+    
+      </section>
+      <aside class="page-sidebar">
+    <div class="sidebar-panel surface">
+      <p class="eyebrow">On This Page</p>
+      <div class="toc" data-toc>
+        <a class="toc-link" href="#수업-개요">수업 개요</a><a class="toc-link" href="#학습-목표">학습 목표</a><a class="toc-link" href="#수업-전에-생각할-질문">수업 전에 생각할 질문</a><a class="toc-link" href="#강의-스크립트">강의 스크립트</a><a class="toc-link sub" href="#part-1-출처가-직접-말하는-것과-강의-해석을-먼저-나눈다">Part 1. 출처가 직접 말하는 것과 강의 해석을 먼저 나눈다</a><a class="toc-link sub" href="#part-2-장치-비교표보다-먼저-그릴-것은-partition-선이다">Part 2. 장치 비교표보다 먼저 그릴 것은 partition 선이다</a><a class="toc-link sub" href="#part-3-나쁜-cut은-블록이-아니라-토큰마다-경계를-넘긴다">Part 3. 나쁜 cut은 블록이 아니라 토큰마다 경계를 넘긴다</a><a class="toc-link sub" href="#part-4-사례-추적-노트북-회의-요약기를-어디서-끊을-것인가">Part 4. 사례 추적: 노트북 회의 요약기를 어디서 끊을 것인가</a><a class="toc-link sub" href="#part-5-이-챕터에서-쓰는-결정표">Part 5. 이 챕터에서 쓰는 결정표</a><a class="toc-link sub" href="#part-6-서버-챗봇과-비교하면-같은-규칙이-더-선명해진다">Part 6. 서버 챗봇과 비교하면 같은 규칙이 더 선명해진다</a><a class="toc-link" href="#자주-헷갈리는-포인트">자주 헷갈리는 포인트</a><a class="toc-link" href="#사례로-다시-보기">사례로 다시 보기</a><a class="toc-link sub" href="#사례-1-회의-요약기에서-좋은-cut">사례 1. 회의 요약기에서 좋은 cut</a><a class="toc-link sub" href="#사례-2-회의-요약기에서-나쁜-cut">사례 2. 회의 요약기에서 나쁜 cut</a><a class="toc-link sub" href="#사례-3-gpu가-덜-효율적이어도-더-싸게-끝나는-경우">사례 3. GPU가 덜 효율적이어도 더 싸게 끝나는 경우</a><a class="toc-link sub" href="#사례-4-edge-음성-비서와의-대비">사례 4. edge 음성 비서와의 대비</a><a class="toc-link" href="#핵심-정리">핵심 정리</a><a class="toc-link" href="#복습-체크리스트">복습 체크리스트</a><a class="toc-link" href="#대안과-비교">대안과 비교</a><a class="toc-link" href="#참고-이미지">참고 이미지</a><a class="toc-link" href="#출처">출처</a>
+      </div>
+    </div>
+    </aside>
+    </div>
+  </main>
+  <script type="module" src="../../assets/app.js"></script>
+  <script type="module">
+    import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs';
+    mermaid.initialize({ startOnLoad: true, theme: 'neutral', securityLevel: 'loose' });
+  </script>
+  <script>
+    window.MathJax = {
+      tex: { inlineMath: [['$', '$'], ['\\(', '\\)']], displayMath: [['$$', '$$'], ['\\[', '\\]']] },
+      svg: { fontCache: 'global' }
+    };
+  </script>
+  <script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-svg.js" async></script>
+</body>
+</html>

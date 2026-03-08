@@ -1,0 +1,70 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="980" viewBox="0 0 1600 980" role="img" aria-labelledby="title desc">
+  <title id="title">Shared model layer divergence paths and observability lanes diagram</title>
+  <desc id="desc">Diagram showing the shared model layer at the top and four divergence lanes below it: compile artifacts, packaged runtime paths, app and OS paths, and infrastructure paths, followed by their observability lanes.</desc>
+  <defs>
+    <style>
+      .bg { fill: #f3f1eb; }
+      .shared { fill: #22313a; }
+      .sharedText { fill: #ffffff; font: 700 28px Helvetica, Arial, sans-serif; }
+      .lane { stroke: #22313a; stroke-width: 2; rx: 18; }
+      .laneTitle { fill: #172026; font: 700 24px Helvetica, Arial, sans-serif; }
+      .laneText { fill: #172026; font: 400 18px Helvetica, Arial, sans-serif; }
+      .small { fill: #4b5a62; font: 400 16px Helvetica, Arial, sans-serif; }
+      .compile { fill: #dbead7; }
+      .runtime { fill: #f6e2c8; }
+      .infra { fill: #d8e7f3; }
+      .observe { fill: #ffffff; stroke: #22313a; stroke-width: 2; rx: 14; }
+      .arrow { stroke: #22313a; stroke-width: 3; marker-end: url(#arrow); }
+      .title { fill: #172026; font: 700 34px Helvetica, Arial, sans-serif; }
+      .subtitle { fill: #4b5a62; font: 400 18px Helvetica, Arial, sans-serif; }
+    </style>
+    <marker id="arrow" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#22313a"/>
+    </marker>
+  </defs>
+  <rect class="bg" x="0" y="0" width="1600" height="980"/>
+  <text class="title" x="48" y="58">Where Vendors Diverge Below the Shared Model Layer</text>
+  <text class="subtitle" x="48" y="90">Qualcomm splits into two compile contracts, AMD and Apple stay local in different ways, and TPU grows an infra lane before serving ever starts.</text>
+
+  <rect class="shared" x="250" y="130" width="1100" height="120" rx="24"/>
+  <text class="sharedText" x="350" y="182">Shared model layer</text>
+  <text class="sharedText" x="350" y="220" style="font-size:22px;font-weight:400;">model semantics, tokenizer, service contract, high-level app logic</text>
+
+  <line class="arrow" x1="400" y1="250" x2="260" y2="340"/>
+  <line class="arrow" x1="670" y1="250" x2="610" y2="340"/>
+  <line class="arrow" x1="930" y1="250" x2="1000" y2="340"/>
+  <line class="arrow" x1="1200" y1="250" x2="1370" y2="340"/>
+
+  <rect class="lane compile" x="40" y="340" width="470" height="380"/>
+  <text class="laneTitle" x="70" y="386">Compile artifact path</text>
+  <text class="laneText" x="70" y="430"><tspan x="70" dy="0">Qualcomm precompiled ONNX</tspan><tspan x="70" dy="28">named-device compile</tspan></text>
+  <text class="laneText" x="70" y="500"><tspan x="70" dy="0">Qualcomm context binary</tspan><tspan x="70" dy="28">serialized context compile</tspan></text>
+  <text class="laneText" x="70" y="570"><tspan x="70" dy="0">Intel OpenVINO NPU</tspan><tspan x="70" dy="28">compile_model(model, "NPU")</tspan></text>
+  <text class="laneText" x="70" y="640"><tspan x="70" dy="0">Tenstorrent TT-Forge</tspan><tspan x="70" dy="28">frontend to TT-MLIR lowering</tspan></text>
+  <text class="small" x="70" y="700"><tspan x="70" dy="0">Divergence object:</tspan><tspan x="70" dy="22">precompiled package, context binary,</tspan><tspan x="70" dy="22">compiled model, backend-specific artifact</tspan></text>
+
+  <rect class="lane runtime" x="540" y="340" width="320" height="380"/>
+  <text class="laneTitle" x="570" y="386">Packaged runtime path</text>
+  <text class="laneText" x="570" y="430"><tspan x="570" dy="0">AMD Hybrid OGA</tspan><tspan x="570" dy="28">pre-optimized model folder</tspan></text>
+  <text class="laneText" x="570" y="500"><tspan x="570" dy="0">HailoRT</tspan><tspan x="570" dy="28">runtime stack install</tspan></text>
+  <text class="laneText" x="570" y="570"><tspan x="570" dy="0">hailo-apps</tspan><tspan x="570" dy="28">pipeline entry point</tspan></text>
+  <text class="small" x="570" y="700"><tspan x="570" dy="0">Divergence object:</tspan><tspan x="570" dy="22">genai_config.json bundle, DLLs,</tspan><tspan x="570" dy="22">driver, pipeline app config</tspan></text>
+
+  <rect class="lane runtime" x="890" y="340" width="300" height="380"/>
+  <text class="laneTitle" x="920" y="386">App and OS path</text>
+  <text class="laneText" x="920" y="430"><tspan x="920" dy="0">Apple Core ML</tspan><tspan x="920" dy="28">Xcode integration</tspan></text>
+  <text class="laneText" x="920" y="500"><tspan x="920" dy="0">Windows ML</tspan><tspan x="920" dy="28">App SDK bootstrapper</tspan></text>
+  <text class="small" x="920" y="700"><tspan x="920" dy="0">Divergence object:</tspan><tspan x="920" dy="22">generated interface, shared ORT,</tspan><tspan x="920" dy="22">dynamic EP distribution</tspan></text>
+
+  <rect class="lane infra" x="1220" y="340" width="330" height="380"/>
+  <text class="laneTitle" x="1250" y="386">Infrastructure path</text>
+  <text class="laneText" x="1250" y="430"><tspan x="1250" dy="0">Google TPU VM</tspan><tspan x="1250" dy="28">single-host serving host</tspan></text>
+  <text class="laneText" x="1250" y="500"><tspan x="1250" dy="0">Google queued resource</tspan><tspan x="1250" dy="28">availability collection</tspan></text>
+  <text class="small" x="1250" y="700"><tspan x="1250" dy="0">Divergence object:</tspan><tspan x="1250" dy="22">TPU VM, topology, quota,</tspan><tspan x="1250" dy="22">queued resource state</tspan></text>
+
+  <rect class="observe" x="50" y="770" width="1500" height="160"/>
+  <text class="laneTitle" x="80" y="818">Observability lanes follow each path</text>
+  <text class="laneText" x="80" y="858"><tspan x="80" dy="0">Compile path: AI Hub profile, ORT QNN EP logs, cache/property inspection, tt-smi, TT-NN Visualizer</tspan></text>
+  <text class="laneText" x="80" y="892"><tspan x="80" dy="0">Packaged runtime and app path: model_benchmark.exe, Xcode preview, Instruments, shipped ORT version table, pipeline logs</tspan></text>
+  <text class="laneText" x="80" y="926"><tspan x="80" dy="0">Infra path: tpu-info metrics and queued-resource state</tspan></text>
+</svg>

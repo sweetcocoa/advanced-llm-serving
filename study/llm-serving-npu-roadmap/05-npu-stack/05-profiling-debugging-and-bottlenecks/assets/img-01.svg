@@ -1,0 +1,67 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="680" viewBox="0 0 1200 680" role="img" aria-labelledby="title desc">
+  <title id="title">ORT profiling timeline with host fallback, cast QDQ, and transfer boundaries</title>
+  <desc id="desc">A local teaching illustration that marks an ORT profiling timeline with host fallback, cast QDQ, transfer boundaries, and the Part 4 reading order for boundary-cost diagnosis.</desc>
+  <rect width="1200" height="680" fill="#f5efe3"/>
+  <rect x="28" y="28" width="1144" height="92" rx="22" fill="#163a59"/>
+  <text x="60" y="72" font-family="Arial, sans-serif" font-size="32" font-weight="700" fill="#ffffff">ORT profiling timeline: where boundary cost starts</text>
+  <text x="60" y="102" font-family="Arial, sans-serif" font-size="18" fill="#dce9f3">README Part 4 reads this figure from red host fallback to yellow Cast/QDQ to blue transfer.</text>
+
+  <rect x="40" y="146" width="748" height="488" rx="20" fill="#fffaf1" stroke="#d9ccb6" stroke-width="2"/>
+  <text x="68" y="190" font-family="Arial, sans-serif" font-size="26" font-weight="700" fill="#163a59">Annotated timeline</text>
+  <text x="68" y="222" font-family="Arial, sans-serif" font-size="18" fill="#384550">One attention block looks "mostly on NPU" until the boundaries are marked.</text>
+
+  <line x1="170" y1="290" x2="730" y2="290" stroke="#c5b79f" stroke-width="2"/>
+  <line x1="170" y1="406" x2="730" y2="406" stroke="#c5b79f" stroke-width="2"/>
+  <text x="84" y="298" font-family="Arial, sans-serif" font-size="22" font-weight="700" fill="#163a59">Host lane</text>
+  <text x="88" y="414" font-family="Arial, sans-serif" font-size="22" font-weight="700" fill="#163a59">NPU lane</text>
+
+  <text x="176" y="264" font-family="Arial, sans-serif" font-size="16" fill="#5c6a72">t0</text>
+  <text x="338" y="264" font-family="Arial, sans-serif" font-size="16" fill="#5c6a72">t1</text>
+  <text x="498" y="264" font-family="Arial, sans-serif" font-size="16" fill="#5c6a72">t2</text>
+  <text x="658" y="264" font-family="Arial, sans-serif" font-size="16" fill="#5c6a72">t3</text>
+
+  <rect x="190" y="272" width="76" height="36" rx="10" fill="#d6e4f0"/>
+  <text x="205" y="295" font-family="Arial, sans-serif" font-size="16" fill="#163a59">prep</text>
+  <rect x="286" y="272" width="82" height="36" rx="10" fill="#f2c0b4"/>
+  <text x="300" y="295" font-family="Arial, sans-serif" font-size="16" fill="#7b2f1f">fallback</text>
+  <rect x="384" y="272" width="90" height="36" rx="10" fill="#f5d37e"/>
+  <text x="403" y="295" font-family="Arial, sans-serif" font-size="16" fill="#6e5600">Cast/QDQ</text>
+  <rect x="602" y="272" width="88" height="36" rx="10" fill="#d6e4f0"/>
+  <text x="622" y="295" font-family="Arial, sans-serif" font-size="16" fill="#163a59">post</text>
+
+  <rect x="236" y="388" width="40" height="36" rx="10" fill="#7fb6dc"/>
+  <text x="242" y="411" font-family="Arial, sans-serif" font-size="15" fill="#0f3756">DMA</text>
+  <rect x="286" y="388" width="96" height="36" rx="10" fill="#75b88a"/>
+  <text x="304" y="411" font-family="Arial, sans-serif" font-size="16" fill="#143f20">Partition A</text>
+  <rect x="476" y="388" width="40" height="36" rx="10" fill="#7fb6dc"/>
+  <text x="482" y="411" font-family="Arial, sans-serif" font-size="15" fill="#0f3756">DMA</text>
+  <rect x="526" y="388" width="96" height="36" rx="10" fill="#75b88a"/>
+  <text x="544" y="411" font-family="Arial, sans-serif" font-size="16" fill="#143f20">Partition B</text>
+
+  <path d="M286 334 L286 458" stroke="#c1492f" stroke-width="3" stroke-dasharray="8 8"/>
+  <path d="M474 334 L474 458" stroke="#d0a700" stroke-width="3" stroke-dasharray="8 8"/>
+  <path d="M516 334 L516 458" stroke="#2477ac" stroke-width="3" stroke-dasharray="8 8"/>
+
+  <rect x="164" y="470" width="566" height="122" rx="16" fill="#eef4f7" stroke="#c7d5df" stroke-width="2"/>
+  <text x="188" y="504" font-family="Arial, sans-serif" font-size="22" font-weight="700" fill="#163a59">What changes the diagnosis</text>
+  <text x="188" y="536" font-family="Arial, sans-serif" font-size="18" fill="#384550">1. Red line: host fallback means the graph is not staying on device.</text>
+  <text x="188" y="564" font-family="Arial, sans-serif" font-size="18" fill="#384550">2. Yellow line: Cast/QDQ is the precision boundary, not just a tiny op.</text>
+  <text x="188" y="592" font-family="Arial, sans-serif" font-size="18" fill="#384550">3. Blue line: transfer repeats the cost and turns a short gap into a long request.</text>
+
+  <rect x="814" y="146" width="346" height="488" rx="20" fill="#fffdf8" stroke="#d9ccb6" stroke-width="2"/>
+  <text x="842" y="190" font-family="Arial, sans-serif" font-size="26" font-weight="700" fill="#163a59">Part 4 reading order</text>
+  <rect x="842" y="220" width="292" height="90" rx="16" fill="#fff0ea" stroke="#e1b5a6" stroke-width="2"/>
+  <text x="864" y="252" font-family="Arial, sans-serif" font-size="20" font-weight="700" fill="#8d3c1b">Step 1</text>
+  <text x="864" y="282" font-family="Arial, sans-serif" font-size="18" fill="#384550">Find the red host gap first.</text>
+
+  <rect x="842" y="330" width="292" height="90" rx="16" fill="#fff7d9" stroke="#e2cc72" stroke-width="2"/>
+  <text x="864" y="362" font-family="Arial, sans-serif" font-size="20" font-weight="700" fill="#7d6500">Step 2</text>
+  <text x="864" y="392" font-family="Arial, sans-serif" font-size="18" fill="#384550">Overlay Cast/QDQ on the same boundary.</text>
+
+  <rect x="842" y="440" width="292" height="90" rx="16" fill="#ebf5fb" stroke="#9cc4df" stroke-width="2"/>
+  <text x="864" y="472" font-family="Arial, sans-serif" font-size="20" font-weight="700" fill="#13547e">Step 3</text>
+  <text x="864" y="502" font-family="Arial, sans-serif" font-size="18" fill="#384550">Check whether transfer makes it repeat.</text>
+
+  <rect x="842" y="550" width="292" height="56" rx="16" fill="#163a59"/>
+  <text x="864" y="584" font-family="Arial, sans-serif" font-size="18" font-weight="700" fill="#ffffff">Decision: boundary cost beats long-op hunting</text>
+</svg>

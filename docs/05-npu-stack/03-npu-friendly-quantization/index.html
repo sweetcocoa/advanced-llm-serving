@@ -1,0 +1,206 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>NPU-Friendly Quantization | NPU 소프트웨어 스택</title>
+  <meta name="description" content="이 챕터는 양자화를 몇 비트까지 줄였는가 보다 runtime이 그대로 읽을 수 있는 quantized artifact를 만들었는가 라는 질문으로 다시 본다. ONNX Runtime 문서는 양자화된 ONNX 표현을 QOperator 와 QDQ 로 나눠 설명하고 정적/동적 양자화를 구분한다 [S1]. OpenVINO NNCF 문서는 PTQ, QAT, calibration dataset, target device 를 함께 다룬다 [S2]. 여기에 QNN Execution Provider와 OpenVINO NPU 문서를 겹쳐 보면, 정확도가 괜찮은 양자화와 실제 NPU 경로에 얹히는 양자화가 다를 수 있다는 점이 더 선명해진다 [S3][S4].">
+  <meta name="theme-color" content="#10182a">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+KR:wght@400;500;600;700&family=Space+Grotesk:wght@500;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../../assets/style.css">
+</head>
+<body class="page-chapter" data-page-kind="chapter" data-page-id="study/llm-serving-npu-roadmap/05-npu-stack/03-npu-friendly-quantization" data-root-prefix="../../">
+  <div class="reading-progress" data-reading-progress></div>
+  <header class="site-header">
+    <a class="brand" href="../../">
+      <span class="brand-kicker">GitHub Pages Study</span>
+      <strong>LLM Serving + NPU</strong>
+    </a>
+    <nav class="top-nav"><a class="top-nav-link" href="../../01-foundations/">기초와 성능 직관</a><a class="top-nav-link" href="../../02-llm-serving-core/">LLM Serving 핵심</a><a class="top-nav-link" href="../../03-llm-serving-advanced/">고급 Serving 패턴</a><a class="top-nav-link" href="../../04-serving-systems/">Serving 시스템 설계</a><a class="top-nav-link is-active" href="../">NPU 소프트웨어 스택</a><a class="top-nav-link" href="../../06-runtime-and-compiler/">런타임과 컴파일러</a><a class="top-nav-link" href="../../07-synthesis/">종합 정리와 최신 흐름</a></nav>
+    <div class="search-shell">
+      <input type="search" placeholder="챕터, 모듈, 키워드 검색" aria-label="검색" data-global-search>
+      <div class="search-results" data-search-results hidden></div>
+    </div>
+  </header>
+  <main class="page-frame">
+    
+    <section class="hero">
+      <div class="hero-copy">
+        <p class="eyebrow">NPU 소프트웨어 스택</p>
+        <h1>NPU-Friendly Quantization</h1>
+        <p class="hero-summary">이 챕터는 양자화를 몇 비트까지 줄였는가 보다 runtime이 그대로 읽을 수 있는 quantized artifact를 만들었는가 라는 질문으로 다시 본다. ONNX Runtime 문서는 양자화된 ONNX 표현을 QOperator 와 QDQ 로 나눠 설명하고 정적/동적 양자화를 구분한다 [S1]. OpenVINO NNCF 문서는 PTQ, QAT, calibration dataset, target device 를 함께 다룬다 [S2]. 여기에 QNN Execution Provider와 OpenVINO NPU 문서를 겹쳐 보면, 정확도가 괜찮은 양자화와 실제 NPU 경로에 얹히는 양자화가 다를 수 있다는 점이 더 선명해진다 [S3][S4].</p>
+      </div>
+      <div class="hero-stats">
+        <div class="stat-card"><strong>35-50 min</strong><span>reading time</span></div>
+        <div class="stat-card"><strong>2026-03-08</strong><span>updated</span></div>
+        <div class="stat-card"><button class="progress-toggle" type="button" data-progress-toggle data-progress-id="study/llm-serving-npu-roadmap/05-npu-stack/03-npu-friendly-quantization">완료로 표시</button></div>
+      </div>
+    </section>
+    
+    <div class="page-layout">
+      <section class="page-main content-shell">
+        
+    <article class="content-panel surface prose" data-reading-target>
+      <h1 id="npu-friendly-quantization">NPU-Friendly Quantization</h1>
+<h2 id="수업-개요">수업 개요</h2>
+<p>이 챕터는 양자화를 <code>몇 비트까지 줄였는가</code>보다 <code>runtime이 그대로 읽을 수 있는 quantized artifact를 만들었는가</code>라는 질문으로 다시 본다. ONNX Runtime 문서는 양자화된 ONNX 표현을 <code>QOperator</code>와 <code>QDQ</code>로 나눠 설명하고 정적/동적 양자화를 구분한다 [S1]. OpenVINO NNCF 문서는 PTQ, QAT, calibration dataset, <code>target_device</code>를 함께 다룬다 [S2]. 여기에 QNN Execution Provider와 OpenVINO NPU 문서를 겹쳐 보면, 정확도가 괜찮은 양자화와 실제 NPU 경로에 얹히는 양자화가 다를 수 있다는 점이 더 선명해진다 [S3][S4].</p>
+<h2 id="학습-목표">학습 목표</h2>
+<ul><li><code>QOperator</code>와 <code>QDQ</code>를 단순 표기 차이가 아니라 배포 artifact 형식의 차이로 설명할 수 있다.</li><li>calibration이 정확도 보정 절차이면서 동시에 재현 가능한 scale/zero-point를 고정하는 과정이라는 점을 말할 수 있다.</li><li>per-tensor/per-channel, symmetric/asymmetric를 품질과 import 복잡도 관점에서 비교할 수 있다.</li><li><code>양자화 품질</code>과 <code>backend deployability</code>가 서로 다른 평가 축이라는 점을 사례로 설명할 수 있다.</li><li>QNN EP 경로와 OpenVINO NPU 경로에서 무엇을 먼저 확인해야 하는지 디버깅 순서를 정리할 수 있다.</li></ul>
+<h2 id="수업-전에-생각할-질문">수업 전에 생각할 질문</h2>
+<ul><li>동일한 Int8 모델이라도 어떤 artifact는 NPU 경로에서 잘 읽히고 어떤 artifact는 계속 fallback이 나는 이유는 무엇인가?</li><li>calibration dataset을 대충 만들면 정확도만 흔들리는가, 아니면 artifact 재현성도 흔들리는가?</li><li><code>QDQ로 내보낼지</code>, <code>QOperator로 내보낼지</code>를 선택할 때 bit-width 외에 어떤 질문을 더 해야 하는가?</li></ul>
+<h2 id="강의-스크립트">강의 스크립트</h2>
+<h3 id="part-1-npu-friendly라는-말의-기준부터-바꾸자">Part 1. NPU-friendly라는 말의 기준부터 바꾸자</h3>
+<p><strong>교수자:</strong> 이 챕터에서는 <code>좋은 양자화</code>를 먼저 정확도로 정의하지 않겠습니다. 먼저 <code>배포 경로가 읽을 수 있는 artifact인가</code>를 묻겠습니다. ONNX Runtime 문서는 양자화된 ONNX 모델을 <code>QOperator</code> 또는 <code>QDQ</code> 형식으로 표현한다고 정리합니다 [S1]. 이 말은 양자화가 단지 숫자를 줄이는 작업이 아니라, graph에 어떤 형태로 고정할지를 결정하는 작업이라는 뜻입니다.</p>
+<p><strong>학습자:</strong> 정확도가 높으면 좋은 양자화 아닌가요? 왜 artifact 형식을 먼저 보죠?</p>
+<p><strong>교수자:</strong> NPU 배포에서는 정확도와 deployability가 분리되기 때문입니다. calibration이나 QAT 결과가 좋아도 runtime이 기대하는 import 경로와 어긋나면, 일부 구간은 host로 빠지거나 다시 변환돼야 합니다 [S3][S4]. 그래서 이 챕터의 첫 판단 기준은 <code>bit-width</code>가 아니라 <code>import 가능한 형식으로 굳었는가</code>입니다.</p>
+<h3 id="part-2-qoperator와-qdq는-그래프를-보는-시선을-바꾼다">Part 2. QOperator와 QDQ는 그래프를 보는 시선을 바꾼다</h3>
+<p><strong>교수자:</strong> <code>QOperator</code>는 quantized operator 자체를 graph에 직접 두는 표현입니다. <code>QLinearConv</code>, <code>MatMulInteger</code>처럼 연산 이름이 이미 양자화된 상태죠 [S1]. 반면 <code>QDQ</code>는 원래 연산 주변에 <code>QuantizeLinear</code>와 <code>DeQuantizeLinear</code>를 배치해, 어느 텐서가 어떤 scale과 zero-point로 양자화되는지 graph 경계에서 드러내는 방식입니다 [S1]. NNCF도 QDQ 형식을 export 맥락에서 설명합니다 [S2].</p>
+<p><strong>학습자:</strong> 그러면 둘 중 하나가 항상 더 낫다고 말할 수는 없겠네요?</p>
+<p><strong>교수자:</strong> 그렇습니다. <code>QOperator</code>는 graph가 더 직접적으로 양자화 연산을 드러내고, <code>QDQ</code>는 원래 floating-point graph에 가까운 형태를 유지하면서 quantization boundary를 명시합니다. 실무에서는 <code>runtime이 어느 표현을 더 안정적으로 읽는가</code>, <code>디버깅할 때 scale 경계를 눈으로 따라가기 쉬운가</code>를 같이 봐야 합니다.</p>
+<h4 id="핵심-수식-1-scale과-zero-point가-artifact에-고정되는-방식">핵심 수식 1. scale과 zero-point가 artifact에 고정되는 방식</h4>
+<div class="math-block">$$
+q = \operatorname{clip}\left(\operatorname{round}\left(\frac{x}{s}\right) + z,\ q_{\min},\ q_{\max}\right)
+$$</div>
+<p>여기서 \(x\)는 원래 값, \(s\)는 scale, \(z\)는 zero-point다. 양자화 artifact를 저장한다는 말은 결국 이 파라미터들이 tensor 또는 channel 단위로 고정된다는 뜻이다 [S1][S2].</p>
+<pre class="mermaid">flowchart LR
+    A[&quot;FP32 ONNX 모델&quot;] --&gt; B{&quot;양자화 경로 선택&quot;}
+    B --&gt; C[&quot;정적 양자화 + calibration [S1][S2]&quot;]
+    B --&gt; D[&quot;QAT 후 export [S2]&quot;]
+    C --&gt; E{&quot;artifact 표현&quot;}
+    D --&gt; E
+    E --&gt; F[&quot;QOperator ONNX [S1]&quot;]
+    E --&gt; G[&quot;QDQ ONNX [S1][S2]&quot;]
+    F --&gt; H[&quot;runtime import / NPU partition 확인&quot;]
+    G --&gt; H</pre>
+<p><strong>교수자:</strong> 여기서 많이 하는 실수가 있습니다. 모델 카드에는 <code>Int8 완료</code>라고 써 두고, 실제 파일이 <code>QDQ</code>인지 <code>QOperator</code>인지 확인하지 않는 겁니다. 그 상태에서는 import 실패 원인이 calibration인지, 표현 형식인지, runtime partition인지 분리되지 않습니다.</p>
+<h3 id="part-3-calibration은-정확도-보정이면서-재현성-고정이다">Part 3. Calibration은 정확도 보정이면서 재현성 고정이다</h3>
+<p><strong>학습자:</strong> calibration은 대표 샘플 몇 개 돌려서 범위를 잡는 과정이라고만 알고 있었어요.</p>
+<p><strong>교수자:</strong> 그 설명은 맞지만 충분하지 않습니다. ONNX Runtime은 정적 양자화에서 calibration으로 activation range를 수집하는 흐름을 설명하고 [S1], NNCF는 calibration dataset과 PTQ/QAT 흐름을 명시적으로 다룹니다 [S2]. 즉 calibration은 <code>이번 실험의 성능을 올리는 트릭</code>이 아니라 <code>이 artifact가 어떤 scale/zero-point를 갖는지 고정하는 절차</code>입니다.</p>
+<p><strong>교수자:</strong> 그래서 calibration dataset을 바꾸면 정확도만 달라지는 게 아닙니다. scale이 달라지고, 결과적으로 export된 quantized artifact도 달라집니다. 이 챕터에서 재현성을 강조하는 이유가 여기 있습니다. NPU import 경로를 디버깅하려면 baseline artifact가 매번 흔들리면 안 됩니다.</p>
+<p><strong>학습자:</strong> 그러면 <code>calibration dataset이 곧 배포 설정 일부</code>라고 봐야겠네요?</p>
+<p><strong>교수자:</strong> 그렇습니다. 특히 PTQ를 쓸 때는 더 그렇습니다. 같은 원본 모델이라도 calibration data가 달라지면 quantized artifact도 달라집니다 [S1][S2].</p>
+<h3 id="part-4-granularity와-zero-point-방식은-품질-문제이면서-import-문제다">Part 4. Granularity와 zero-point 방식은 품질 문제이면서 import 문제다</h3>
+<p><strong>교수자:</strong> 이제 scale granularity를 보죠. 가장 자주 비교하는 것은 per-tensor와 per-channel입니다. per-tensor는 텐서 전체가 하나의 scale을 공유하고, per-channel은 채널별로 따로 scale을 둡니다. 대체로 granularity가 세밀할수록 품질을 보존할 여지가 커지지만, artifact에 포함되는 메타데이터와 경계 관리가 복잡해집니다. 이 문서 묶음은 세부 지원표를 주지 않으므로, 여기서는 <code>세밀한 표현일수록 import 조건도 같이 확인해야 한다</code>는 수준까지만 정리하겠습니다 [S1][S2].</p>
+<p><strong>학습자:</strong> symmetric와 asymmetric는 zero-point를 어떻게 잡느냐의 차이죠?</p>
+<p><strong>교수자:</strong> 맞습니다. symmetric는 zero-point를 단순하게 두는 쪽으로, asymmetric는 offset을 포함해 표현 범위를 더 유연하게 쓰는 쪽으로 이해하면 됩니다 [S1]. 중요한 것은 이것도 수학 교과서 문제가 아니라는 점입니다. 어떤 방식을 택하느냐에 따라 artifact 안에 들어가는 파라미터 구조와 runtime이 해석해야 하는 경계가 달라집니다.</p>
+<h4 id="핵심-수식-2-배포-관점에서-보는-양자화-총비용">핵심 수식 2. 배포 관점에서 보는 양자화 총비용</h4>
+<div class="math-block">$$
+T_{\mathrm{total}} =
+T_{\mathrm{int8\_compute}}
++ N_{\mathrm{boundary}} \cdot T_{\mathrm{handoff}}
++ N_{\mathrm{requant}} \cdot T_{\mathrm{requant}}
+$$</div>
+<p>이 식은 문서에 있는 공식이 아니라, 실무 판단을 위해 단순화한 모델이다. Int8 계산 자체가 빨라도 boundary handoff나 requantization이 많으면 전체 이득이 줄어든다. 그래서 <code>좋은 양자화</code>와 <code>배포되는 양자화</code>가 갈릴 수 있다 [S3][S4].</p>
+<h3 id="part-5-품질이-좋은데도-npu-경로가-답답한-두-장면">Part 5. 품질이 좋은데도 NPU 경로가 답답한 두 장면</h3>
+<p><strong>교수자:</strong> 첫 번째 장면은 <code>ONNX Runtime + QNN EP</code>입니다. ORT에서 모델을 양자화해 ONNX artifact를 만들고 [S1], 그 모델을 QNN Execution Provider로 실행합니다 [S3]. 이때 봐야 할 첫 질문은 <code>정확도가 몇 점 올랐는가</code>가 아니라 <code>quantized graph가 QNN 쪽 partition에 오래 머무는가</code>입니다. QDQ 경계가 잦거나 unsupported segment가 중간에 끼면, 품질이 좋아도 배포 이득은 약해집니다.</p>
+<p><strong>학습자:</strong> 즉, QNN EP에서는 quantized artifact가 실제 offload graph를 얼마나 길게 유지하느냐가 중요하군요.</p>
+<p><strong>교수자:</strong> 정확합니다.</p>
+<p><strong>교수자:</strong> 두 번째 장면은 <code>NNCF + OpenVINO NPU</code>입니다. NNCF는 PTQ, QAT, calibration dataset, preset, <code>target_device</code> 같은 최적화 문맥을 제공합니다 [S2]. OpenVINO NPU 문서는 NPU를 명시적 device target과 runtime mode로 다룹니다 [S4]. 그래서 이 경로에서는 <code>어떤 quantization artifact를 만들었는가</code>뿐 아니라 <code>어느 device 문맥을 상정하고 최적화했는가</code>가 더 드러납니다.</p>
+<p><strong>학습자:</strong> 그러면 두 사례 다 Int8일 수 있어도 질문 순서는 다르겠네요.</p>
+<p><strong>교수자:</strong> 그렇습니다. QNN EP 쪽은 <code>partition과 import</code>가 먼저 보이고 [S3], OpenVINO 쪽은 <code>optimization 설정과 target device</code>가 먼저 보입니다 [S2][S4].</p>
+<pre class="mermaid">flowchart TD
+    A[&quot;양자화 완료된 artifact&quot;] --&gt; B{&quot;먼저 무엇을 확인할까?&quot;}
+    B --&gt; C[&quot;표현 형식: QDQ / QOperator [S1]&quot;]
+    B --&gt; D[&quot;calibration 설정 고정 여부 [S1][S2]&quot;]
+    C --&gt; E[&quot;QNN EP partition과 fallback 위치 점검 [S3]&quot;]
+    D --&gt; F[&quot;OpenVINO target_device / NPU 경로 점검 [S2][S4]&quot;]
+    E --&gt; G[&quot;boundary / requant 비용 판단&quot;]
+    F --&gt; G
+    G --&gt; H[&quot;품질과 deployability를 분리해 평가&quot;]</pre>
+<h3 id="part-6-이-챕터에서-권하는-디버깅-순서">Part 6. 이 챕터에서 권하는 디버깅 순서</h3>
+<p><strong>학습자:</strong> 실제로 문제가 생기면 어디부터 보시나요?</p>
+<p><strong>교수자:</strong> 저는 거의 항상 같은 순서로 봅니다.</p>
+<ol><li>export 결과가 <code>QDQ</code>인지 <code>QOperator</code>인지부터 적어 둡니다 [S1].</li><li>정적 양자화라면 calibration dataset과 설정이 무엇이었는지 고정합니다 [S1][S2].</li><li>runtime 단계에서 QNN EP partition이나 OpenVINO NPU target이 어떻게 잡히는지 확인합니다 [S3][S4].</li><li>품질 저하와 latency 악화를 분리해서 봅니다. 전자는 scale 설정 문제일 수 있고, 후자는 boundary나 requant 문제일 수 있습니다.</li></ol>
+<p><strong>교수자:</strong> 이 순서를 지키면 <code>정확도 문제</code>와 <code>import 문제</code>를 섞어 해석하는 실수를 줄일 수 있습니다.</p>
+<h2 id="자주-헷갈리는-포인트">자주 헷갈리는 포인트</h2>
+<ul><li><code>Int8</code>이라는 라벨만 같다고 같은 배포 artifact가 아니다. <code>QDQ</code>와 <code>QOperator</code>는 graph 구조 자체를 다르게 만든다 [S1].</li><li>calibration은 측정 보조 절차가 아니라 scale과 zero-point를 고정하는 재현성 절차다 [S1][S2].</li><li>per-channel이 항상 더 좋다고 단정할 수는 없다. 품질 보존 여지는 커질 수 있지만, import와 경계 해석도 함께 점검해야 한다.</li><li>symmetric/asymmetric는 수학 선택지이면서 runtime이 읽어야 할 파라미터 구조 선택지다 [S1].</li><li>QNN EP와 OpenVINO NPU를 비교할 때 <code>누가 더 많이 지원하나</code>부터 묻기보다, <code>각 경로가 quantized artifact를 어떤 방식으로 받아들이는가</code>를 먼저 봐야 한다 [S3][S4].</li></ul>
+<h2 id="사례로-다시-보기">사례로 다시 보기</h2>
+<p>사례 A는 모바일 NPU 실험이다. 팀이 ORT로 정적 양자화를 수행해 ONNX artifact를 만들었다 [S1]. accuracy drop은 작았지만 QNN EP 실행 시 기대한 만큼 offload되지 않았다 [S3]. 원인은 bit-width가 아니라 QDQ 경계와 partition 단절이었다고 해석하는 편이 맞다. 이 장면은 <code>양자화 품질</code>과 <code>backend deployability</code>가 분리될 수 있음을 보여 준다.</p>
+<p>사례 B는 Intel NPU 배포 준비다. 팀은 NNCF로 calibration dataset을 정리하고 <code>target_device</code>를 포함한 최적화 흐름을 잡는다 [S2]. 그 다음 OpenVINO NPU device 문맥에서 실행 경로를 맞춘다 [S4]. 여기서 핵심은 <code>정확도 손실 최소화</code>만이 아니라 <code>같은 설정으로 같은 artifact를 다시 만들 수 있는가</code>이다. 재현성이 흔들리면 device target 검증도 흔들린다.</p>
+<h2 id="핵심-정리">핵심 정리</h2>
+<ul><li>이 챕터에서 NPU-friendly quantization은 <code>낮은 비트수</code>가 아니라 <code>runtime/import 경로와 맞는 quantized artifact</code>를 뜻한다.</li><li>ORT 문맥에서는 <code>QOperator</code>와 <code>QDQ</code>가 양자화 graph를 표현하는 공식 형식이며, 정적/동적 양자화 구분이 중요하다 [S1].</li><li>NNCF 문맥에서는 PTQ, QAT, calibration dataset, <code>target_device</code>가 함께 움직이며 artifact 재현성에 직접 관여한다 [S2].</li><li>QNN EP와 OpenVINO NPU는 quantized artifact를 읽는 경로와 확인 지점이 다르므로, 동일한 Int8 결과라도 배포 감각이 달라진다 [S3][S4].</li><li>따라서 배포 전 질문은 <code>몇 비트인가</code>보다 <code>어떤 형식으로 export됐고, 어떤 calibration으로 고정됐고, 어떤 runtime 경로가 그것을 읽는가</code>여야 한다.</li></ul>
+<h2 id="복습-체크리스트">복습 체크리스트</h2>
+<ul><li><code>QOperator</code>와 <code>QDQ</code>를 각각 한 문장으로 설명할 수 있는가?</li><li>calibration dataset이 바뀌면 왜 artifact 재현성도 흔들리는지 설명할 수 있는가?</li><li>per-tensor/per-channel, symmetric/asymmetric를 <code>품질</code>과 <code>import</code> 두 축으로 비교할 수 있는가?</li><li>QNN EP 경로에서 먼저 볼 항목과 OpenVINO NPU 경로에서 먼저 볼 항목을 구분할 수 있는가?</li><li>accuracy가 괜찮은데 latency가 나빠질 때 <code>boundary</code>와 <code>requant</code>를 의심해야 하는 이유를 말할 수 있는가?</li></ul>
+<h2 id="대안과-비교">대안과 비교</h2>
+<p>| 비교 관점 | ORT 중심 양자화 해석 | NNCF 중심 양자화 해석 | 공통 실무 질문 | | --- | --- | --- | --- | | 대표 형식 | <code>QOperator</code>, <code>QDQ</code> [S1] | QDQ export, PTQ/QAT 흐름 [S2] | export 결과가 runtime이 읽을 형식인가 | | calibration 의미 | 정적 양자화에서 activation range 고정 [S1] | calibration dataset 기반 압축/최적화 [S2] | scale과 zero-point가 재현 가능하게 고정됐는가 | | 배포 연결점 | QNN EP 같은 runtime import와 partition [S3] | <code>target_device</code>와 NPU device 문맥 [S2][S4] | artifact가 실제 device 경로에 맞는가 | | 실패 징후 | quantized graph인데 offload가 짧다 | 설정은 맞는데 artifact 재생성이 흔들린다 | 품질과 deployability를 섞어서 보고 있지 않은가 |</p>
+<div class="table-wrap"><table><thead><tr><th>적합한 질문</th><th><code>QDQ와 QOperator 중 무엇을 내보냈나</code></th><th><code>어떤 calibration과 target_device로 만들었나</code></th><th><code>이 artifact를 다시 만들고 다시 읽힐 수 있나</code></th></tr></thead><tbody></tbody></table></div>
+<h2 id="참고-이미지">참고 이미지</h2>
+<p><img src="./assets/img-01.png" alt="Quantization error block diagram"></p>
+<ul><li>[I1] 캡션: Quantization error block diagram</li><li>출처 번호: [I1]</li><li>왜 이 그림이 필요한지: scale과 zero-point가 이상적인 실수 값을 정수 격자에 맞추는 과정에서 왜 오차를 만들 수밖에 없는지 시각적으로 설명해 준다. calibration과 granularity 이야기를 할 때 이 그림이 가장 직접적이다.</li></ul>
+<p><img src="./assets/img-02.png" alt="Roofline model"></p>
+<ul><li>[I2] 캡션: Roofline model</li><li>출처 번호: [I2]</li><li>왜 이 그림이 필요한지: 양자화가 계산 밀도와 메모리 트래픽을 개선할 수 있다는 기대를 설명할 때 유용하다. 동시에 이 챕터에서는 boundary handoff와 requant 비용이 그 이득을 깎을 수 있다는 반례를 붙여 읽어야 한다.</li></ul>
+<h2 id="출처">출처</h2>
+<p>| 번호 | 제목 | 발행 주체 | 날짜 | URL | 사용 이유 | | --- | --- | --- | --- | --- | --- | | [S1] | Quantize ONNX Models | ONNX Runtime | 2026-03-08 (accessed) | <a href="https://onnxruntime.ai/docs/performance/model-optimizations/quantization.html" target="_blank" rel="noreferrer">https://onnxruntime.ai/docs/performance/model-optimizations/quantization.html</a> | <code>QOperator</code>, <code>QDQ</code>, 정적/동적 양자화, scale/zero-point 설명 | | [S2] | Model Optimization - NNCF | OpenVINO | 2026-03-08 (accessed) | <a href="https://docs.openvino.ai/nncf" target="_blank" rel="noreferrer">https://docs.openvino.ai/nncf</a> | PTQ/QAT, calibration dataset, QDQ export, <code>target_device</code> 맥락 설명 | | [S3] | QNN Execution Provider | ONNX Runtime | 2026-03-08 (accessed) | <a href="https://onnxruntime.ai/docs/execution-providers/QNN-ExecutionProvider.html" target="_blank" rel="noreferrer">https://onnxruntime.ai/docs/execution-providers/QNN-ExecutionProvider.html</a> | quantized ONNX artifact가 runtime partition과 offload 경로에서 어떻게 읽히는지 설명 | | [S4] | NPU device | OpenVINO | 2026-03-08 (accessed) | <a href="https://docs.openvino.ai/2025/openvino-workflow/running-inference/inference-devices-and-modes/npu-device.html" target="_blank" rel="noreferrer">https://docs.openvino.ai/2025/openvino-workflow/running-inference/inference-devices-and-modes/npu-device.html</a> | Intel NPU target device와 runtime mode 문맥 설명 |</p>
+    </article>
+    <section class="content-panel surface quiz-panel">
+      <div class="section-heading">
+        <div>
+          <p class="eyebrow">Quiz</p>
+          <h2>복습 문제</h2>
+        </div>
+      </div>
+      <div class="prose">
+        <h1 id="npu-friendly-quantization-퀴즈">NPU-Friendly Quantization 퀴즈</h1>
+<h2 id="객관식-1">객관식 1</h2>
+<p>다음 중 이 챕터가 말하는 <code>NPU-friendly quantization</code>을 가장 정확히 설명한 것은 무엇인가?</p>
+<ol><li>가능한 한 가장 낮은 bit-width를 고르는 일</li><li>정확도 손실이 가장 작은 양자화 기법을 고르는 일</li><li>quantized artifact가 runtime/import 경로와 맞도록 표현 형식과 calibration을 고정하는 일</li><li>weight만 양자화하고 activation은 항상 FP16으로 두는 일</li></ol>
+<h2 id="객관식-2">객관식 2</h2>
+<p><code>QOperator</code>와 <code>QDQ</code>를 비교할 때 가장 먼저 확인해야 할 질문으로 적절한 것은 무엇인가?</p>
+<ol><li>파일 크기가 더 작은 쪽이 무엇인가</li><li>runtime이 어떤 형식을 더 안정적으로 읽고 partition하는가</li><li>zero-point를 전혀 사용하지 않는 쪽이 무엇인가</li><li>calibration dataset이 전혀 필요 없는 쪽이 무엇인가</li></ol>
+<h2 id="객관식-3">객관식 3</h2>
+<p>다음 중 calibration을 가장 적절하게 설명한 것은 무엇인가?</p>
+<ol><li>학습을 다시 하지 않기 위해 optimizer state를 삭제하는 과정</li><li>scale과 zero-point를 고정하기 위한 기준 데이터를 정해 quantized artifact를 재현 가능하게 만드는 과정</li><li>runtime이 unsupported op를 자동으로 제거하게 만드는 과정</li><li>execution provider가 NPU를 탐지하는 과정</li></ol>
+<h2 id="짧은-서술형-1">짧은 서술형 1</h2>
+<p>같은 Int8 모델이라도 <code>QNN EP</code> 경로와 <code>OpenVINO NPU</code> 경로에서 먼저 확인할 항목이 달라지는 이유를 3문장 이내로 설명하라.</p>
+<h2 id="짧은-서술형-2">짧은 서술형 2</h2>
+<p>다음 식이 왜 이 챕터에서 중요했는지 설명하라.</p>
+<div class="math-block">$$
+T_{\mathrm{total}} =
+T_{\mathrm{int8\_compute}}
++ N_{\mathrm{boundary}} \cdot T_{\mathrm{handoff}}
++ N_{\mathrm{requant}} \cdot T_{\mathrm{requant}}
+$$</div>
+<h2 id="심화-설명형-1">심화 설명형 1</h2>
+<p>한 팀이 ORT로 정적 양자화를 수행한 뒤 accuracy drop이 작다는 이유로 바로 배포를 진행했다. 그런데 QNN EP에서 기대보다 NPU offload가 짧고 latency도 개선되지 않았다.</p>
+<p>이 상황에서 확인해야 할 순서를 다음 키워드를 모두 사용해 설명하라.</p>
+<ul><li><code>QDQ/QOperator</code></li><li>calibration dataset</li><li>partition</li><li>boundary 또는 requant</li></ul>
+<h2 id="심화-설명형-2">심화 설명형 2</h2>
+<p>다음 두 선택을 비교해 설명하라.</p>
+<ul><li>per-tensor vs per-channel</li><li>symmetric vs asymmetric</li></ul>
+<p>답안에는 반드시 다음 두 요소를 포함하라.</p>
+<ul><li>왜 이것이 <code>품질 문제</code>이면서 동시에 <code>import 문제</code>인지</li><li>왜 이 챕터가 세부 지원표를 단정하지 않고 artifact 관점으로 설명하는지</li></ul><details class="answer-key"><summary>정답 및 해설 보기</summary><h2 id="정답-및-해설">정답 및 해설</h2>
+<ul><li>객관식 1 정답: 3. 이 챕터의 핵심은 bit-width 자체보다 quantized artifact가 runtime/import 경로와 맞는지다. 표현 형식과 calibration 고정이 함께 봐야 할 대상이다.</li><li>객관식 2 정답: 2. <code>QOperator</code>와 <code>QDQ</code>는 표기 차이가 아니라 graph 구조 차이이므로, 실제 runtime이 어떤 형식을 읽고 partition하는지부터 확인해야 한다.</li><li>객관식 3 정답: 2. calibration은 activation range를 수집해 scale과 zero-point를 정하는 과정이며, 결과적으로 quantized artifact의 재현성에도 직접 연결된다.</li><li>짧은 서술형 1 예시: QNN EP 경로에서는 quantized artifact가 실제로 어떤 partition으로 잡히는지가 먼저 중요하다. OpenVINO NPU 경로에서는 NNCF의 calibration 및 <code>target_device</code> 설정과 NPU device 문맥이 더 먼저 보인다. 둘 다 Int8일 수 있어도 runtime이 artifact를 읽는 방식이 다르기 때문에 질문 순서가 달라진다.</li><li>짧은 서술형 2 예시: 이 식은 Int8 계산이 빨라 보여도 경계 handoff와 requantization이 많으면 전체 latency 이득이 사라질 수 있음을 보여 준다. 그래서 양자화 품질이 좋아도 배포 성능은 나쁠 수 있다는 점을 한 줄로 정리해 준다. 이 챕터가 <code>좋은 양자화</code>와 <code>배포되는 양자화</code>를 구분한 이유가 여기 있다.</li><li>심화 설명형 1 해설 포인트: 먼저 export 결과가 <code>QDQ</code>인지 <code>QOperator</code>인지 확인해 graph 표현을 고정한다. 다음으로 calibration dataset과 설정을 확인해 scale/zero-point가 재현 가능한 artifact였는지 본다. 그 뒤 QNN EP partition이 어디서 끊기는지 보고, 마지막으로 boundary handoff 또는 requant 구간이 latency를 잡아먹는지 확인한다. accuracy drop이 작았다는 사실만으로 deployability를 보장할 수 없다는 결론이 핵심이다.</li><li>심화 설명형 2 해설 포인트: per-channel은 per-tensor보다 더 세밀하게 scale을 둘 수 있어 품질 보존 여지가 있지만 artifact 구조와 import 해석이 더 복잡해질 수 있다. symmetric와 asymmetric는 zero-point 처리 방식 차이이며, 표현 범위와 파라미터 구조에 영향을 준다. 이 챕터가 세부 지원표를 단정하지 않는 이유는 제공된 근거가 <code>지원 범위 표</code>보다 <code>QDQ/QOperator</code>, calibration, target device, runtime import 경로 설명`에 집중돼 있기 때문이다. 따라서 실무자는 지원표를 추정하기보다 먼저 artifact 형식과 import 경로를 확인해야 한다.</li></ul></details>
+      </div>
+    </section>
+    <nav class="pager">
+      <a class="pager-link" href="../02-onnx-graph-and-lowering/"><span>이전</span><strong>ONNX Graph and Lowering</strong></a>
+      <a class="pager-link" href="../04-runtime-and-execution-provider/"><span>다음</span><strong>Runtime and Execution Provider</strong></a>
+    </nav>
+    
+      </section>
+      <aside class="page-sidebar">
+    <div class="sidebar-panel surface">
+      <p class="eyebrow">On This Page</p>
+      <div class="toc" data-toc>
+        <a class="toc-link" href="#수업-개요">수업 개요</a><a class="toc-link" href="#학습-목표">학습 목표</a><a class="toc-link" href="#수업-전에-생각할-질문">수업 전에 생각할 질문</a><a class="toc-link" href="#강의-스크립트">강의 스크립트</a><a class="toc-link sub" href="#part-1-npu-friendly라는-말의-기준부터-바꾸자">Part 1. NPU friendly라는 말의 기준부터 바꾸자</a><a class="toc-link sub" href="#part-2-qoperator와-qdq는-그래프를-보는-시선을-바꾼다">Part 2. QOperator와 QDQ는 그래프를 보는 시선을 바꾼다</a><a class="toc-link sub" href="#part-3-calibration은-정확도-보정이면서-재현성-고정이다">Part 3. Calibration은 정확도 보정이면서 재현성 고정이다</a><a class="toc-link sub" href="#part-4-granularity와-zero-point-방식은-품질-문제이면서-import-문제다">Part 4. Granularity와 zero point 방식은 품질 문제이면서 import 문제다</a><a class="toc-link sub" href="#part-5-품질이-좋은데도-npu-경로가-답답한-두-장면">Part 5. 품질이 좋은데도 NPU 경로가 답답한 두 장면</a><a class="toc-link sub" href="#part-6-이-챕터에서-권하는-디버깅-순서">Part 6. 이 챕터에서 권하는 디버깅 순서</a><a class="toc-link" href="#자주-헷갈리는-포인트">자주 헷갈리는 포인트</a><a class="toc-link" href="#사례로-다시-보기">사례로 다시 보기</a><a class="toc-link" href="#핵심-정리">핵심 정리</a><a class="toc-link" href="#복습-체크리스트">복습 체크리스트</a><a class="toc-link" href="#대안과-비교">대안과 비교</a><a class="toc-link" href="#참고-이미지">참고 이미지</a><a class="toc-link" href="#출처">출처</a>
+      </div>
+    </div>
+    </aside>
+    </div>
+  </main>
+  <script type="module" src="../../assets/app.js"></script>
+  <script type="module">
+    import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs';
+    mermaid.initialize({ startOnLoad: true, theme: 'neutral', securityLevel: 'loose' });
+  </script>
+  <script>
+    window.MathJax = {
+      tex: { inlineMath: [['$', '$'], ['\\(', '\\)']], displayMath: [['$$', '$$'], ['\\[', '\\]']] },
+      svg: { fontCache: 'global' }
+    };
+  </script>
+  <script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-svg.js" async></script>
+</body>
+</html>

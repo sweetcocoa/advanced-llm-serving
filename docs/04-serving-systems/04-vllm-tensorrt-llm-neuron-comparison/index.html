@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>vLLM, TensorRT-LLM, Neuron Comparison | Serving 시스템 설계</title>
+  <meta name="description" content="이 챕터는 세 프레임워크를 제품 소개처럼 나열하지 않는다. 대신 &quot;모델은 같아도 왜 팀마다 backend 답이 달라지는가&quot;를 추적한다. vLLM 문서는 범용 serving의 기준선을 제공하고, TensorRT LLM의 disaggregated serving 문서는 prefill/decode를 분리해서 병목을 다시 배치하는 발상을 보여 주며, AWS Neuron 자료는 2025년 8월 6일 announcement와 2026년 3월 8일 기준 2.26.0 release notes를 통해 전용 하드웨어와 릴리스 주기를 함께 관리해야 한다는 점을 드러낸다. [S1] [S2] [S3] [S4]">
+  <meta name="theme-color" content="#10182a">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+KR:wght@400;500;600;700&family=Space+Grotesk:wght@500;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../../assets/style.css">
+</head>
+<body class="page-chapter" data-page-kind="chapter" data-page-id="study/llm-serving-npu-roadmap/04-serving-systems/04-vllm-tensorrt-llm-neuron-comparison" data-root-prefix="../../">
+  <div class="reading-progress" data-reading-progress></div>
+  <header class="site-header">
+    <a class="brand" href="../../">
+      <span class="brand-kicker">GitHub Pages Study</span>
+      <strong>LLM Serving + NPU</strong>
+    </a>
+    <nav class="top-nav"><a class="top-nav-link" href="../../01-foundations/">기초와 성능 직관</a><a class="top-nav-link" href="../../02-llm-serving-core/">LLM Serving 핵심</a><a class="top-nav-link" href="../../03-llm-serving-advanced/">고급 Serving 패턴</a><a class="top-nav-link is-active" href="../">Serving 시스템 설계</a><a class="top-nav-link" href="../../05-npu-stack/">NPU 소프트웨어 스택</a><a class="top-nav-link" href="../../06-runtime-and-compiler/">런타임과 컴파일러</a><a class="top-nav-link" href="../../07-synthesis/">종합 정리와 최신 흐름</a></nav>
+    <div class="search-shell">
+      <input type="search" placeholder="챕터, 모듈, 키워드 검색" aria-label="검색" data-global-search>
+      <div class="search-results" data-search-results hidden></div>
+    </div>
+  </header>
+  <main class="page-frame">
+    
+    <section class="hero">
+      <div class="hero-copy">
+        <p class="eyebrow">Serving 시스템 설계</p>
+        <h1>vLLM, TensorRT-LLM, Neuron Comparison</h1>
+        <p class="hero-summary">이 챕터는 세 프레임워크를 제품 소개처럼 나열하지 않는다. 대신 &quot;모델은 같아도 왜 팀마다 backend 답이 달라지는가&quot;를 추적한다. vLLM 문서는 범용 serving의 기준선을 제공하고, TensorRT LLM의 disaggregated serving 문서는 prefill/decode를 분리해서 병목을 다시 배치하는 발상을 보여 주며, AWS Neuron 자료는 2025년 8월 6일 announcement와 2026년 3월 8일 기준 2.26.0 release notes를 통해 전용 하드웨어와 릴리스 주기를 함께 관리해야 한다는 점을 드러낸다. [S1] [S2] [S3] [S4]</p>
+      </div>
+      <div class="hero-stats">
+        <div class="stat-card"><strong>35-50 min</strong><span>reading time</span></div>
+        <div class="stat-card"><strong>2026-03-08</strong><span>updated</span></div>
+        <div class="stat-card"><button class="progress-toggle" type="button" data-progress-toggle data-progress-id="study/llm-serving-npu-roadmap/04-serving-systems/04-vllm-tensorrt-llm-neuron-comparison">완료로 표시</button></div>
+      </div>
+    </section>
+    
+    <div class="page-layout">
+      <section class="page-main content-shell">
+        
+    <article class="content-panel surface prose" data-reading-target>
+      <h1 id="vllm-tensorrt-llm-neuron-comparison">vLLM, TensorRT-LLM, Neuron Comparison</h1>
+<h2 id="수업-개요">수업 개요</h2>
+<p>이 챕터는 세 프레임워크를 제품 소개처럼 나열하지 않는다. 대신 &quot;모델은 같아도 왜 팀마다 backend 답이 달라지는가&quot;를 추적한다. vLLM 문서는 범용 serving의 기준선을 제공하고, TensorRT-LLM의 disaggregated serving 문서는 prefill/decode를 분리해서 병목을 다시 배치하는 발상을 보여 주며, AWS Neuron 자료는 2025년 8월 6일 announcement와 2026년 3월 8일 기준 2.26.0 release notes를 통해 전용 하드웨어와 릴리스 주기를 함께 관리해야 한다는 점을 드러낸다. [S1] [S2] [S3] [S4]</p>
+<h2 id="학습-목표">학습 목표</h2>
+<ul><li>vLLM, TensorRT-LLM, Neuron을 생산성, 성능 상한, 장비 종속성, 운영 검증 방식으로 비교할 수 있다.</li><li>&quot;같은 모델이 뜬다&quot;와 &quot;같은 운영 난이도다&quot;가 왜 다른 말인지 설명할 수 있다.</li><li>prefill/decode 분리와 release-note 기반 검증이 backend 선택 순서를 어떻게 바꾸는지 말할 수 있다.</li><li>팀의 장비와 배포 문화에 맞춰 어떤 backend를 1순위로 볼지 제안할 수 있다.</li></ul>
+<h2 id="수업-전에-생각할-질문">수업 전에 생각할 질문</h2>
+<ul><li>한 달에 여러 번 모델을 갈아끼우는 팀과, 특정 하드웨어 표준을 이미 굳힌 팀이 같은 backend를 고를 이유가 있을까?</li><li>벤치마크 숫자가 좋아도 운영 절차가 길어지면 그 backend는 실제로 더 빠른 선택일까?</li><li>AWS 전용 장비에서의 적합성과 NVIDIA GPU에서의 적합성을 같은 점수표로 평가해도 될까?</li></ul>
+<h2 id="강의-스크립트">강의 스크립트</h2>
+<h3 id="1-비교는-성능표가-아니라-실패-비용표에서-시작한다">1. 비교는 성능표가 아니라 실패 비용표에서 시작한다</h3>
+<p><strong>교수자:</strong> 세 프레임워크를 비교할 때 먼저 적어야 하는 것은 최고 TPS가 아닙니다. 어떤 실패가 가장 비싼지부터 적어야 합니다. 모델 교체가 느린 게 비싼가요, GPU 활용률이 낮은 게 비싼가요, 아니면 특정 하드웨어 제약을 팀이 감당 못 하는 게 비싼가요?</p>
+<p><strong>학습자:</strong> 그러면 backend는 속도 선택지라기보다 운영 리스크 선택지에 가깝겠네요?</p>
+<p><strong>교수자:</strong> 맞습니다. vLLM은 범용 serving 문서를 중심으로 읽게 되고, TensorRT-LLM은 disaggregated serving처럼 병목 분해 전략을 중심으로 읽게 되며, AWS Neuron은 announcement와 release notes를 함께 보면서 지원 범위와 릴리스 리듬을 먼저 확인하게 됩니다. 읽기 시작하는 문서가 다르다는 것은 운영 질문이 다르다는 뜻입니다. [S1] [S2] [S3] [S4]</p>
+<div class="math-block">$$
+\mathrm{DecisionScore}(b) = w_p P_b + w_s S_b + w_o O_b - w_l L_b
+$$</div>
+<p>여기서 $P$는 배포 생산성, $S$는 성능 상한, $O$는 운영 적합성, $L$은 장비 종속성이다. 이 수식은 실제 점수 계산기보다 &quot;우리 팀이 어떤 항목을 빼먹었는가&quot;를 드러내는 틀로 쓰면 된다.</p>
+<pre class="mermaid">flowchart TD
+    A[&quot;팀 상황 정리&quot;] --&gt; B{&quot;가장 큰 비용은?&quot;}
+    B --&gt;|모델 교체 지연| C[&quot;vLLM 먼저 검토 [S1]&quot;]
+    B --&gt;|stage별 병목과 GPU 활용률| D[&quot;TensorRT-LLM 먼저 검토 [S2]&quot;]
+    B --&gt;|전용 하드웨어와 릴리스 검증| E[&quot;AWS Neuron 먼저 검토 [S3][S4]&quot;]
+    C --&gt; F[&quot;모델 교체 속도, serving 표면 확인&quot;]
+    D --&gt; G[&quot;prefill/decode 분리 가치 확인&quot;]
+    E --&gt; H[&quot;지원 조합, 버전, 릴리스 주기 확인&quot;]</pre>
+<h3 id="2-vllm은-바로-시작해야-하는-팀의-기준선이-된다">2. vLLM은 &#x27;바로 시작해야 하는 팀&#x27;의 기준선이 된다</h3>
+<p><strong>학습자:</strong> 그럼 vLLM은 어떤 팀에서 가장 설득력이 큰가요?</p>
+<p><strong>교수자:</strong> 모델 후보가 자주 바뀌고, serving 기능을 넓게 시도해야 하고, 우선 서비스를 띄워서 피드백을 받아야 하는 팀입니다. 이 챕터에서 vLLM은 &quot;가장 빠르다&quot;보다 &quot;가장 빨리 운영 실험을 시작하게 해 주는 기준선&quot;으로 두는 편이 정확합니다. [S1]</p>
+<p><strong>학습자:</strong> 실무에서 자주 나오는 오해는 뭔가요?</p>
+<p><strong>교수자:</strong> 두 가지입니다. 첫째, 시작이 쉬우면 장기 운영에서도 항상 최선이라고 착각하는 것. 둘째, 반대로 범용성이 높으니 전문 최적화 여지는 없다고 성급하게 단정하는 것입니다. vLLM은 출발선을 낮춰 주는 장점이 크지만, 트래픽 규모와 하드웨어 고정성이 커지면 다른 backend가 더 맞을 수 있다는 질문도 동시에 열어 둬야 합니다. [S1]</p>
+<h3 id="3-tensorrt-llm은-병목을-쪼개서-다루려는-팀에-맞는다">3. TensorRT-LLM은 병목을 쪼개서 다루려는 팀에 맞는다</h3>
+<p><strong>교수자:</strong> TensorRT-LLM의 disaggregated serving 문서가 중요한 이유는 단순합니다. 이 backend를 볼 때는 &quot;GPU 위에서 추론이 된다&quot;가 아니라 &quot;prefill과 decode를 같은 방식으로 운영하지 않아도 된다&quot;는 선택지가 열린다는 점을 먼저 봐야 하기 때문입니다. [S2]</p>
+<p><strong>학습자:</strong> 분리하면 무조건 이득인가요?</p>
+<p><strong>교수자:</strong> 아닙니다. 분리하면 보이는 병목이 늘어납니다. prefill 쪽이 막히는지, decode 쪽이 막히는지, 둘 사이 handoff가 흔들리는지 따로 봐야 합니다. 성능 상한이 커지는 대신 시스템 경계도 늘어납니다. [S2]</p>
+<div class="math-block">$$
+\mathrm{TTFT}_{\mathrm{split}} = T_{\mathrm{queue}} + T_{\mathrm{prefill}} + T_{\mathrm{handoff}} + T_{\mathrm{first\ decode}}
+$$</div>
+<p>분리형 서빙에서는 $T_{\mathrm{handoff}}$가 새로 드러난다. 대신 $T_{\mathrm{prefill}}$과 $T_{\mathrm{first\ decode}}$를 서로 다른 자원 정책으로 다룰 수 있다.</p>
+<pre class="mermaid">sequenceDiagram
+    participant U as User
+    participant R as Router
+    participant P as Prefill Service
+    participant D as Decode Service
+    U-&gt;&gt;R: 긴 컨텍스트 요청
+    R-&gt;&gt;P: prefill 작업 전달
+    P--&gt;&gt;R: 상태 반환
+    R-&gt;&gt;D: decode 세션 전달
+    D--&gt;&gt;U: 첫 토큰 스트림
+    Note over P,D: 분리의 이득과 handoff 비용을 함께 본다. [S2]</pre>
+<h3 id="4-aws-neuron은-성능-수치보다-지원-조합-검증이-먼저다">4. AWS Neuron은 성능 수치보다 지원 조합 검증이 먼저다</h3>
+<p><strong>학습자:</strong> Neuron은 왜 자꾸 release notes 이야기가 따라오나요?</p>
+<p><strong>교수자:</strong> 이 챕터에서 Neuron은 범용 라이브러리라기보다 전용 운영 스택으로 보는 편이 맞기 때문입니다. 2025년 8월 6일 AWS Neuron 2.25 announcement와 2026년 3월 8일 기준 2.26.0 release notes가 함께 필요한 이유도 여기에 있습니다. &quot;무엇이 추가됐는가&quot;와 &quot;지금 무엇이 지원되는가&quot;를 같이 봐야 실제 배포 판단이 되기 때문입니다. [S3] [S4]</p>
+<p><strong>학습자:</strong> 그러면 Neuron에서 첫 질문은 benchmark가 아니겠네요.</p>
+<p><strong>교수자:</strong> 그렇습니다. 현재 모델, SDK, 하드웨어 조합이 지원 범위 안에 있는가가 첫 질문입니다. Inferentia나 Trainium 환경이 이미 조직 표준이면 이 과정이 체계로 흡수되지만, 그렇지 않으면 장비 종속성과 릴리스 확인 비용이 바로 운영 부담으로 보입니다. [S3] [S4]</p>
+<h3 id="5-디버깅-순서도-backend마다-다르게-잡아야-한다">5. 디버깅 순서도 backend마다 다르게 잡아야 한다</h3>
+<p><strong>교수자:</strong> 같은 &quot;응답이 늦다&quot;라는 증상도 backend에 따라 보는 순서가 달라집니다.</p>
+<p><strong>학습자:</strong> 순서를 예로 들어 주세요.</p>
+<p><strong>교수자:</strong> vLLM은 먼저 모델 교체 직후 설정 변화, serving 옵션, 요청 분포 변화를 묻는 편이 자연스럽습니다. TensorRT-LLM은 prefill/decode 어느 쪽 stage에서 지연이 튀는지부터 나눠 봐야 합니다. Neuron은 성능처럼 보이는 문제가 사실은 릴리스 조합이나 지원 범위 확인에서 시작되는 경우가 있어, announcement와 release notes를 먼저 다시 보는 절차가 중요합니다. [S1] [S2] [S3] [S4]</p>
+<p><strong>학습자:</strong> 결국 backend 선택은 성능 숫자를 바꾸는 것만이 아니라, 장애를 읽는 문법을 바꾸는 일이군요.</p>
+<p><strong>교수자:</strong> 바로 그 점이 핵심입니다. 누구나 benchmark는 읽을 수 있어도, 아무나 운영 문제를 같은 속도로 해석하지는 못합니다.</p>
+<h2 id="자주-헷갈리는-포인트">자주 헷갈리는 포인트</h2>
+<ul><li>vLLM이 기준선이라는 말은 모든 상황에서 최종 선택지라는 뜻이 아니다. [S1]</li><li>TensorRT-LLM의 장점은 &quot;빠른 추론&quot; 한 단어보다 &quot;stage를 쪼개 운영할 수 있음&quot;에 더 가깝다. [S2]</li><li>Neuron은 AWS에서도 그냥 돌릴 수 있는 옵션이 아니라, 전용 하드웨어와 릴리스 관리가 묶인 선택이다. [S3] [S4]</li><li>같은 모델이 실행된다는 사실만으로 운영 절차, 검증 비용, 디버깅 난이도가 같아지지는 않는다.</li><li>backend를 비교할 때는 평균 처리량뿐 아니라 새 모델 온보딩 속도와 검증 절차 길이도 함께 봐야 한다.</li></ul>
+<h2 id="사례로-다시-보기">사례로 다시 보기</h2>
+<h3 id="사례-1-모델-교체가-많은-제품-팀">사례 1. 모델 교체가 많은 제품 팀</h3>
+<p>한 제품 팀은 분기 안에 여러 모델 후보를 시험해야 했다. 이 팀에게 가장 비싼 실패는 최고 처리량 부족이 아니라, 모델 교체와 serving 검증이 늦어지는 일이었다. 이 경우 vLLM을 기준선으로 잡고 실험 속도와 운영 피드백 루프를 먼저 확보하는 선택이 합리적이다. [S1]</p>
+<h3 id="사례-2-긴-입력-비중이-큰-nvidia-gpu-팀">사례 2. 긴 입력 비중이 큰 NVIDIA GPU 팀</h3>
+<p>다른 팀은 긴 입력 요청이 많고, 한 단계 안에서 prefill과 decode가 서로 다른 성격의 병목을 만든다는 점이 문제였다. 이때는 TensorRT-LLM의 disaggregated serving을 검토해 stage별 병목을 따로 다룰 가치가 생긴다. 다만 handoff와 추가 운영 복잡도를 함께 계산해야 한다. [S2]</p>
+<h3 id="사례-3-inferentiatrainium-표준화를-추진하는-팀">사례 3. Inferentia/Trainium 표준화를 추진하는 팀</h3>
+<p>세 번째 팀은 AWS 안에서 하드웨어와 배포 절차를 표준화하려 했다. 이 팀은 Neuron을 단순 성능 후보가 아니라 release-note 중심 운영 체계로 받아들여야 한다. 즉 새 기능 announcement를 보고 기대치를 세운 뒤, 실제 배포 직전에는 release notes로 지원 조합과 버전 범위를 검증하는 식이다. [S3] [S4]</p>
+<h2 id="핵심-정리">핵심 정리</h2>
+<ul><li>vLLM은 빠른 실험과 범용 serving의 기준선, TensorRT-LLM은 stage 분리를 통한 성능 재배치, Neuron은 전용 하드웨어와 릴리스 관리가 결합된 선택으로 보면 비교가 명확해진다. [S1] [S2] [S3] [S4]</li><li>backend 선택은 모델 이름보다 조직의 하드웨어 고정성, 모델 교체 빈도, 운영 검증 습관에 더 크게 좌우된다.</li><li>TensorRT-LLM은 prefill/decode 분리를 통해 성능 여지를 만들지만 handoff와 운영 경계를 늘린다. [S2]</li><li>AWS Neuron은 announcement와 release notes를 함께 읽는 검증 흐름이 핵심이며, 이 점이 장비 종속성과 직접 연결된다. [S3] [S4]</li></ul>
+<h2 id="복습-체크리스트">복습 체크리스트</h2>
+<ul><li>세 backend를 생산성, 성능 상한, 장비 종속성, 검증 방식 네 축으로 설명할 수 있는가?</li><li>vLLM을 &quot;기준선&quot;으로 부르는 이유를 성능 만능론과 구분해 말할 수 있는가?</li><li>TensorRT-LLM에서 <code>T_handoff</code>가 왜 새 운영 항목이 되는지 설명할 수 있는가?</li><li>AWS Neuron에서 announcement와 release notes를 함께 보는 이유를 말할 수 있는가?</li><li>같은 모델을 쓰더라도 팀마다 backend 답이 달라지는 이유를 사례로 설명할 수 있는가?</li></ul>
+<h2 id="대안과-비교">대안과 비교</h2>
+<p>| 비교 축 | vLLM | TensorRT-LLM | AWS Neuron | | --- | --- | --- | --- | | 출발 질문 | 얼마나 빨리 실험과 serving을 시작할 수 있는가 [S1] | prefill/decode를 분리해 병목을 다시 배치할 가치가 있는가 [S2] | 현재 조합이 지원 범위 안에 있는가 [S3] [S4] | | 강점 | 범용 serving 기준선, 빠른 모델 실험 [S1] | stage별 최적화와 병목 분리 [S2] | Inferentia/Trainium 기반 운영 표준화 [S3] [S4] | | 주된 비용 | 장기적으로 더 전문화된 최적화가 필요할 수 있음 | handoff와 운영 경계 증가 | 장비 종속성과 릴리스 검증 절차 | | 잘 맞는 팀 | 모델 교체가 잦은 팀 | 병목을 세밀하게 쪼개려는 GPU 팀 | AWS 전용 운영 체계를 이미 갖춘 팀 | | 먼저 볼 문서 | 범용 serving 문서 [S1] | disaggregated serving 문서 [S2] | announcement + release notes [S3] [S4] |</p>
+<div class="table-wrap"><table><thead><tr><th>흔한 오해</th><th>&quot;쉽게 시작되니 항상 최종 답이다&quot;</th><th>&quot;분리하면 성능만 좋아지고 복잡도는 그대로다&quot;</th><th>&quot;AWS 환경이면 자동으로 바로 맞는다&quot;</th></tr></thead><tbody></tbody></table></div>
+<h2 id="참고-이미지">참고 이미지</h2>
+<p><img src="./assets/img-01.png" alt="vLLM logo"></p>
+<ul><li>[I1] 캡션: vLLM logo</li><li>출처 번호: [I1]</li><li>왜 이 그림이 필요한지: 이 챕터에서 vLLM을 범용 서빙의 출발점으로 놓고 비교한다는 점을 시각적으로 고정하기 위해 사용한다.</li></ul>
+<p><img src="./assets/img-02.svg" alt="Open Neural Network Exchange logo"></p>
+<ul><li>[I2] 캡션: Open Neural Network Exchange logo</li><li>출처 번호: [I2]</li><li>왜 이 그림이 필요한지: 모델 포맷의 이식 가능성과 serving backend의 운영 적합성이 같은 문제가 아니라는 점을 상기시키기 위해 넣었다.</li></ul>
+<h2 id="출처">출처</h2>
+<p>| 번호 | 제목 | 발행 주체 | 날짜 | URL | 사용 이유 | | --- | --- | --- | --- | --- | --- | | [S1] | vLLM Documentation | vLLM project | 2026-01-07 | <a href="https://docs.vllm.ai/en/latest/" target="_blank" rel="noreferrer">https://docs.vllm.ai/en/latest/</a> | 범용 serving 기준선과 비교의 출발점 | | [S2] | Disaggregated Serving | NVIDIA TensorRT-LLM | 2026-03-08 (accessed) | <a href="https://nvidia.github.io/TensorRT-LLM/1.2.0rc6/features/disagg-serving.html" target="_blank" rel="noreferrer">https://nvidia.github.io/TensorRT-LLM/1.2.0rc6/features/disagg-serving.html</a> | prefill/decode 분리와 stage 기반 운영 비교 | | [S3] | AWS Neuron 2.25 announcement | AWS | 2025-08-06 | <a href="https://aws.amazon.com/about-aws/whats-new/2025/08/aws-neuron-2-25-announce/" target="_blank" rel="noreferrer">https://aws.amazon.com/about-aws/whats-new/2025/08/aws-neuron-2-25-announce/</a> | AWS Neuron 최신 기능 변화와 기대치 설정 | | [S4] | AWS Neuron release notes 2.26.0 | AWS Neuron | 2026-03-08 (accessed) | <a href="https://awsdocs-neuron.readthedocs-hosted.com/en/v2.26.1/release-notes/2.26.0/" target="_blank" rel="noreferrer">https://awsdocs-neuron.readthedocs-hosted.com/en/v2.26.1/release-notes/2.26.0/</a> | 지원 조합과 배포 검증 포인트 확인 |</p>
+    </article>
+    <section class="content-panel surface quiz-panel">
+      <div class="section-heading">
+        <div>
+          <p class="eyebrow">Quiz</p>
+          <h2>복습 문제</h2>
+        </div>
+      </div>
+      <div class="prose">
+        <h1 id="vllm-tensorrt-llm-neuron-comparison-퀴즈">vLLM, TensorRT-LLM, Neuron Comparison 퀴즈</h1>
+<h2 id="객관식-1">객관식 1</h2>
+<p>다음 중 이 챕터의 설명에 가장 잘 맞는 연결은 무엇인가?</p>
+<ol><li>vLLM은 release notes 검토가 우선이고, Neuron은 범용 serving 실험이 우선이다.</li><li>TensorRT-LLM은 prefill/decode 분리 검토와 가장 직접적으로 연결된다.</li><li>AWS Neuron은 장비 종속성이 거의 없어서 하드웨어 검토가 중요하지 않다.</li><li>세 backend는 운영 질문이 같아서 같은 문서 순서로 평가하면 된다.</li></ol>
+<h2 id="객관식-2">객관식 2</h2>
+<p>모델 교체가 잦고 빠르게 serving 실험을 시작해야 하는 팀이 있다. 이 챕터의 비교 틀에서 가장 자연스러운 출발점은 무엇인가?</p>
+<ol><li>vLLM을 기준선으로 두고 실험 속도와 serving 표면을 먼저 본다.</li><li>TensorRT-LLM만 고정하고 handoff 비용은 나중에 생각한다.</li><li>AWS Neuron announcement 없이 release notes도 건너뛴다.</li><li>어떤 backend든 모델만 같으면 운영 비용도 같다고 본다.</li></ol>
+<h2 id="객관식-3">객관식 3</h2>
+<p>AWS Neuron을 평가할 때 benchmark 전에 먼저 던져야 할 질문으로 가장 적절한 것은 무엇인가?</p>
+<ol><li>현재 모델, SDK, 하드웨어 조합이 지원 범위 안에 있는가?</li><li>TensorRT-LLM의 disaggregated serving을 바로 적용할 수 있는가?</li><li>vLLM 문서만 읽어도 Neuron 운영 정책을 대신할 수 있는가?</li><li>장비 종속성은 무시해도 되는가?</li></ol>
+<h2 id="짧은-서술형-1">짧은 서술형 1</h2>
+<p>이 챕터에서 backend 비교를 &quot;성능표&quot;보다 &quot;실패 비용표&quot;에서 시작해야 한다고 한 이유를 2~3문장으로 설명하라.</p>
+<h2 id="짧은-서술형-2">짧은 서술형 2</h2>
+<p><code>TTFT_split = T_queue + T_prefill + T_handoff + T_first_decode</code> 식이 TensorRT-LLM 검토에서 어떤 판단을 돕는지 설명하라.</p>
+<h2 id="심화-설명형-1">심화 설명형 1</h2>
+<p>다음 세 팀 가운데 하나를 골라 어떤 backend를 1순위로 검토할지 쓰고, 그 이유를 생산성, 성능 상한, 장비 종속성, 검증 방식 네 축으로 설명하라.</p>
+<ul><li>팀 A: 모델 후보가 자주 바뀌고 serving 실험을 빨리 시작해야 함</li><li>팀 B: 긴 입력 비중이 크고 stage별 병목을 따로 다루고 싶음</li><li>팀 C: Inferentia/Trainium 기반 운영 표준화를 추진 중임</li></ul>
+<h2 id="심화-설명형-2">심화 설명형 2</h2>
+<p>vLLM에서 출발한 서비스가 성장하면서 TensorRT-LLM 또는 AWS Neuron 전환을 검토한다. 단순 처리량 외에 반드시 비교해야 할 항목을 네 가지 이상 제시하고, 왜 그 항목이 실제 운영 의사결정에 중요한지 설명하라.</p><details class="answer-key"><summary>정답 및 해설 보기</summary><h2 id="정답-및-해설">정답 및 해설</h2>
+<ul><li>객관식 1 정답: 2. TensorRT-LLM의 핵심 비교 포인트는 disaggregated serving, 즉 prefill/decode 분리 검토와 직접 연결된다. [S2]</li><li>객관식 2 정답: 1. 이 챕터에서는 vLLM을 빠른 serving 실험과 모델 교체가 필요한 팀의 기준선으로 둔다. [S1]</li><li>객관식 3 정답: 1. AWS Neuron은 announcement와 release notes를 함께 보며 현재 모델, SDK, 하드웨어 조합의 지원 여부를 먼저 확인해야 한다. [S3] [S4]</li><li>짧은 서술형 1 예시: backend 선택은 평균 성능 숫자 하나로 끝나지 않는다. 어떤 팀은 모델 교체 지연이 가장 비싸고, 어떤 팀은 stage 병목이나 장비 종속성이 더 비싸기 때문에 실패 비용을 먼저 정의해야 실제로 맞는 backend를 고를 수 있다.</li><li>짧은 서술형 2 예시: 이 식은 분리형 서빙에서 첫 토큰 시간의 구성 요소를 나눠 보게 만든다. 따라서 TensorRT-LLM이 주는 이득이 prefill/decode 분리에서 오는지, 아니면 handoff 비용 때문에 상쇄되는지를 판단하는 데 쓰인다. [S2]</li><li>심화 설명형 1 해설 포인트: 팀 A는 vLLM [S1], 팀 B는 TensorRT-LLM [S2], 팀 C는 AWS Neuron [S3] [S4]이 각각 1순위가 되기 쉽다. 정답의 핵심은 모델 이름보다 팀의 운영 방식과 검증 절차가 backend 우선순위를 만든다는 점을 설명하는 것이다.</li><li>심화 설명형 2 해설 포인트: 새 모델 온보딩 시간, stage 분리로 인한 handoff 비용, 운영자가 먼저 읽어야 할 문서, 장비 종속성, 릴리스 검증 절차, 지원 조합 확인 비용 등을 비교해야 한다. 이 챕터는 backend가 성능 숫자뿐 아니라 운영 문법과 장애 분석 순서를 바꾼다는 점을 강조한다. [S1] [S2] [S3] [S4]</li></ul></details>
+      </div>
+    </section>
+    <nav class="pager">
+      <a class="pager-link" href="../03-benchmarking-and-observability/"><span>이전</span><strong>Benchmarking and Observability</strong></a>
+      <a class="pager-link" href="../../05-npu-stack/01-npu-architecture-basics/"><span>다음</span><strong>NPU Architecture Basics</strong></a>
+    </nav>
+    
+      </section>
+      <aside class="page-sidebar">
+    <div class="sidebar-panel surface">
+      <p class="eyebrow">On This Page</p>
+      <div class="toc" data-toc>
+        <a class="toc-link" href="#수업-개요">수업 개요</a><a class="toc-link" href="#학습-목표">학습 목표</a><a class="toc-link" href="#수업-전에-생각할-질문">수업 전에 생각할 질문</a><a class="toc-link" href="#강의-스크립트">강의 스크립트</a><a class="toc-link sub" href="#1-비교는-성능표가-아니라-실패-비용표에서-시작한다">1. 비교는 성능표가 아니라 실패 비용표에서 시작한다</a><a class="toc-link sub" href="#2-vllm은-바로-시작해야-하는-팀의-기준선이-된다">2. vLLM은 &#x27;바로 시작해야 하는 팀&#x27;의 기준선이 된다</a><a class="toc-link sub" href="#3-tensorrt-llm은-병목을-쪼개서-다루려는-팀에-맞는다">3. TensorRT LLM은 병목을 쪼개서 다루려는 팀에 맞는다</a><a class="toc-link sub" href="#4-aws-neuron은-성능-수치보다-지원-조합-검증이-먼저다">4. AWS Neuron은 성능 수치보다 지원 조합 검증이 먼저다</a><a class="toc-link sub" href="#5-디버깅-순서도-backend마다-다르게-잡아야-한다">5. 디버깅 순서도 backend마다 다르게 잡아야 한다</a><a class="toc-link" href="#자주-헷갈리는-포인트">자주 헷갈리는 포인트</a><a class="toc-link" href="#사례로-다시-보기">사례로 다시 보기</a><a class="toc-link sub" href="#사례-1-모델-교체가-많은-제품-팀">사례 1. 모델 교체가 많은 제품 팀</a><a class="toc-link sub" href="#사례-2-긴-입력-비중이-큰-nvidia-gpu-팀">사례 2. 긴 입력 비중이 큰 NVIDIA GPU 팀</a><a class="toc-link sub" href="#사례-3-inferentiatrainium-표준화를-추진하는-팀">사례 3. Inferentia/Trainium 표준화를 추진하는 팀</a><a class="toc-link" href="#핵심-정리">핵심 정리</a><a class="toc-link" href="#복습-체크리스트">복습 체크리스트</a><a class="toc-link" href="#대안과-비교">대안과 비교</a><a class="toc-link" href="#참고-이미지">참고 이미지</a><a class="toc-link" href="#출처">출처</a>
+      </div>
+    </div>
+    </aside>
+    </div>
+  </main>
+  <script type="module" src="../../assets/app.js"></script>
+  <script type="module">
+    import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs';
+    mermaid.initialize({ startOnLoad: true, theme: 'neutral', securityLevel: 'loose' });
+  </script>
+  <script>
+    window.MathJax = {
+      tex: { inlineMath: [['$', '$'], ['\\(', '\\)']], displayMath: [['$$', '$$'], ['\\[', '\\]']] },
+      svg: { fontCache: 'global' }
+    };
+  </script>
+  <script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-svg.js" async></script>
+</body>
+</html>

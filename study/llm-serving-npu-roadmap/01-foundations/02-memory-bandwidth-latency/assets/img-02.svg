@@ -1,0 +1,25 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="760" height="220" viewBox="0 0 760 220" role="img" aria-label="Decode bytes moved path">
+  <rect width="760" height="220" fill="#f8fafc"/>
+  <style>
+    text { font-family: Arial, sans-serif; fill: #0f172a; }
+    .title { font-size: 20px; font-weight: 700; }
+    .label { font-size: 16px; font-weight: 700; }
+    .sub { font-size: 14px; fill: #475569; }
+  </style>
+  <text x="28" y="36" class="title">Decode bytes moved path</text>
+  <rect x="28" y="74" width="150" height="84" rx="14" fill="#dbeafe" stroke="#2563eb" stroke-width="2"/>
+  <text x="103" y="108" text-anchor="middle" class="label">New token</text>
+  <text x="103" y="130" text-anchor="middle" class="sub">small fresh compute</text>
+  <path d="M178 116 L238 116" stroke="#2563eb" stroke-width="4" fill="none"/>
+  <polygon points="238,116 224,108 224,124" fill="#2563eb"/>
+  <rect x="238" y="58" width="210" height="116" rx="14" fill="#dcfce7" stroke="#16a34a" stroke-width="2"/>
+  <text x="343" y="98" text-anchor="middle" class="label">Read past KV</text>
+  <text x="343" y="120" text-anchor="middle" class="sub">bytes moved grows with context</text>
+  <text x="343" y="142" text-anchor="middle" class="sub">same token, longer memory walk</text>
+  <path d="M448 116 L520 116" stroke="#16a34a" stroke-width="4" fill="none"/>
+  <polygon points="520,116 506,108 506,124" fill="#16a34a"/>
+  <rect x="520" y="74" width="212" height="84" rx="14" fill="#fee2e2" stroke="#dc2626" stroke-width="2"/>
+  <text x="626" y="108" text-anchor="middle" class="label">Latency headroom</text>
+  <text x="626" y="130" text-anchor="middle" class="sub">falls when bandwidth dominates</text>
+  <text x="28" y="194" class="sub">Chapter interpretation: when model shrink barely helps but context length hurts, re-check bytes moved before more FLOPs tuning.</text>
+</svg>
