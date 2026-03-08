@@ -74,13 +74,13 @@ $$</div>
 <p><strong>교수자:</strong> 그 말이 맞는 구간도 있지만, 서비스 latency는 weight 읽기 시간 하나로 끝나지 않습니다. 실측할 때는 최소한 <code>L_e2e = L_kernel + L_dequant + L_layout + L_fallback</code>처럼 나눠 봐야 합니다. 이 식은 교과서 공식이라기보다 디버깅 체크리스트입니다.</p>
 <p><strong>교수자:</strong> 여기서 중요한 건 출처 역할 분리입니다. <code>dequantize</code>와 <code>layout</code>은 양자화 경로에서 추가될 수 있는 변환 항목이고, <code>fallback</code>은 backend 문서가 직접 가리키는 위험입니다. ONNX Runtime QNN 문서는 execution provider가 graph를 특정 backend로 넘기는 구조를 설명하므로, 지원되지 않는 연산이나 형식이 남아 있으면 일부 경로가 fallback될 수 있다는 사실을 받쳐 줍니다 [S2]. Qualcomm AI Hub compile examples는 모델을 장치용 산출물로 바꾸는 compile 단계 자체가 따로 있다는 점을 보여 줍니다 [S3]. OpenVINO NPU 문서는 device target과 실행 모드가 배포 경로에 직접 영향을 준다는 사실을 보여 줍니다 [S4]. 따라서 &quot;INT4인데 안 빨라졌다&quot;는 현상은 bit-width보다 offload 범위, compile 결과, device target부터 확인해야 합니다.</p>
 <h4 id="시각-자료-1-양자화-형식이-실제-실행-경로로-내려가는-순서">시각 자료 1. 양자화 형식이 실제 실행 경로로 내려가는 순서</h4>
-<pre class="mermaid">flowchart LR
+<div class="mermaid-wrap"><pre class="mermaid">flowchart LR
     A[&quot;형식 선택&lt;br/&gt;INT8 / INT4 / FP8&quot;] --&gt; B[&quot;메모리 계산&lt;br/&gt;[식 1]&quot;]
     A --&gt; C[&quot;품질 위험 점검&lt;br/&gt;[식 2], [I1]&quot;]
     A --&gt; D[&quot;execution provider 확인&lt;br/&gt;[S2]&quot;]
     D --&gt; E[&quot;compile 산출물 확인&lt;br/&gt;[S3]&quot;]
     E --&gt; F[&quot;device target 확인&lt;br/&gt;[S4]&quot;]
-    F --&gt; G[&quot;실측 latency 확인&lt;br/&gt;kernel / dequant / fallback&quot;]</pre>
+    F --&gt; G[&quot;실측 latency 확인&lt;br/&gt;kernel / dequant / fallback&quot;]</pre></div>
 <p><strong>교수자:</strong> 이 그림의 핵심은 순서입니다. 품질과 메모리는 형식 자체로 먼저 따지고, 실제 속도는 backend 경로를 통과한 뒤에야 판단합니다.</p>
 <h3 id="장면-4-왜-서버에서는-8비트-계열부터-npu에서는-backend부터-보나">장면 4. 왜 서버에서는 8비트 계열부터, NPU에서는 backend부터 보나</h3>
 <p><strong>교수자:</strong> 이제 운영 판단으로 넘어가 봅시다. 여기서는 사실과 추론을 분리해서 말해야 합니다.</p>
@@ -89,7 +89,7 @@ $$</div>
 <p><strong>교수자:</strong> 품질 보수성이 중요하고 backend 제약이 없지 않다면 그렇게 정리하는 편이 안전합니다. INT8은 FP16 대비 weight 메모리를 절반으로 줄이면서도, [식 2] 기준으로 4비트만큼 공격적으로 눈금을 넓히지 않습니다. FP8은 8비트 예산을 유지하는 다른 후보이므로, backend가 지원되고 품질 테스트에서 이득이 보일 때 비교군으로 올립니다. 반대로 메모리 압박이 매우 강하면 INT4를 볼 수 있지만, 그때는 품질과 fallback 비용을 더 빡빡하게 검증해야 합니다.</p>
 <p><strong>교수자:</strong> NPU 쪽은 순서가 더 엄격합니다. QNN EP는 어떤 graph를 backend로 넘길지 [S2], AI Hub는 어떤 compile 산출물을 만들어야 하는지 [S3], OpenVINO는 어떤 device target과 모드로 실행해야 하는지 [S4]를 설명합니다. 따라서 NPU-friendly quantization의 첫 질문은 &quot;가장 작은 형식이 무엇인가&quot;가 아니라 &quot;어떤 형식이 offload, compile, target을 통과하는가&quot;입니다.</p>
 <h4 id="시각-자료-2-서버-판단과-npu-판단의-출발점-차이">시각 자료 2. 서버 판단과 NPU 판단의 출발점 차이</h4>
-<pre class="mermaid">flowchart TD
+<div class="mermaid-wrap"><pre class="mermaid">flowchart TD
     A[&quot;서버 GPU 서빙&quot;] --&gt; B[&quot;메모리 예산 계산&lt;br/&gt;[식 1]&quot;]
     B --&gt; C[&quot;품질 민감도 확인&lt;br/&gt;[식 2], [I1]&quot;]
     C --&gt; D[&quot;8비트 계열 기본선 실험&lt;br/&gt;[S1]&quot;]
@@ -98,7 +98,7 @@ $$</div>
     F[&quot;NPU 배포&quot;] --&gt; G[&quot;EP 지원 확인&lt;br/&gt;[S2]&quot;]
     G --&gt; H[&quot;compile 산출물 확인&lt;br/&gt;[S3]&quot;]
     H --&gt; I[&quot;device target 확인&lt;br/&gt;[S4]&quot;]
-    I --&gt; J[&quot;통과한 형식 중 메모리/품질 비교&quot;]</pre>
+    I --&gt; J[&quot;통과한 형식 중 메모리/품질 비교&quot;]</pre></div>
 <h3 id="장면-5-디버깅은-숫자보다-경로를-먼저-본다">장면 5. 디버깅은 숫자보다 경로를 먼저 본다</h3>
 <p><strong>학습자:</strong> 팀원이 &quot;INT4로 바꿨는데 latency가 그대로예요&quot;라고 말하면 어떻게 보시나요?</p>
 <p><strong>교수자:</strong> 저는 네 단계로 봅니다.</p>
@@ -185,7 +185,14 @@ $$</div>
   <script type="module" src="../../assets/app.js"></script>
   <script type="module">
     import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs';
-    mermaid.initialize({ startOnLoad: true, theme: 'neutral', securityLevel: 'loose' });
+    mermaid.initialize({
+      startOnLoad: true,
+      theme: 'neutral',
+      securityLevel: 'loose',
+      flowchart: { useMaxWidth: false },
+      sequence: { useMaxWidth: false },
+      gantt: { useMaxWidth: false }
+    });
   </script>
   <script>
     window.MathJax = {

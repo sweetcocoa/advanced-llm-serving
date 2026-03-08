@@ -70,7 +70,7 @@ T_{\mathrm{npu\_segment}}
 \right)
 $$</div>
 <p>이 값이 양수면 NPU segment로 내리는 것이 이득이고, 음수면 계산 자체는 빨라도 boundary handoff와 layout 변환이 이득을 지워 버린다는 뜻이다.</p>
-<pre class="mermaid">flowchart LR
+<div class="mermaid-wrap"><pre class="mermaid">flowchart LR
     A[&quot;ONNX Graph [S1]&quot;] --&gt; B{&quot;QNN EP가\nsubgraph를 잡는가? [S2]&quot;}
     B -- 예 --&gt; C[&quot;QNN용 partition&quot;]
     B -- 아니오 --&gt; D[&quot;Host / 다른 EP 경로&quot;]
@@ -78,8 +78,8 @@ $$</div>
     E -- 예 --&gt; C
     E -- 아니오 --&gt; F[&quot;Boundary handoff&quot;]
     D --&gt; F
-    F --&gt; G[&quot;다음 partition 또는 host 실행&quot;]</pre>
-<p><strong>교수자:</strong> 예를 들어 transformer block 일부가 <code>MatMul -&amp;gt; Add -&amp;gt; Activation</code>처럼 backend가 좋아하는 패턴이면 한 덩어리로 내려갈 수 있습니다. 반대로 중간에 custom op나 backend가 다루지 못하는 변형된 연산이 끼어 있으면 graph가 잘립니다. 문제는 잘린 조각 수가 늘어날수록 handoff가 늘고, 그때 tensor 복사와 동기화, 때로는 layout 재배치까지 함께 붙는다는 점이에요.</p>
+    F --&gt; G[&quot;다음 partition 또는 host 실행&quot;]</pre></div>
+<p><strong>교수자:</strong> 예를 들어 transformer block 일부가 <code>MatMul -&gt; Add -&gt; Activation</code>처럼 backend가 좋아하는 패턴이면 한 덩어리로 내려갈 수 있습니다. 반대로 중간에 custom op나 backend가 다루지 못하는 변형된 연산이 끼어 있으면 graph가 잘립니다. 문제는 잘린 조각 수가 늘어날수록 handoff가 늘고, 그때 tensor 복사와 동기화, 때로는 layout 재배치까지 함께 붙는다는 점이에요.</p>
 <p><strong>학습자:</strong> 그러면 unsupported op 하나가 있다고 해서 바로 실패는 아니지만, 잘못하면 segment 전체 수익을 없앨 수 있겠네요?</p>
 <p><strong>교수자:</strong> 정확합니다. <code>지원 여부</code>만 보면 낙관적으로 보이고, <code>경계 수</code>까지 보면 현실이 보입니다. QNN 계열에서는 특히 execution provider와 backend artifact의 연결을 같이 생각해야 합니다. 그래프가 깔끔하게 묶여야 context binary나 유사한 backend 전용 결과물을 재사용하기도 편해지거든요 [S2].</p>
 <h3 id="part-3-lowering은-연산-이름을-바꾸는-작업이-아니다">Part 3. Lowering은 연산 이름을 바꾸는 작업이 아니다</h3>
@@ -94,12 +94,12 @@ K_{\mathrm{backend}}
 \left(G_{\mathrm{ONNX}}\right)
 $$</div>
 <p>여기서 각 \(f_i\)는 op legalization, shape 고정, layout 재작성, bufferization, code generation 같은 변환을 뜻한다. 중요한 점은 <code>ONNX graph 하나가 곧바로 kernel이 되지 않는다</code>는 사실이다.</p>
-<pre class="mermaid">flowchart TD
+<div class="mermaid-wrap"><pre class="mermaid">flowchart TD
     A[&quot;ONNX Graph [S1]&quot;] --&gt; B[&quot;High-level IR / Dialect 변환 [S3]&quot;]
     B --&gt; C[&quot;Pattern rewrite / Fusion / Canonicalization [S3]&quot;]
     C --&gt; D[&quot;Layout 결정 / Bufferization [S3]&quot;]
     D --&gt; E[&quot;Backend codegen / Executable 생성 [S4]&quot;]
-    E --&gt; F[&quot;Runtime dispatch / Device 실행 [S4]&quot;]</pre>
+    E --&gt; F[&quot;Runtime dispatch / Device 실행 [S4]&quot;]</pre></div>
 <p><strong>교수자:</strong> 이 파이프라인을 볼 줄 알면 &quot;왜 같은 ONNX인데 backend마다 결과가 다르지?&quot;라는 질문에 답할 수 있습니다. 답은 간단합니다. <code>합성되는 함수열이 다르기 때문</code>입니다. 표준 입력은 같아도, 어디서 fusion을 하고 어떤 layout을 선호하며 어느 시점에 버퍼를 고정하는지가 다르면 결과 executable도 달라집니다.</p>
 <h3 id="part-4-layout-변환은-숨은-비용이-아니라-노출된-비용이다">Part 4. Layout 변환은 숨은 비용이 아니라 노출된 비용이다</h3>
 <p><strong>학습자:</strong> layout 변환은 compiler가 알아서 처리하는 뒷단 일이라고 생각했는데, 왜 이 챕터에서 그렇게 크게 다루나요?</p>
@@ -200,7 +200,14 @@ $$</div>
   <script type="module" src="../../assets/app.js"></script>
   <script type="module">
     import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs';
-    mermaid.initialize({ startOnLoad: true, theme: 'neutral', securityLevel: 'loose' });
+    mermaid.initialize({
+      startOnLoad: true,
+      theme: 'neutral',
+      securityLevel: 'loose',
+      flowchart: { useMaxWidth: false },
+      sequence: { useMaxWidth: false },
+      gantt: { useMaxWidth: false }
+    });
   </script>
   <script>
     window.MathJax = {

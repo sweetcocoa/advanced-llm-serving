@@ -58,32 +58,32 @@
 <p><strong>교수자:</strong> 맞습니다. AMD는 CPU, GPU, NPU가 함께 일하는 on-device GenAI 흐름을 먼저 놓고 이야기합니다 [S1]. [합성] 그래서 수업도 &quot;모델 전체를 한 장치에 고정할까?&quot;보다 &quot;prefill, decode, orchestration을 어디에 둘까?&quot;를 먼저 묻습니다.</p>
 <p><strong>학습자:</strong> Ryzen AI OGA에서 각 장치는 보통 어떤 역할 후보로 보나요?</p>
 <p><strong>교수자:</strong> AMD 문서가 hybrid 구성을 전면에 둔다는 사실을 출발점으로 삼으면, CPU는 토크나이징과 세션 orchestration, GPU는 긴 prompt를 빨리 밀어 넣는 prefill, NPU는 반복 decode처럼 전력 효율을 노리고 싶은 구간의 후보로 읽는 것이 자연스럽습니다 [S1]. [합성] 이 역할 배치는 문서의 구현 세부를 그대로 옮긴 공식이 아니라, AMD의 hybrid framing을 제품 회의용으로 단순화한 학습용 역할 지도입니다 [합성] [S1].</p>
-<pre class="mermaid">flowchart LR
+<div class="mermaid-wrap"><pre class="mermaid">flowchart LR
     U[&quot;사용자 요청&quot;] --&gt; C[&quot;CPU\n토크나이징\n세션 orchestration&quot;]
     C --&gt; G[&quot;GPU\nprefill\n초기 burst 계산&quot;]
     G --&gt; H[&quot;handoff\nKV/state 전달\n동기화&quot;]
     H --&gt; N[&quot;NPU\ndecode 후보\n반복 생성&quot;]
-    N --&gt; R[&quot;CPU\n스트리밍/후처리&quot;]</pre>
+    N --&gt; R[&quot;CPU\n스트리밍/후처리&quot;]</pre></div>
 <h4 id="식-1-split-유지-여부를-보는-학습용-식">식 1. split 유지 여부를 보는 학습용 식</h4>
 <p>AMD 문서가 hybrid workflow를 강조한다는 사실을 바탕으로, 이 장은 split 유지 여부를 handoff까지 포함해 읽는 학습용 식을 쓴다 [합성] [S1].</p>
 <div class="math-block">$$
 G_{\mathrm{split}} = \left(T_{\mathrm{single}} - T_{\mathrm{split\_compute}}\right) - T_{\mathrm{handoff}}
 $$</div>
-<p>[합성] <code>G_split &amp;gt; 0</code>이면 장치 분할이 남기는 계산상 이득이 handoff 비용보다 크고, <code>G_split &amp;lt;= 0</code>이면 hybrid가 오히려 제품 체감을 망친다 [합성] [S1].</p>
+<p>[합성] <code>G_split &gt; 0</code>이면 장치 분할이 남기는 계산상 이득이 handoff 비용보다 크고, <code>G_split &lt;= 0</code>이면 hybrid가 오히려 제품 체감을 망친다 [합성] [S1].</p>
 <p><strong>학습자:</strong> 결국 hybrid의 핵심은 <code>어디서 넘기느냐</code>군요.</p>
-<p><strong>교수자:</strong> 그렇습니다. AMD 문서가 hybrid를 먼저 말한다는 것은, 장치를 섞는 순간 handoff를 피할 수 없다는 뜻이기도 합니다 [S1]. [합성] 그래서 Ryzen AI OGA 회의에서는 <code>NPU 사용률</code>보다 <code>GPU -&amp;gt; NPU</code> handoff가 한 번인지, decode 중 반복되는지를 먼저 적는 편이 더 실용적입니다.</p>
+<p><strong>교수자:</strong> 그렇습니다. AMD 문서가 hybrid를 먼저 말한다는 것은, 장치를 섞는 순간 handoff를 피할 수 없다는 뜻이기도 합니다 [S1]. [합성] 그래서 Ryzen AI OGA 회의에서는 <code>NPU 사용률</code>보다 <code>GPU -&gt; NPU</code> handoff가 한 번인지, decode 중 반복되는지를 먼저 적는 편이 더 실용적입니다.</p>
 <h3 id="2-전력-효율은-긴-decode에서만-공짜처럼-보인다">2. 전력 효율은 긴 decode에서만 공짜처럼 보인다</h3>
 <p><strong>학습자:</strong> 배터리 목표가 강하면 decode를 NPU에 두는 쪽이 자연스럽지 않나요?</p>
 <p><strong>교수자:</strong> 그 가설은 AMD 문서의 hybrid framing과 잘 맞습니다 [S1]. [합성] 긴 세션에서 반복 decode가 계속 이어지면 NPU 쪽 전력 이점을 노릴 여지가 커집니다. 반대로 답변이 짧고 handoff가 자주 생기면 NPU로 넘기는 순간의 동기화와 상태 이동이 체감 이득을 지워 버릴 수 있습니다 [합성] [S1].</p>
 <p><strong>학습자:</strong> 그러면 첫 토큰이 중요한 앱은 다르게 봐야겠네요.</p>
 <p><strong>교수자:</strong> 맞습니다. [합성] 첫 토큰이 더 중요하면 <code>GPU prefill</code>이 우선 후보가 되고, 장시간 세션 에너지와 발열이 더 중요하면 <code>NPU decode</code>가 우선 후보가 됩니다. 같은 Ryzen AI OGA라도 제품 목표가 다르면 split의 정답도 달라집니다 [합성] [S1].</p>
-<pre class="mermaid">flowchart TD
+<div class="mermaid-wrap"><pre class="mermaid">flowchart TD
     A[&quot;제품 목표 확인\n첫 토큰 / 배터리 / 발열&quot;] --&gt; B{&quot;긴 decode가 많은가?&quot;}
     B --&gt;|예| C[&quot;NPU decode 후보 강화&quot;]
     B --&gt;|아니오| D[&quot;단일 GPU 또는 단순 split 검토&quot;]
     C --&gt; E{&quot;handoff가 한 번으로 끝나는가?&quot;}
     E --&gt;|예| F[&quot;hybrid 유지 가능성 높음&quot;]
-    E --&gt;|아니오| G[&quot;harmony 깨짐\n단일 경로 재검토&quot;]</pre>
+    E --&gt;|아니오| G[&quot;harmony 깨짐\n단일 경로 재검토&quot;]</pre></div>
 <h3 id="3-왜-전력-이득이-운영-복잡도로-되돌아오는가">3. 왜 전력 이득이 운영 복잡도로 되돌아오는가</h3>
 <p><strong>학습자:</strong> 배터리 이득이 보이면 그대로 hybrid로 가면 되는 것 아닌가요?</p>
 <p><strong>교수자:</strong> 그렇지 않습니다. AMD가 hybrid workflow를 말할 때 제품 팀은 장치 분할뿐 아니라 준비와 검증도 함께 늘어난다고 이해해야 합니다 [S1]. Qualcomm AI Hub는 compile/deploy 준비 흐름을 별도 문서로 설명하고 [S2], QNN EP는 provider와 backend 경계를 별도 문서로 설명하며 [S3], Windows ML은 OS 통합 표면을 따로 설명합니다 [S4]. 즉 hybrid를 실제 제품으로 가져가면 artifact 준비, provider 해석, fallback 시험, OS 수준 배포 차이를 함께 떠안게 됩니다.</p>
@@ -101,10 +101,10 @@ $$</div>
 <p><strong>학습자:</strong> 결국 CPU/GPU/NPU를 모두 쓴다고 해서 항상 현대적인 설계가 되는 건 아니군요.</p>
 <p><strong>교수자:</strong> 맞습니다. AMD 문서가 hybrid를 말하는 이유는 &quot;반드시 섞어라&quot;가 아니라 &quot;실제 제품은 섞을 가능성이 높으니 설계 기준을 먼저 세워라&quot;에 가깝습니다 [S1].</p>
 <h2 id="자주-헷갈리는-포인트">자주 헷갈리는 포인트</h2>
-<ul><li><code>hybrid = NPU 사용 시간을 최대화하는 것</code>은 오해다. AMD가 먼저 강조하는 것은 hybrid workflow 자체이며, split 지점 설계가 핵심이다 [S1].</li><li><code>GPU prefill -&amp;gt; NPU decode</code>는 AMD 문서의 고정 공식이 아니라, hybrid framing을 제품 목표와 연결하기 위한 학습용 split 후보다 [합성] [S1].</li><li>battery 목표가 있으면 항상 hybrid가 이긴다고 생각하기 쉽다. 짧은 세션과 잦은 handoff에서는 단일 GPU가 더 나은 체감을 만들 수 있다 [합성] [S1].</li><li>artifact 준비 [S2], provider 경계 [S3], OS 통합 [S4]은 AMD 설명을 대체하는 주제들이 아니라, AMD hybrid 설계를 실무로 옮길 때 붙는 인접 계층이다.</li></ul>
+<ul><li><code>hybrid = NPU 사용 시간을 최대화하는 것</code>은 오해다. AMD가 먼저 강조하는 것은 hybrid workflow 자체이며, split 지점 설계가 핵심이다 [S1].</li><li><code>GPU prefill -&gt; NPU decode</code>는 AMD 문서의 고정 공식이 아니라, hybrid framing을 제품 목표와 연결하기 위한 학습용 split 후보다 [합성] [S1].</li><li>battery 목표가 있으면 항상 hybrid가 이긴다고 생각하기 쉽다. 짧은 세션과 잦은 handoff에서는 단일 GPU가 더 나은 체감을 만들 수 있다 [합성] [S1].</li><li>artifact 준비 [S2], provider 경계 [S3], OS 통합 [S4]은 AMD 설명을 대체하는 주제들이 아니라, AMD hybrid 설계를 실무로 옮길 때 붙는 인접 계층이다.</li></ul>
 <h2 id="사례로-다시-보기">사례로 다시 보기</h2>
 <h3 id="사례-a-오프라인-영상-자막-초안-생성기">사례 A. 오프라인 영상 자막 초안 생성기</h3>
-<ul><li>제품 목표: 긴 영상 구간을 넣었을 때 첫 초안이 빠르게 떠야 한다.</li><li>첫 후보: <code>GPU prefill -&amp;gt; NPU decode</code> [합성] [S1]</li><li>이유: 긴 입력 구간의 초기 계산은 GPU가 유리할 수 있고, 이후 긴 decode 구간은 NPU 전력 이점을 노릴 수 있다 [합성] [S1]</li><li>실패 신호: 결과가 짧게 끝나거나 구간 전환마다 handoff가 반복되면 <code>T_handoff</code>가 이득을 잠식한다 [합성] [S1]</li></ul>
+<ul><li>제품 목표: 긴 영상 구간을 넣었을 때 첫 초안이 빠르게 떠야 한다.</li><li>첫 후보: <code>GPU prefill -&gt; NPU decode</code> [합성] [S1]</li><li>이유: 긴 입력 구간의 초기 계산은 GPU가 유리할 수 있고, 이후 긴 decode 구간은 NPU 전력 이점을 노릴 수 있다 [합성] [S1]</li><li>실패 신호: 결과가 짧게 끝나거나 구간 전환마다 handoff가 반복되면 <code>T_handoff</code>가 이득을 잠식한다 [합성] [S1]</li></ul>
 <h3 id="사례-b-배터리-우선-개인-코파일럿">사례 B. 배터리 우선 개인 코파일럿</h3>
 <ul><li>제품 목표: 장시간 세션에서 발열과 배터리 소모를 낮추는 것.</li><li>첫 후보: CPU orchestration + NPU 중심 decode [합성] [S1]</li><li>이유: 긴 세션에서는 반복 decode의 누적 에너지 비용이 커지므로 NPU 구간을 길게 가져가는 설계가 의미를 가질 수 있다 [합성] [S1]</li><li>실패 신호: artifact 관리 [S2], provider 해석 [S3], 회귀 검증 [S4]이 감당되지 않으면 첫 릴리스는 단일 GPU 경로가 더 현실적일 수 있다 [합성]</li></ul>
 <h2 id="핵심-정리">핵심 정리</h2>
@@ -138,7 +138,7 @@ $$</div>
 <p>AMD Ryzen AI OGA 챕터를 읽을 때 가장 먼저 붙잡아야 하는 표현은 무엇인가?</p>
 <ol><li>단일 NPU 최대 활용</li><li>Hybrid On-Device GenAI workflow</li><li>Windows 앱 배포 자동화</li><li>provider 옵션 최소화</li></ol>
 <h2 id="객관식-2">객관식 2</h2>
-<p>다음 중 <code>GPU prefill -&amp;gt; NPU decode</code> split을 먼저 검토할 조건으로 가장 적절한 것은 무엇인가?</p>
+<p>다음 중 <code>GPU prefill -&gt; NPU decode</code> split을 먼저 검토할 조건으로 가장 적절한 것은 무엇인가?</p>
 <ol><li>답변이 매우 짧고 handoff가 여러 번 생길 때</li><li>첫 토큰이 중요하고 prompt가 길며, handoff를 한 번 수준으로 묶을 수 있을 때</li><li>provider 로그를 전혀 볼 수 없을 때</li><li>OS 통합만으로 장치 경계가 완전히 사라질 때</li></ol>
 <h2 id="객관식-3">객관식 3</h2>
 <p>다음 중 Ryzen AI OGA 챕터에서 <code>전력 효율과 개발 복잡도</code>를 함께 설명하는 문장으로 가장 적절한 것은 무엇인가?</p>
@@ -151,7 +151,7 @@ $$</div>
 <p>Ryzen AI OGA 관점에서 <code>CPU orchestration - GPU prefill - NPU decode</code>라는 학습용 split을 언제 먼저 검토하고, 언제 단일 경로로 되돌릴지 설명하라. 답변에는 <code>first token</code>, <code>긴 decode</code>, <code>handoff</code>, <code>운영 복잡도</code>가 모두 포함되어야 한다.</p>
 <h2 id="심화-설명형-2">심화 설명형 2</h2>
 <p>AMD 문서 S1을 중심에 두고, S2, S3, S4를 각각 어떤 보조 비교 축으로 써야 하는지 설명하라. 답변에는 <code>artifact</code>, <code>provider</code>, <code>OS 통합</code>이 모두 포함되어야 한다.</p><details class="answer-key"><summary>정답 및 해설 보기</summary><h2 id="정답-및-해설">정답 및 해설</h2>
-<ul><li>객관식 1 정답: 2. AMD 문서 제목 자체가 <code>Hybrid On-Device GenAI workflow</code>이므로, 이 챕터의 중심도 단일 장치 최대 활용이 아니라 hybrid 설계 문제다 [S1].</li><li>객관식 2 정답: 2. 첫 토큰이 중요하고 prompt가 길며 handoff를 한 번 수준으로 묶을 수 있을 때는 GPU prefill 뒤에 NPU decode를 붙이는 split을 먼저 검토할 수 있다 [합성] [S1].</li><li>객관식 3 정답: 2. 긴 decode는 NPU 전력 이점을 노릴 수 있지만, artifact 준비 [S2], provider debug [S3], OS 수준 제품 검증 [S4]이 함께 붙으므로 운영 복잡도도 같이 커질 수 있다 [합성] [S1][S2][S3][S4].</li><li>짧은 서술형 1 예시: <code>G_split = (T_single - T_split_compute) - T_handoff</code>이므로, handoff 비용이 계산 절감분보다 크면 <code>G_split</code>은 0 이하가 된다. 짧은 응답이나 잦은 장치 전환에서는 hybrid를 써도 체감 이득이 거의 남지 않을 수 있다 [합성] [S1].</li><li>짧은 서술형 2 예시: 오프라인 영상 자막 초안 생성기는 긴 입력 구간의 첫 반응이 중요하므로 GPU prefill을 먼저 가설로 두기 쉽다. 반면 배터리 우선 개인 코파일럿은 긴 세션의 누적 에너지와 발열이 중요하므로 NPU decode 비중을 더 길게 검토하게 된다 [합성] [S1].</li><li>심화 설명형 1 해설 포인트: first token이 중요하고 prompt가 길면 <code>GPU prefill -&amp;gt; NPU decode</code> split을 후보에 올릴 수 있다 [합성] [S1]. 하지만 긴 decode가 실제로 길지 않거나 handoff가 여러 번 생기면 <code>T_handoff</code>가 이득을 잠식하므로 단일 GPU나 단일 NPU 경로로 되돌려야 한다 [합성] [S1]. 또한 artifact 준비 [S2], provider debug [S3], 제품 회귀 검증 [S4]을 감당할 수 있을 때만 hybrid가 운영상 성립한다.</li><li>심화 설명형 2 해설 포인트: S1은 AMD의 hybrid workflow 자체를 설명하는 중심 자료다 [S1]. S2는 hybrid 설계를 실제 배포로 옮길 때 어떤 artifact 준비가 필요한지 떠올리게 하고 [S2], S3는 provider와 backend 경계 및 fallback 해석을 보조하며 [S3], S4는 Windows 제품화 단계에서 OS 통합 표면을 어떻게 설명할지 보조한다 [S4].</li></ul></details>
+<ul><li>객관식 1 정답: 2. AMD 문서 제목 자체가 <code>Hybrid On-Device GenAI workflow</code>이므로, 이 챕터의 중심도 단일 장치 최대 활용이 아니라 hybrid 설계 문제다 [S1].</li><li>객관식 2 정답: 2. 첫 토큰이 중요하고 prompt가 길며 handoff를 한 번 수준으로 묶을 수 있을 때는 GPU prefill 뒤에 NPU decode를 붙이는 split을 먼저 검토할 수 있다 [합성] [S1].</li><li>객관식 3 정답: 2. 긴 decode는 NPU 전력 이점을 노릴 수 있지만, artifact 준비 [S2], provider debug [S3], OS 수준 제품 검증 [S4]이 함께 붙으므로 운영 복잡도도 같이 커질 수 있다 [합성] [S1][S2][S3][S4].</li><li>짧은 서술형 1 예시: <code>G_split = (T_single - T_split_compute) - T_handoff</code>이므로, handoff 비용이 계산 절감분보다 크면 <code>G_split</code>은 0 이하가 된다. 짧은 응답이나 잦은 장치 전환에서는 hybrid를 써도 체감 이득이 거의 남지 않을 수 있다 [합성] [S1].</li><li>짧은 서술형 2 예시: 오프라인 영상 자막 초안 생성기는 긴 입력 구간의 첫 반응이 중요하므로 GPU prefill을 먼저 가설로 두기 쉽다. 반면 배터리 우선 개인 코파일럿은 긴 세션의 누적 에너지와 발열이 중요하므로 NPU decode 비중을 더 길게 검토하게 된다 [합성] [S1].</li><li>심화 설명형 1 해설 포인트: first token이 중요하고 prompt가 길면 <code>GPU prefill -&gt; NPU decode</code> split을 후보에 올릴 수 있다 [합성] [S1]. 하지만 긴 decode가 실제로 길지 않거나 handoff가 여러 번 생기면 <code>T_handoff</code>가 이득을 잠식하므로 단일 GPU나 단일 NPU 경로로 되돌려야 한다 [합성] [S1]. 또한 artifact 준비 [S2], provider debug [S3], 제품 회귀 검증 [S4]을 감당할 수 있을 때만 hybrid가 운영상 성립한다.</li><li>심화 설명형 2 해설 포인트: S1은 AMD의 hybrid workflow 자체를 설명하는 중심 자료다 [S1]. S2는 hybrid 설계를 실제 배포로 옮길 때 어떤 artifact 준비가 필요한지 떠올리게 하고 [S2], S3는 provider와 backend 경계 및 fallback 해석을 보조하며 [S3], S4는 Windows 제품화 단계에서 OS 통합 표면을 어떻게 설명할지 보조한다 [S4].</li></ul></details>
       </div>
     </section>
     <nav class="pager">
@@ -173,7 +173,14 @@ $$</div>
   <script type="module" src="../../assets/app.js"></script>
   <script type="module">
     import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs';
-    mermaid.initialize({ startOnLoad: true, theme: 'neutral', securityLevel: 'loose' });
+    mermaid.initialize({
+      startOnLoad: true,
+      theme: 'neutral',
+      securityLevel: 'loose',
+      flowchart: { useMaxWidth: false },
+      sequence: { useMaxWidth: false },
+      gantt: { useMaxWidth: false }
+    });
   </script>
   <script>
     window.MathJax = {

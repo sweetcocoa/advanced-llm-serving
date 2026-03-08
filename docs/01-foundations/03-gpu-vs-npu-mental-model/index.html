@@ -66,7 +66,7 @@
 \mathrm{AI}=\frac{\mathrm{FLOPs}}{\mathrm{Bytes\ moved}}
 $$</div>
 <p>이 식은 장치 비교를 시작하기 전에, 지금 보는 블록이 계산보다 메모리 이동에 더 묶여 있는지 묻게 만든다 [S2]. 같은 matmul이 보여도 <code>bytes moved</code>가 길게 따라붙는 경로라면, 장치를 바꾸는 것보다 경계 횟수를 줄이는 편이 더 중요할 수 있다.</p>
-<pre class="mermaid">flowchart TD
+<div class="mermaid-wrap"><pre class="mermaid">flowchart TD
     A[블록 하나를 고른다] --&gt; B{입력 길이와 shape가\n여러 요청에서 거의 같은가?}
     B -- 아니오 --&gt; C[같은 runtime에 남길 후보]
     B -- 예 --&gt; D{지원 연산과 graph 경로를\n한 번에 확인할 수 있는가?}
@@ -76,7 +76,7 @@ $$</div>
     E -- 아니오 --&gt; G[NPU 후보로 올려 본다]
     G --&gt; H[escape path와 handoff 횟수 계산]
     F --&gt; H
-    C --&gt; H</pre>
+    C --&gt; H</pre></div>
 <p><strong>학습자:</strong> decode 안쪽이냐 바깥쪽이냐가 그렇게 중요합니까?</p>
 <p><strong>교수자:</strong> 이 챕터에서는 그게 핵심입니다. decode loop 안쪽에서 장치를 자주 바꾸면, 작은 연산 이득이 경계 비용에 바로 잡아먹힙니다.</p>
 <h3 id="part-3-나쁜-cut은-블록이-아니라-토큰마다-경계를-넘긴다">Part 3. 나쁜 cut은 블록이 아니라 토큰마다 경계를 넘긴다</h3>
@@ -89,7 +89,7 @@ $$</div>
 T_{\mathrm{partition}}=\sum_i T_i + N_{\mathrm{handoff}} \cdot t_{\mathrm{handoff}} + N_{\mathrm{escape}} \cdot t_{\mathrm{escape}}
 $$</div>
 <p>여기서 중요한 것은 <code>N_handoff</code>와 <code>N_escape</code>다. 장치별 단품 시간이 좋아 보여도, 잘못 자른 partition은 경계를 자주 넘기면서 총 시간을 악화시킨다. [S4]를 이 식의 일반론 근거로 쓰면 과장이다. 다만 [S4]는 <code>지원 제약이 실제로 release note 수준에서 관리된다</code>는 사례를 주므로, <code>N_escape</code>를 설계 초반에 적어 두라는 해석에는 도움을 준다.</p>
-<pre class="mermaid">sequenceDiagram
+<div class="mermaid-wrap"><pre class="mermaid">sequenceDiagram
     participant App as App
     participant NPU as NPU runtime
     participant GPU as GPU runtime
@@ -101,14 +101,14 @@ $$</div>
         NPU--&gt;&gt;GPU: escape early
         GPU-&gt;&gt;GPU: run remaining path without bouncing back
     end
-    Note over GPU,NPU: 좋은 cut은 escape가 드물고 decode loop가 한 장치에 남는다</pre>
+    Note over GPU,NPU: 좋은 cut은 escape가 드물고 decode loop가 한 장치에 남는다</pre></div>
 <p><strong>학습자:</strong> 그러면 hybrid의 핵심은 &quot;둘 다 쓴다&quot;가 아니라 &quot;한 번 넘기고 오래 머문다&quot;네요.</p>
 <p><strong>교수자:</strong> 맞습니다. hybrid가 맞는 설계라도, 토큰마다 왕복하면 사실상 나쁜 hybrid입니다.</p>
 <h3 id="part-4-사례-추적-노트북-회의-요약기를-어디서-끊을-것인가">Part 4. 사례 추적: 노트북 회의 요약기를 어디서 끊을 것인가</h3>
 <p><strong>학습자:</strong> 하나의 사례를 끝까지 보고 싶습니다. 어디서 끊으면 손해가 나는지요.</p>
 <p><strong>교수자:</strong> 노트북 회의 요약기를 보죠. 입력 전처리 단계가 회의록을 <code>512-token chunk</code>로 잘라 반복 요약하고, 마지막에 전체 회의에 대한 자유 형식 요약을 생성한다고 가정합시다.</p>
 <p><strong>학습자:</strong> 첫 번째 chunk 요약 경로는 shape가 꽤 안정적이겠네요.</p>
-<p><strong>교수자:</strong> 그렇습니다. 그래서 이 챕터의 설계 해석에서는 그 블록을 NPU 후보로 올립니다. 반대로 마지막 자유 형식 요약 decode는 길이가 흔들리고, 사용자가 중간 편집을 넣을 수도 있으니 GPU 기준선으로 남기는 편이 안전합니다. 여기서 중요한 이유는 단지 latency가 아닙니다. 짧고 가변적인 decode에서는 <code>GPU -&amp;gt; NPU</code> 전환 때 드는 동기화와 fallback 비용이 배터리 이득보다 먼저 커질 수 있기 때문입니다.</p>
+<p><strong>교수자:</strong> 그렇습니다. 그래서 이 챕터의 설계 해석에서는 그 블록을 NPU 후보로 올립니다. 반대로 마지막 자유 형식 요약 decode는 길이가 흔들리고, 사용자가 중간 편집을 넣을 수도 있으니 GPU 기준선으로 남기는 편이 안전합니다. 여기서 중요한 이유는 단지 latency가 아닙니다. 짧고 가변적인 decode에서는 <code>GPU -&gt; NPU</code> 전환 때 드는 동기화와 fallback 비용이 배터리 이득보다 먼저 커질 수 있기 때문입니다.</p>
 <p><strong>교수자:</strong> 중요한 건 중간 경계입니다. chunk 요약 결과를 모두 모은 뒤 최종 decode를 시작하기 전에 한 번 handoff하는 건 검토할 수 있습니다. 하지만 최종 decode 중간에 특정 projection만 NPU로 보내는 cut은 거의 항상 나쁩니다. 작고 잦은 왕복이 생기기 때문입니다.</p>
 <p><strong>학습자:</strong> unsupported op가 chunk 요약 블록 안에서 나오면요?</p>
 <p><strong>교수자:</strong> 그때는 escape를 일찍 결정합니다. NPU에 조금 돌리다가 다시 GPU로, 다시 NPU로 튀는 식은 피합니다. escape가 필요하면 한 번 빠져서 남은 경로를 같은 runtime에 두는 쪽이 낫습니다. [S4]는 바로 이런 지원 제약이 실제 배포에서 버전별로 관리된다는 점을 보여 주는 벤더 사례입니다.</p>
@@ -201,7 +201,14 @@ $$</div>
   <script type="module" src="../../assets/app.js"></script>
   <script type="module">
     import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs';
-    mermaid.initialize({ startOnLoad: true, theme: 'neutral', securityLevel: 'loose' });
+    mermaid.initialize({
+      startOnLoad: true,
+      theme: 'neutral',
+      securityLevel: 'loose',
+      flowchart: { useMaxWidth: false },
+      sequence: { useMaxWidth: false },
+      gantt: { useMaxWidth: false }
+    });
   </script>
   <script>
     window.MathJax = {

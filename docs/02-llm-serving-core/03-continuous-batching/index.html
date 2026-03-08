@@ -61,7 +61,7 @@ $$</div>
 <p><strong>교수자:</strong> <code>B_max</code>는 장비가 한 step에서 처리할 수 있는 최대 활성 시퀀스 수이고, <code>n_t</code>는 실제로 살아 있는 시퀀스 수입니다. static batching에서는 먼저 끝난 요청이 만든 빈칸이 다음 batch boundary까지 남아서 <code>S_idle</code>이 커집니다. continuous batching은 step 경계마다 새 요청을 태워 이 값을 줄이려 합니다 [S1][S2].</p>
 <p><strong>학습자:</strong> 그러면 &quot;큰 batch냐 작은 batch냐&quot;보다 &quot;빈칸을 언제 메우느냐&quot;가 본질이군요.</p>
 <p><strong>교수자:</strong> 맞습니다. continuous batching의 핵심은 배치를 없애는 게 아니라, 배치 경계를 더 잘게 쪼개는 것입니다.</p>
-<pre class="mermaid">sequenceDiagram
+<div class="mermaid-wrap"><pre class="mermaid">sequenceDiagram
     participant Q as Incoming Queue
     participant S as Static Batch
     participant C as Continuous Scheduler
@@ -75,7 +75,7 @@ $$</div>
 
     Q-&gt;&gt;C: R5,R6 추가 도착
     C-&gt;&gt;G: step 경계에서 빈 slot 즉시 보충
-    Note over G: step 3 이후 active 수 유지</pre>
+    Note over G: step 3 이후 active 수 유지</pre></div>
 <h3 id="2-throughput과-latency가-같은-방향으로-움직이는-이유">2. throughput과 latency가 같은 방향으로 움직이는 이유</h3>
 <p><strong>학습자:</strong> 그래도 새 요청을 중간에 넣으면 기존 요청 처리에 방해가 되는 것 아닌가요?</p>
 <p><strong>교수자:</strong> 방해가 될 수도 있습니다. 하지만 decode가 메모리 대역폭과 cache residency에 민감한 구간이라면, 빈 slot을 오래 두는 편이 더 큰 손해가 됩니다. 아주 단순하게 쓰면 평균 토큰 처리량은 이렇게 볼 수 있습니다.</p>
@@ -88,7 +88,7 @@ $$</div>
 <h3 id="3-scheduler는-decode만-보는-사람이-아니다">3. scheduler는 decode만 보는 사람이 아니다</h3>
 <p><strong>학습자:</strong> slot만 채우면 되는 일이라면 구현이 그렇게 어렵지는 않을 것 같은데요.</p>
 <p><strong>교수자:</strong> 실제로는 prefill과 decode를 같이 봐야 해서 복잡합니다. 새 요청 하나를 decode active set에 넣으려면 먼저 prefill을 처리해 KV cache를 만들어야 합니다. 반대로 prefill을 너무 공격적으로 밀어 넣으면 이미 스트리밍 중인 decode가 흔들릴 수 있습니다 [S2][S4].</p>
-<pre class="mermaid">flowchart LR
+<div class="mermaid-wrap"><pre class="mermaid">flowchart LR
     A[Request arrival] --&gt; B{Can admit now?}
     B --&gt;|No| Q[Prefill queue]
     B --&gt;|Yes| P[Prefill run]
@@ -99,7 +99,7 @@ $$</div>
     F --&gt;|No| D
     R --&gt; B
     K --&gt; X[Prefix reuse store]
-    X --&gt; P</pre>
+    X --&gt; P</pre></div>
 <p><strong>교수자:</strong> 그래서 continuous batching은 단순한 &quot;dynamic batch&quot;보다 scheduler에 가깝습니다. 어느 시점에 prefill을 넣을지, decode slot을 몇 개 남겨 둘지, prefix reuse block을 얼마나 오래 붙잡을지까지 판단해야 합니다 [S2][S3][S4].</p>
 <h3 id="4-사례-1-상담-챗봇은-짧은-답변이-많아서-static-batch가-손해를-숨기지-못한다">4. 사례 1: 상담 챗봇은 짧은 답변이 많아서 static batch가 손해를 숨기지 못한다</h3>
 <p><strong>교수자:</strong> 첫 번째 사례를 보죠. 긴 시스템 프롬프트를 가진 상담 챗봇 서비스가 있습니다. 어떤 사용자는 세 줄만 묻고 나가고, 어떤 사용자는 20턴까지 이어 갑니다.</p>
@@ -200,7 +200,14 @@ $$</div>
   <script type="module" src="../../assets/app.js"></script>
   <script type="module">
     import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs';
-    mermaid.initialize({ startOnLoad: true, theme: 'neutral', securityLevel: 'loose' });
+    mermaid.initialize({
+      startOnLoad: true,
+      theme: 'neutral',
+      securityLevel: 'loose',
+      flowchart: { useMaxWidth: false },
+      sequence: { useMaxWidth: false },
+      gantt: { useMaxWidth: false }
+    });
   </script>
   <script>
     window.MathJax = {

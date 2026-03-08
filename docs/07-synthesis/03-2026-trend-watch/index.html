@@ -64,7 +64,7 @@ $$</div>
 <ul><li>$R_{\mathrm{repeat}}$: 여러 요청과 여러 배포 환경에서 같은 이득이 재현되는가</li><li>$O_{\mathrm{observe}}$: 병목, fallback, routing 결과를 실제로 계측할 수 있는가</li><li>$W_{\mathrm{fit}}$: 기능이 내 workload의 병목과 직접 맞닿아 있는가</li><li>$F_{\mathrm{fallback}}$: 미지원 연산, 검증 실패, device miss 때문에 우회 경로가 생길 위험</li><li>$I_{\mathrm{integration}}$: 배포, 검증, 운영 복잡도를 새로 떠안아야 하는 정도</li></ul>
 <p><strong>교수자:</strong> 예를 들어 vLLM의 disaggregated prefill은 긴 prompt workload에서 어떤 병목을 겨냥하는지 분명합니다 [S1]. TensorRT-LLM의 speculative decoding도 decode 병목을 줄인다는 목적이 명확하죠 [S2]. on-device 쪽 문서 묶음은 provider, runtime, workflow, NPU target을 따로 노출하면서 fallback과 실행 경계를 관리해야 한다는 사실을 드러냅니다 [S3][S4][S5][S6]. 문서 존재 자체보다, <code>어디를 재고 어디서 실패할지</code>가 보인다는 점이 중요합니다.</p>
 <h4 id="시각-자료-1-2026-채택-신호-판별기">시각 자료 1. 2026 채택 신호 판별기</h4>
-<pre class="mermaid">flowchart TD
+<div class="mermaid-wrap"><pre class="mermaid">flowchart TD
     A[&quot;새 기능 또는 새 런타임&quot;] --&gt; B{&quot;병목이 명확한가?&quot;}
     B -- &quot;아니오&quot; --&gt; X[&quot;실험 유지&quot;]
     B -- &quot;예&quot; --&gt; C{&quot;fallback 경로가 보이는가?&quot;}
@@ -73,7 +73,7 @@ $$</div>
     D -- &quot;아니오&quot; --&gt; Y
     D -- &quot;예&quot; --&gt; E{&quot;여러 요청 분포에서 이득이 유지되는가?&quot;}
     E -- &quot;예&quot; --&gt; Z[&quot;주류 진입&quot;]
-    E -- &quot;아니오&quot; --&gt; Y</pre>
+    E -- &quot;아니오&quot; --&gt; Y</pre></div>
 <p><strong>학습자:</strong> 정리하면 2026년 트렌드라는 말은 사실 <code>운영 체크리스트</code>에 가깝군요.</p>
 <p><strong>교수자:</strong> 맞습니다. 이 챕터는 기술 이름 암기가 아니라, 채택 신호와 실험 신호를 읽는 훈련입니다.</p>
 <h3 id="part-2-structured-outputs는-인프라-기술이-아니라-제품-요구-신호다">Part 2. Structured Outputs는 인프라 기술이 아니라 제품 요구 신호다</h3>
@@ -93,7 +93,7 @@ $$</div>
 <ul><li>$T_{\mathrm{validate}}$: schema 검사, tool argument 검사, 정책 검사 시간</li><li>$T_{\mathrm{repair}}$: 형식 오류를 바로잡기 위한 재생성 또는 후처리 시간</li><li>$T_{\mathrm{route}}$: local fallback, CPU/GPU fallback, cloud escalation으로 인한 추가 시간</li></ul>
 <p><strong>교수자:</strong> 제공된 소스는 structured outputs를 직접 설명하지는 않지만, 이 식의 앞뒤 항목을 뒷받침합니다. prefill/decode 분리는 [S1], decode 가속은 [S2], fallback과 offload 경계는 [S3][S4][S5][S6]이 다룹니다. 그래서 이 챕터의 수업용 추론은 이렇습니다. <code>structured outputs는 인프라 유행어가 아니라, validation과 routing 비용을 인프라에 떠넘기는 제품 요구다.</code></p>
 <h4 id="시각-자료-2-structured-outputs가-경로를-늘리는-방식">시각 자료 2. Structured Outputs가 경로를 늘리는 방식</h4>
-<pre class="mermaid">sequenceDiagram
+<div class="mermaid-wrap"><pre class="mermaid">sequenceDiagram
     participant P as Product Contract
     participant S as Serving Path
     participant V as Validator
@@ -106,7 +106,7 @@ $$</div>
     V--&gt;&gt;S: 통과 또는 실패
     S-&gt;&gt;C: 실패 시 재생성, 보정, cloud escalation
     C--&gt;&gt;V: 수정된 응답 반환
-    V--&gt;&gt;P: 계약을 만족하는 최종 응답</pre>
+    V--&gt;&gt;P: 계약을 만족하는 최종 응답</pre></div>
 <p><strong>학습자:</strong> 그러면 structured outputs가 들어오면 단순히 &quot;JSON 잘 나오나?&quot;만 볼 게 아니라, 실패했을 때 어디로 보내는지도 설계해야겠네요.</p>
 <p><strong>교수자:</strong> 정확합니다. 그래서 이것을 인프라 기술 목록에 넣기보다, 인프라 선택을 밀어붙이는 제품 요구 신호로 읽는 겁니다.</p>
 <h3 id="part-3-cloud에서-2026년-주류에-가까운-것은-병목-분리가-보이는-기술이다">Part 3. Cloud에서 2026년 주류에 가까운 것은 병목 분리가 보이는 기술이다</h3>
@@ -208,7 +208,14 @@ $$</div>
   <script type="module" src="../../assets/app.js"></script>
   <script type="module">
     import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs';
-    mermaid.initialize({ startOnLoad: true, theme: 'neutral', securityLevel: 'loose' });
+    mermaid.initialize({
+      startOnLoad: true,
+      theme: 'neutral',
+      securityLevel: 'loose',
+      flowchart: { useMaxWidth: false },
+      sequence: { useMaxWidth: false },
+      gantt: { useMaxWidth: false }
+    });
   </script>
   <script>
     window.MathJax = {

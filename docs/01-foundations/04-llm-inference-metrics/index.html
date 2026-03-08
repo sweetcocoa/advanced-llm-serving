@@ -66,8 +66,8 @@
 \mathrm{TTFT}=T_{\mathrm{queue}}+T_{\mathrm{prefill}}+T_{\mathrm{schedule}}+T_{\mathrm{first\ decode}}, \qquad
 \mathrm{TPOT}=\frac{T_{\mathrm{response\ end}}-T_{\mathrm{first\ token}}}{N_{\mathrm{output}}-1}
 $$</div>
-<p>운영 해석: <code>TTFT</code>가 나쁘면 모델 아키텍처를 탓하기 전에 <code>queue -&amp;gt; prefill -&amp;gt; schedule -&amp;gt; first decode</code> 순으로 쪼개 본다. <code>TPOT</code>이 나쁘면 첫 토큰 이후 반복되는 decode 경로를 의심한다.</p>
-<pre class="mermaid">flowchart LR
+<p>운영 해석: <code>TTFT</code>가 나쁘면 모델 아키텍처를 탓하기 전에 <code>queue -&gt; prefill -&gt; schedule -&gt; first decode</code> 순으로 쪼개 본다. <code>TPOT</code>이 나쁘면 첫 토큰 이후 반복되는 decode 경로를 의심한다.</p>
+<div class="mermaid-wrap"><pre class="mermaid">flowchart LR
     A[&quot;Request arrival&quot;] --&gt; B[&quot;Queue&quot;]
     B --&gt; C[&quot;Prefill&lt;br/&gt;prompt 전체 처리&quot;]
     C --&gt; D[&quot;Schedule / dispatch&quot;]
@@ -81,7 +81,7 @@ $$</div>
     F -. &quot;TPOT&quot; .-&gt; I[&quot;토큰 리듬&quot;]
     G -. &quot;Request throughput&quot; .-&gt; J[&quot;완료 요청 수&quot;]
     F -. &quot;Output-token throughput&quot; .-&gt; K[&quot;생성 토큰 총량&quot;]
-    D -. &quot;Utilization context&quot; .-&gt; L[&quot;장비 바쁨&quot;]</pre>
+    D -. &quot;Utilization context&quot; .-&gt; L[&quot;장비 바쁨&quot;]</pre></div>
 <p><strong>학습자:</strong> 같은 모델이라도 긴 문서 요청은 <code>TTFT</code>가 훨씬 불리하겠군요.</p>
 <p><strong>교수자:</strong> 네. 출처 기반 사실은 <code>[S1]</code>의 토큰 생성 구조와 <code>[S3]</code>의 runtime 계층뿐입니다. 운영 해석으로는 long context 요청일수록 <code>prefill</code> 비중이 커지고, 짧은 질의가 많은 서비스일수록 queue 정책이 <code>TTFT</code>를 더 크게 흔든다고 볼 수 있습니다.</p>
 <h3 id="part-3-throughput-을-둘로-나누지-않으면-회의가-꼬인다">Part 3. <code>throughput</code>을 둘로 나누지 않으면 회의가 꼬인다</h3>
@@ -103,7 +103,7 @@ $$</div>
 <h3 id="part-5-batching은-보통-한-지표를-올리고-다른-지표를-흔든다">Part 5. batching은 보통 한 지표를 올리고 다른 지표를 흔든다</h3>
 <p><strong>학습자:</strong> 운영자는 결국 batch를 어떻게 잡느냐가 중요하겠네요.</p>
 <p><strong>교수자:</strong> 네. <code>[S3]</code>가 직접 주는 사실은 runtime이 batching과 scheduling을 가진다는 점입니다. 그다음부터는 운영 해석입니다. 더 큰 batch는 장비를 더 바쁘게 만들어 <code>output-token throughput</code>이나 <code>utilization</code>을 밀어 올릴 수 있습니다. 하지만 같은 순간에 들어온 짧은 요청은 queue에서 더 오래 기다릴 수 있으니 <code>TTFT</code>가 악화될 수 있습니다.</p>
-<pre class="mermaid">flowchart TD
+<div class="mermaid-wrap"><pre class="mermaid">flowchart TD
     A[&quot;Batching knob&quot;] --&gt; B{&quot;batch를 더 크게 모을까?&quot;}
     B -- 예 --&gt; C[&quot;queue 대기 증가 가능&quot;]
     B -- 예 --&gt; D[&quot;장비 바쁨 증가 가능&quot;]
@@ -114,12 +114,12 @@ $$</div>
     D --&gt; I[&quot;utilization 상승&quot;]
     E --&gt; J[&quot;긴 출력 워크로드 총량 개선 가능&quot;]
     F --&gt; K[&quot;실시간 UX 개선 가능&quot;]
-    G --&gt; L[&quot;총량 손실 가능&quot;]</pre>
+    G --&gt; L[&quot;총량 손실 가능&quot;]</pre></div>
 <p><strong>학습자:</strong> 결국 batch는 무조건 크게 잡는 게 아니라 서비스 목표에 맞춰야 하겠네요.</p>
 <p><strong>교수자:</strong> 맞습니다. <code>utilization</code>을 목표 함수처럼 다루면 여기서 자주 틀립니다. 출처 기반 사실은 <code>[S3]</code>가 runtime knobs를 제공한다는 점이고, 운영 해석은 <code>utilization</code>이 높아도 queue가 길면 실시간 서비스 품질은 나쁠 수 있다는 점입니다.</p>
 <h3 id="part-6-사례-1-실시간-코딩-도우미는-ttft-와-tpot-을-먼저-지킨다">Part 6. 사례 1. 실시간 코딩 도우미는 <code>TTFT</code>와 <code>TPOT</code>을 먼저 지킨다</h3>
 <p><strong>학습자:</strong> 코딩 도우미처럼 짧은 요청과 긴 요청이 섞인 서비스는 어떤 순서로 봐야 합니까?</p>
-<p><strong>교수자:</strong> 우선순위는 보통 <code>TTFT -&amp;gt; TPOT -&amp;gt; request throughput -&amp;gt; utilization</code>입니다. 사용자는 첫 반응 공백과 스트리밍 끊김을 먼저 기억하기 때문입니다.</p>
+<p><strong>교수자:</strong> 우선순위는 보통 <code>TTFT -&gt; TPOT -&gt; request throughput -&gt; utilization</code>입니다. 사용자는 첫 반응 공백과 스트리밍 끊김을 먼저 기억하기 때문입니다.</p>
 <p><strong>학습자:</strong> <code>output-token throughput</code>은 덜 중요합니까?</p>
 <p><strong>교수자:</strong> 덜 중요하다기보다 두 번째 줄입니다. 코드 생성처럼 길게 출력되는 요청에는 중요하지만, 짧은 수정 제안이 많은 서비스에서는 완료 요청 수와 첫 반응이 더 직접적입니다. 운영 해석으로는 짧은 요청 비중이 높을수록 큰 batch가 <code>request throughput</code>을 조금 올려도 <code>TTFT</code> 악화가 더 크게 느껴질 수 있습니다.</p>
 <p><strong>교수자:</strong> 흔한 오해도 있습니다. <code>utilization</code>이 60%면 비효율이라고 단정하는 겁니다. 실시간 서비스에서는 일부 여유를 남겨 <code>TTFT</code>를 지키는 설정이 오히려 정답일 수 있습니다. 이건 일반적 규칙이지, <code>[S3]</code>가 &quot;60%가 좋다&quot;라고 말해 준 사실은 아닙니다.</p>
@@ -176,7 +176,7 @@ $$</div>
 <p>장문 계약서 JSON 추출 API에서 단일 <code>TPS</code> 숫자만으로 상태를 설명하기 어려운 가장 좋은 이유는 무엇인가?</p>
 <ol><li>JSON 응답은 토큰이 아니므로 throughput 계산이 불가능하다.</li><li>long context는 <code>prefill</code> 쪽을, 형식 제약은 <code>decode</code> 쪽을 각각 흔들 수 있어 문제 위치가 다르기 때문이다.</li><li><code>TTFT</code>는 학습 단계에서만 쓰는 지표이기 때문이다.</li><li>structured output이 있으면 <code>utilization</code>을 측정할 수 없기 때문이다.</li></ol>
 <h2 id="짧은-서술형-1">짧은 서술형 1</h2>
-<p><code>TTFT</code>를 구성하는 요소를 쓰고, 왜 <code>queue -&amp;gt; prefill -&amp;gt; schedule -&amp;gt; first decode</code> 순서로 분해하는 것이 장애 분석에 유용한지 3~4문장으로 설명하라.</p>
+<p><code>TTFT</code>를 구성하는 요소를 쓰고, 왜 <code>queue -&gt; prefill -&gt; schedule -&gt; first decode</code> 순서로 분해하는 것이 장애 분석에 유용한지 3~4문장으로 설명하라.</p>
 <p>답변 조건:</p>
 <ul><li><code>queue</code>, <code>prefill</code>, <code>schedule</code>을 모두 포함할 것</li><li>&quot;첫 반응&quot;이라는 표현을 포함할 것</li></ul>
 <h2 id="짧은-서술형-2">짧은 서술형 2</h2>
@@ -213,7 +213,14 @@ $$</div>
   <script type="module" src="../../assets/app.js"></script>
   <script type="module">
     import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs';
-    mermaid.initialize({ startOnLoad: true, theme: 'neutral', securityLevel: 'loose' });
+    mermaid.initialize({
+      startOnLoad: true,
+      theme: 'neutral',
+      securityLevel: 'loose',
+      flowchart: { useMaxWidth: false },
+      sequence: { useMaxWidth: false },
+      gantt: { useMaxWidth: false }
+    });
   </script>
   <script>
     window.MathJax = {

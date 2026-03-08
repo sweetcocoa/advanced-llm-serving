@@ -63,7 +63,7 @@ R_{\mathrm{resident}} =
 {T_{\mathrm{onchip}} + T_{\mathrm{refill}} + T_{\mathrm{handoff}}}
 $$</div>
 <p>여기서 <code>T_onchip</code>은 한 세그먼트가 온칩에서 이어지는 시간, <code>T_refill</code>은 다시 채우는 시간, <code>T_handoff</code>는 host나 다른 경로로 넘기는 시간이다. 이 식은 [S2], [S3], [S4]의 offload/target/artifact 설명을 한 장면으로 묶기 위한 학습용 식이며, source가 직접 제시한 공식은 아니다 [합성] [S2] [S3] [S4]. 이 장에서는 <code>R_resident</code>가 클수록 NPU 친화적인 구조라고 읽는다.</p>
-<pre class="mermaid">flowchart LR
+<div class="mermaid-wrap"><pre class="mermaid">flowchart LR
     A[&quot;DRAM / Host Tensor&quot;] --&gt; B[&quot;DMA Refill&quot;]
     B --&gt; C[&quot;On-chip SRAM Tile&quot;]
     C --&gt; D[&quot;Op A&quot;]
@@ -71,12 +71,12 @@ $$</div>
     E --&gt; F[&quot;Op C&quot;]
     F --&gt; G{&quot;다음 연산도\n같은 세그먼트인가?&quot;}
     G -- 예 --&gt; C
-    G -- 아니오 --&gt; H[&quot;Write-back / Handoff&quot;]</pre>
-<p><strong>교수자:</strong> 이 그림에서 좋은 경로는 <code>C -&amp;gt; D -&amp;gt; E -&amp;gt; F -&amp;gt; C</code>가 길게 반복되는 경우입니다. NPU는 대개 이 반복을 길게 만들 때 특화 효율이 살아나고, <code>H</code>가 자주 등장할수록 범용 경로의 장점이 다시 커집니다.</p>
+    G -- 아니오 --&gt; H[&quot;Write-back / Handoff&quot;]</pre></div>
+<p><strong>교수자:</strong> 이 그림에서 좋은 경로는 <code>C -&gt; D -&gt; E -&gt; F -&gt; C</code>가 길게 반복되는 경우입니다. NPU는 대개 이 반복을 길게 만들 때 특화 효율이 살아나고, <code>H</code>가 자주 등장할수록 범용 경로의 장점이 다시 커집니다.</p>
 <h3 id="part-2-fusion은-연산-합치기가-아니라-머무는-시간-늘리기다">Part 2. fusion은 연산 합치기가 아니라 머무는 시간 늘리기다</h3>
 <p><strong>학습자:</strong> operator fusion을 compiler 편의 기능으로만 보면 부족하다는 말이 이 뜻이었군요.</p>
 <p><strong>교수자:</strong> 그렇습니다. [S1]이 ONNX graph를 공통 연산 그래프로 제공하고, [S2]와 [S4]가 그 그래프의 일부를 NPU 경로로 맡기거나 compile하는 문서라는 점이 source가 직접 주는 사실입니다. 그 사실을 합쳐 이 장은 fusion의 실무적 의미를 <code>중간 텐서를 밖으로 내보내지 않고 다음 연산으로 이어 붙일 수 있는가</code>로 해석합니다 [합성] [S1] [S2] [S4]. 이 source pack만으로 특정 벤더가 어떤 fusion rule을 갖는지 단정할 수는 없지만, 긴 offload 세그먼트가 이득이라는 방향성은 충분히 읽을 수 있습니다.</p>
-<p><strong>학습자:</strong> 결국 같은 <code>MatMul -&amp;gt; Add -&amp;gt; Activation</code>이라도 어떤 경로는 한 덩어리처럼 읽고, 어떤 경로는 중간에 자를 수 있겠네요.</p>
+<p><strong>학습자:</strong> 결국 같은 <code>MatMul -&gt; Add -&gt; Activation</code>이라도 어떤 경로는 한 덩어리처럼 읽고, 어떤 경로는 중간에 자를 수 있겠네요.</p>
 <p><strong>교수자:</strong> 바로 그 차이가 NPU 사고방식입니다. GPU에서는 커널을 여러 번 호출해도 꽤 자연스러운 경우가 많지만, NPU에서는 중간 결과를 반복해서 밖으로 내보낼수록 <code>특화 효율</code>이 희미해집니다. 이 역시 특정 벤더의 보편 공식이 아니라 [S2], [S4]의 offload 경계를 읽기 위해 도입한 수업용 판단 기준입니다 [합성] [S2] [S4]. 그래서 이 장에서 fusion은 연산 개수 절감보다 <code>resident 구간 연장</code>으로 설명하는 편이 더 정확합니다.</p>
 <h3 id="part-3-dma-리듬이-깨지면-범용-경로가-다시-유리해진다">Part 3. DMA 리듬이 깨지면 범용 경로가 다시 유리해진다</h3>
 <p><strong>학습자:</strong> 그러면 DMA는 단순 복사 엔진이 아니라 resident 구간을 유지하게 만드는 장치라고 봐야 하나요?</p>
@@ -93,12 +93,12 @@ T_{\mathrm{npu}}
 + N_{\mathrm{handoff}} \cdot T_{\mathrm{boundary}}
 \right)
 $$</div>
-<p><code>Δ_specialize &amp;gt; 0</code>이면 특화된 NPU 경로가 이득이고, <code>Δ_specialize &amp;lt;= 0</code>이면 범용 경로의 유연성이 더 낫다. 이 식은 [S2], [S3], [S4]가 설명하는 offload/compile/cache 경계를 비용 항으로 단순화한 학습용 식이며, 문서의 직접 공식은 아니다 [합성] [S2] [S3] [S4]. 이 식의 핵심은 <code>N_refill</code>과 <code>N_handoff</code>다. 이번 장에서는 unsupported op 개수보다 이 두 항을 더 앞에 둔다.</p>
+<p><code>Δ_specialize &gt; 0</code>이면 특화된 NPU 경로가 이득이고, <code>Δ_specialize &lt;= 0</code>이면 범용 경로의 유연성이 더 낫다. 이 식은 [S2], [S3], [S4]가 설명하는 offload/compile/cache 경계를 비용 항으로 단순화한 학습용 식이며, 문서의 직접 공식은 아니다 [합성] [S2] [S3] [S4]. 이 식의 핵심은 <code>N_refill</code>과 <code>N_handoff</code>다. 이번 장에서는 unsupported op 개수보다 이 두 항을 더 앞에 둔다.</p>
 <h3 id="part-4-특화-효율과-범용성의-선택-규칙">Part 4. 특화 효율과 범용성의 선택 규칙</h3>
 <p><strong>학습자:</strong> 실무에서는 어떤 신호가 보이면 <code>이건 NPU 쪽</code>, <code>이건 범용 경로 쪽</code>이라고 판단하나요?</p>
 <p><strong>교수자:</strong> 아래 네 줄은 source 원문을 그대로 옮긴 체크리스트가 아니라, [S2], [S3], [S4]를 읽을 때 쓰는 이 장의 수업용 선택 규칙입니다. 직접 source가 말하는 것은 offload 경계, target/runtime, compile artifact 경로이고, <code>무엇을 먼저 고른다</code>는 우선순위는 그 사실 위에 얹는 합성 판단입니다 [합성] [S2] [S3] [S4].</p>
 <ul><li>입력 shape가 거의 고정되고, 한 번 올라간 텐서가 온칩에서 여러 연산을 연달아 거치며, host handoff가 적으면 NPU 쪽으로 기운다.</li><li>DMA refill이 예측 가능하고, 같은 패턴이 프레임마다 반복되며, compile artifact를 오래 재사용할 수 있으면 NPU 쪽으로 기운다. [S3]</li><li>반대로 불규칙 제어 흐름, 잦은 reshape, cache 갱신, host 왕복, 세그먼트 사이 상태 의존성이 많으면 범용 경로가 더 자연스럽다.</li><li>[S2]와 [S4]처럼 runtime/provider가 <code>어디까지 device에 맡길지</code>를 설명하는 문서가 나올 때는, 지원 여부보다 <code>맡긴 뒤 오래 유지되는가</code>를 먼저 본다.</li></ul>
-<pre class="mermaid">flowchart TD
+<div class="mermaid-wrap"><pre class="mermaid">flowchart TD
     A[&quot;워크로드를 본다&quot;] --&gt; B{&quot;입력 shape와 경로가\n대체로 고정적인가?&quot;}
     B -- 예 --&gt; C{&quot;한 번 올라간 텐서가\n온칩에서 오래 머무는가?&quot;}
     B -- 아니오 --&gt; F[&quot;범용 경로 우선&quot;]
@@ -108,7 +108,7 @@ $$</div>
     D -- 아니오 --&gt; F
     F --&gt; G{&quot;reshape / cache / host 왕복이 잦은가?&quot;}
     G -- 예 --&gt; H[&quot;GPU / CPU 등 범용 경로 유지&quot;]
-    G -- 아니오 --&gt; I[&quot;혼합 경로 검토&quot;]</pre>
+    G -- 아니오 --&gt; I[&quot;혼합 경로 검토&quot;]</pre></div>
 <p><strong>교수자:</strong> 02장은 graph와 lowering 경계를 더 깊게 보겠지만, 이 장의 첫 질문은 다릅니다. <code>지원하지 않는 op가 몇 개인가</code>보다 <code>resident 구간이 얼마나 길고 refill 리듬이 얼마나 단순한가</code>를 먼저 봅니다.</p>
 <h3 id="part-5-사례-1-스마트폰-카메라-보정-파이프라인">Part 5. 사례 1. 스마트폰 카메라 보정 파이프라인</h3>
 <p><strong>교수자:</strong> 첫 사례는 스마트폰 카메라 보정입니다. 해상도가 비교적 고정되고, conv 계열 블록이 반복되며, 프레임마다 비슷한 흐름이 재현됩니다. 이런 구조는 <code>온칩에 올린 뒤 몇 단계 더 처리하고 내보내는</code> 그림을 만들기 쉽습니다. ONNX Runtime QNN EP와 OpenVINO NPU 문서가 공통으로 강조하는 것은 바로 이런 device offload/target이 성립하는 안정적 세그먼트의 존재입니다 [S2][S4].</p>
@@ -194,7 +194,14 @@ $$</div>
   <script type="module" src="../../assets/app.js"></script>
   <script type="module">
     import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs';
-    mermaid.initialize({ startOnLoad: true, theme: 'neutral', securityLevel: 'loose' });
+    mermaid.initialize({
+      startOnLoad: true,
+      theme: 'neutral',
+      securityLevel: 'loose',
+      flowchart: { useMaxWidth: false },
+      sequence: { useMaxWidth: false },
+      gantt: { useMaxWidth: false }
+    });
   </script>
   <script>
     window.MathJax = {

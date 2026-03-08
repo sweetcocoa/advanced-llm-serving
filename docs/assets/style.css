@@ -615,6 +615,33 @@ p {
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06);
 }
 
+:where(.mermaid-wrap) {
+  overflow-x: auto;
+  margin: 1.5rem 0;
+  padding: 12px;
+  border: 1px solid rgba(19, 38, 31, 0.1);
+  border-radius: var(--radius-md);
+  background: rgba(255, 255, 255, 0.68);
+}
+
+:where(.mermaid-wrap .mermaid) {
+  display: block;
+  width: max-content;
+  min-width: 100%;
+  margin: 0 auto;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+  color: inherit;
+}
+
+:where(.mermaid-wrap .mermaid svg) {
+  display: block;
+  max-width: none !important;
+  height: auto !important;
+}
+
 :where(.table-wrap) {
   overflow-x: auto;
   margin: 1.5rem 0;
@@ -925,6 +952,10 @@ footer,
 
   :where(.content-panel) {
     padding: 18px;
+  }
+
+  :where(.mermaid-wrap) {
+    padding: 10px;
   }
 
   :where(.toc, .chapter-toc, aside nav[data-toc], [data-toc]) {

@@ -58,14 +58,14 @@
 <ul><li>API layer: 인증, 요청 스키마, 모델 라우팅, OpenAI-compatible contract를 맡는다. [S2]</li><li>runtime layer: batching, scheduler, KV cache 관리, 메모리 효율 같은 공통 운영을 맡는다. [S1] [S2]</li><li>backend optimization layer: 장치 친화적인 cache reuse나 prefill/decode 분리 같은 더 깊은 최적화를 맡는다. [S3] [S4]</li><li>observability layer: 위 세 층의 상태를 숫자로 연결해 어디서 병목이 생겼는지 보여 준다. [S2] [S3] [S4]</li></ul>
 <p><strong>학습자:</strong> observability를 따로 떼는 이유가 있나요?</p>
 <p><strong>교수자:</strong> 있습니다. 앞의 세 층은 &quot;무엇을 실행하나&quot;를 정하고, observability는 &quot;왜 느린가&quot;를 분해합니다. 이 챕터는 구조도보다 진단 순서를 더 중요하게 봅니다.</p>
-<pre class="mermaid">flowchart LR
+<div class="mermaid-wrap"><pre class="mermaid">flowchart LR
     U[&quot;Client / SDK&quot;] --&gt; A[&quot;API layer&lt;br/&gt;auth, schema, routing&quot;]
     A --&gt; R[&quot;Runtime layer&lt;br/&gt;batching, scheduler, KV cache&quot;]
     R --&gt; B[&quot;Backend optimization layer&lt;br/&gt;cache reuse, disaggregation&quot;]
     B --&gt; D[&quot;Device&lt;br/&gt;GPU / NPU&quot;]
     A --&gt; O[&quot;Observability&quot;]
     R --&gt; O
-    B --&gt; O</pre>
+    B --&gt; O</pre></div>
 <h3 id="장면-2-같은-api도-다른-운영-계약을-만든다">장면 2. 같은 API도 다른 운영 계약을 만든다</h3>
 <p><strong>학습자:</strong> 그러면 OpenAI-compatible API를 제공하는 순간 선택은 거의 끝난 것 아닌가요?</p>
 <p><strong>교수자:</strong> 아닙니다. 거기서부터 두 갈래가 갈립니다. 하나는 표준 API 위에 범용 runtime을 얹어 공통 운영을 최대화하는 길이고, 다른 하나는 backend-specific 기능을 더 드러내 장치 맞춤 최적화를 깊게 가져가는 길입니다. [S2] [S3] [S4]</p>
@@ -95,7 +95,7 @@ $$</div>
 <p><strong>교수자:</strong> 반복 prefix와 긴 입력이 성능 문제의 중심일 때입니다. TensorRT-LLM 문서가 <code>KV Cache Reuse</code>와 <code>Disaggregated Serving</code>을 따로 설명하는 이유도 여기에 있습니다. [S3] [S4]</p>
 <ul><li><code>KV Cache Reuse</code>: 같은 prefix를 다시 계산하지 않도록 해 prefill 부담을 줄이려는 선택이다. [S3]</li><li><code>Disaggregated Serving</code>: prefill과 decode를 서로 다른 자원이나 역할로 분리해 간섭을 줄이려는 선택이다. [S4]</li></ul>
 <p><strong>교수자:</strong> 예를 들어 계약서 검토 서비스처럼 긴 공통 시스템 프롬프트와 긴 첨부 문서가 반복된다면, &quot;API는 이미 맞다&quot;에서 멈추면 안 됩니다. cache hit ratio를 보지 못하면 reuse의 이점도 확인할 수 없고, prefill과 decode를 구분해 보지 못하면 분리 구조가 필요한지조차 판단하기 어렵습니다. [S3] [S4]</p>
-<pre class="mermaid">flowchart TD
+<div class="mermaid-wrap"><pre class="mermaid">flowchart TD
     A[&quot;TTFT 급등&quot;] --&gt; B{&quot;API 이상?&quot;}
     B -- 예 --&gt; C[&quot;auth / routing / schema 확인&quot;]
     B -- 아니오 --&gt; D{&quot;queue depth 증가?&quot;}
@@ -104,7 +104,7 @@ $$</div>
     F -- 예 --&gt; G[&quot;cache hit ratio 확인&lt;br/&gt;KV cache reuse 검토&quot;]
     F -- 아니오 --&gt; H{&quot;prefill이 decode를 밀어내는가?&quot;}
     H -- 예 --&gt; I[&quot;disaggregated serving 검토&quot;]
-    H -- 아니오 --&gt; J[&quot;backend / kernel / memory pressure 확인&quot;]</pre>
+    H -- 아니오 --&gt; J[&quot;backend / kernel / memory pressure 확인&quot;]</pre></div>
 <h3 id="장면-6-kernel-최적화는-위-계층이-정리된-뒤에-의미가-커진다">장면 6. kernel 최적화는 위 계층이 정리된 뒤에 의미가 커진다</h3>
 <p><strong>교수자:</strong> 이제 roofline 관점을 가져와 봅시다. backend-specific 최적화가 항상 가장 큰 체감 개선을 주는 것은 아닙니다.</p>
 <h4 id="수식-2-roofline-관점의-상한">수식 2. Roofline 관점의 상한</h4>
@@ -203,7 +203,14 @@ $$</div>
   <script type="module" src="../../assets/app.js"></script>
   <script type="module">
     import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs';
-    mermaid.initialize({ startOnLoad: true, theme: 'neutral', securityLevel: 'loose' });
+    mermaid.initialize({
+      startOnLoad: true,
+      theme: 'neutral',
+      securityLevel: 'loose',
+      flowchart: { useMaxWidth: false },
+      sequence: { useMaxWidth: false },
+      gantt: { useMaxWidth: false }
+    });
   </script>
   <script>
     window.MathJax = {

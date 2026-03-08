@@ -45,7 +45,7 @@
     <article class="content-panel surface prose" data-reading-target>
       <h1 id="transformer-inference">Transformer Inference</h1>
 <h2 id="수업-개요">수업 개요</h2>
-<p>이 챕터는 Transformer를 &quot;attention 식 하나&quot;로 소개하지 않고, 실제 요청이 <code>prefill -&amp;gt; decode</code>를 지나며 어떤 계산과 어떤 메모리 읽기를 만들어 내는지 따라간다. 핵심 질문은 단순하다. 더 긴 문맥, 더 넓은 표현 공간, 더 자주 과거를 참조하는 모델 설정이 실제 품질을 얼마나 올리고, 그 대가로 prefill FLOPs와 decode memory traffic을 얼마나 늘리느냐이다 [S1][S2]. 2026년 기준의 serving 문서가 prefix caching, paged attention, continuous batching 같은 기능을 별도 운영 항목으로 다루는 이유도 이 tradeoff가 여전히 현재형이기 때문이다 [S3]. 최신 runtime release note가 계속 갱신되는 사실 자체도, 추론 경로 최적화가 끝난 문제가 아니라는 보조 신호로 읽을 수 있다 [S4].</p>
+<p>이 챕터는 Transformer를 &quot;attention 식 하나&quot;로 소개하지 않고, 실제 요청이 <code>prefill -&gt; decode</code>를 지나며 어떤 계산과 어떤 메모리 읽기를 만들어 내는지 따라간다. 핵심 질문은 단순하다. 더 긴 문맥, 더 넓은 표현 공간, 더 자주 과거를 참조하는 모델 설정이 실제 품질을 얼마나 올리고, 그 대가로 prefill FLOPs와 decode memory traffic을 얼마나 늘리느냐이다 [S1][S2]. 2026년 기준의 serving 문서가 prefix caching, paged attention, continuous batching 같은 기능을 별도 운영 항목으로 다루는 이유도 이 tradeoff가 여전히 현재형이기 때문이다 [S3]. 최신 runtime release note가 계속 갱신되는 사실 자체도, 추론 경로 최적화가 끝난 문제가 아니라는 보조 신호로 읽을 수 있다 [S4].</p>
 <h2 id="학습-목표">학습 목표</h2>
 <ul><li><code>prefill</code>과 <code>decode</code>를 서로 다른 비용 구조로 설명할 수 있다.</li><li>self-attention을 설명할 때 <code>QKV projection</code>, <code>output projection</code>, <code>FFN</code>, <code>KV cache</code>를 함께 묶어 말할 수 있다.</li><li>더 긴 문맥, 더 많은 head, 더 큰 hidden/FFN이 어떤 품질 이득을 주고 어떤 비용을 늘리는지 서비스 관점에서 비교할 수 있다.</li><li>&quot;느리다&quot;는 불만을 TTFT 문제와 TPOT 문제로 분리해 진단 순서를 세울 수 있다.</li></ul>
 <h2 id="수업-전에-생각할-질문">수업 전에 생각할 질문</h2>
@@ -56,7 +56,7 @@
 <p><strong>교수자:</strong> 실무에서는 더 앞단에서 시작합니다. &quot;지금 느린 구간이 prefill인가, decode인가&quot;부터 나눕니다. prefill은 입력 프롬프트 전체를 한 번에 통과시키는 구간이고, decode는 새 토큰을 하나씩 만들며 과거를 계속 참조하는 구간입니다.</p>
 <p><strong>학습자:</strong> 같은 모델인데도 진단표가 달라진다는 말이군요.</p>
 <p><strong>교수자:</strong> 그렇습니다. <code>저장소 코드 질의봇</code>은 긴 파일 묶음을 처음 읽을 때 prefill이 두드러집니다. 반면 <code>실시간 말하기 튜터</code>는 세션이 이어질수록 decode가 길어지며 과거 대화의 K/V를 계속 읽습니다. 둘 다 Transformer지만 사용자가 느끼는 지연의 성질이 다릅니다.</p>
-<pre class="mermaid">flowchart LR
+<div class="mermaid-wrap"><pre class="mermaid">flowchart LR
     A[입력 토큰] --&gt; B[Embedding]
     B --&gt; C{어느 단계인가?}
     C --&gt;|Prefill| D[전체 입력에 대한\nQKV projection]
@@ -68,7 +68,7 @@
     I --&gt; J[Attention]
     J --&gt; K[O projection + FFN]
     K --&gt; L[다음 토큰 출력]
-    G --&gt; L</pre>
+    G --&gt; L</pre></div>
 <p><strong>교수자:</strong> 이 그림에서 먼저 봐야 할 것은 &quot;attention이 있는가&quot;가 아닙니다. 무엇을 새로 계산하고, 무엇을 저장해 두었다가 반복해서 읽는가입니다.</p>
 <h3 id="part-2-attention은-중심이지만-비용표-전체는-아니다">Part 2. attention은 중심이지만, 비용표 전체는 아니다</h3>
 <p><strong>학습자:</strong> 그래도 Transformer의 상징은 attention 아닌가요?</p>
@@ -104,7 +104,7 @@ $$</div>
 <p><strong>교수자:</strong> 반대로 <code>실시간 말하기 튜터</code>는 세션 전체를 무조건 길게 들고 가는 것보다, 최근 교정 포인트와 발음 습관 요약만 유지하는 편이 더 낫기도 합니다. 아주 긴 문맥이 피드백 품질을 조금 올려도, 후반 decode가 눈에 띄게 느려지면 사용자는 바로 체감합니다.</p>
 <p><strong>학습자:</strong> 결국 &quot;병목이 어디냐&quot;와 &quot;그 병목이 사는 이유가 제품 가치냐&quot;를 같이 물어야 하네요.</p>
 <p><strong>교수자:</strong> 네. 같은 비용 증가라도 제품 가치를 직접 만들면 감수할 수 있고, 가치가 약하면 줄여야 합니다.</p>
-<pre class="mermaid">flowchart TD
+<div class="mermaid-wrap"><pre class="mermaid">flowchart TD
     A[표현력 강화 아이디어] --&gt; B{제품 가치가 큰가?}
     B --&gt;|예| C{비용 증가는 주로 어디서 터지나?}
     B --&gt;|아니오| D[문맥 축약 또는 모델 폭 축소 검토]
@@ -113,7 +113,7 @@ $$</div>
     E --&gt;|아니오| G[입력 구조 재설계]
     C --&gt;|Decode| H[긴 과거 참조가 정말 필요한가?]
     H --&gt;|예| I[KV 경로와 paging 최적화]
-    H --&gt;|아니오| J[요약 메모리, 최근 창 유지]</pre>
+    H --&gt;|아니오| J[요약 메모리, 최근 창 유지]</pre></div>
 <h3 id="part-6-엔진-문서와-release-note를-같이-보는-이유">Part 6. 엔진 문서와 release note를 같이 보는 이유</h3>
 <p><strong>학습자:</strong> 이 챕터는 기초인데도 왜 엔진 문서가 들어오나요?</p>
 <p><strong>교수자:</strong> 수식만 보면 Transformer 추론이 고정된 절차처럼 보이기 쉽기 때문입니다. 하지만 실제 serving 엔진은 prefix caching, paged attention, continuous batching처럼 같은 모델을 다른 실행 경로로 돌립니다 [S3]. 이 기능들은 논문 바깥의 디테일이 아니라, 바로 앞에서 본 <code>prefill 낭비</code>와 <code>decode cache traffic</code>을 줄이기 위한 장치입니다.</p>
@@ -202,7 +202,14 @@ $$</div>
   <script type="module" src="../../assets/app.js"></script>
   <script type="module">
     import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs';
-    mermaid.initialize({ startOnLoad: true, theme: 'neutral', securityLevel: 'loose' });
+    mermaid.initialize({
+      startOnLoad: true,
+      theme: 'neutral',
+      securityLevel: 'loose',
+      flowchart: { useMaxWidth: false },
+      sequence: { useMaxWidth: false },
+      gantt: { useMaxWidth: false }
+    });
   </script>
   <script>
     window.MathJax = {

@@ -67,14 +67,14 @@
 T_{\mathrm{TTFT}}^{\mathrm{cloud}} = T_{\mathrm{uplink}} + T_{\mathrm{queue}} + T_{\mathrm{prefill}} + T_{\mathrm{first\ decode}}
 $$</div>
 <p><strong>교수자:</strong> 이 식은 클라우드가 느리다고 단정하기 전에 어디를 분리해 측정해야 하는지 알려 줍니다. 회선 지연이 큰지, 피크 시간 큐가 긴지, prefill이 긴지, decode가 느린지 나눠 봐야 합니다. speculative decoding은 마지막 항을 줄이는 쪽의 도구이고 [S2], disaggregated prefill은 세 번째 항을 다른 자원 계층으로 보내는 발상에 가깝습니다 [S1].</p>
-<pre class="mermaid">flowchart LR
+<div class="mermaid-wrap"><pre class="mermaid">flowchart LR
     A[&quot;긴 문맥 + 높은 동시성&quot;] --&gt; B{&quot;어디가 병목인가?&quot;}
     B --&gt;|prefill| C[&quot;prefill 자원 분리 검토&quot;]
     B --&gt;|decode| D[&quot;speculative decoding 검토&quot;]
     B --&gt;|queue| E[&quot;batching / admission control 조정&quot;]
     C --&gt; F[&quot;클라우드 최적화 강화&quot;]
     D --&gt; F
-    E --&gt; F</pre>
+    E --&gt; F</pre></div>
 <p><strong>학습자:</strong> 결국 클라우드는 &quot;멀리 있어서 느리다&quot;가 아니라 &quot;멀어도 잘 쪼개면 강하다&quot;에 가깝군요.</p>
 <p><strong>교수자:</strong> 정확합니다. 그리고 운영 관점도 중요합니다. 감사 로그, 버전 롤백, 공용 지식베이스 업데이트, A/B 실험은 중앙 서버가 훨씬 수월합니다. 비용도 요청량이 출렁이면 클라우드가 오히려 낫습니다. idle 장치를 수천 대에 깔아 두는 비용은 장부에 늦게 나타날 뿐 사라지지 않습니다.</p>
 <h3 id="part-3-엣지가-먼저-맞는-장면">Part 3. 엣지가 먼저 맞는 장면</h3>
@@ -88,7 +88,7 @@ $$</div>
 <p><strong>교수자:</strong> edge를 이야기할 때 자주 빠지는 항목이 전력입니다. 서버비가 줄었다고 끝이 아닙니다. 긴 응답을 자주 생성하면 사용자는 배터리와 발열로 불만을 느낍니다. 로컬 배치는 네트워크 비용을 줄여도, 에너지와 열 예산을 넘기면 제품 전체 만족도가 떨어집니다.</p>
 <p><strong>학습자:</strong> 그러면 edge 디버깅은 throughput보다 전력과 fallback부터 봐야 합니까?</p>
 <p><strong>교수자:</strong> 순서를 이렇게 잡으면 됩니다. <code>1) 실제로 NPU에 얼마나 올라갔는지</code>, <code>2) CPU fallback이 얼마나 발생했는지</code>, <code>3) 모델 로딩 시간이 사용자 대기 시간을 잡아먹는지</code>, <code>4) 장시간 실행 시 발열로 클럭이 떨어지는지</code>. QNN EP와 OpenVINO NPU 문서를 읽을 때도 &quot;지원한다&quot;보다 &quot;어디서 fallback이 생길 수 있는가&quot;를 보는 습관이 중요합니다 [S3][S6].</p>
-<pre class="mermaid">flowchart TD
+<div class="mermaid-wrap"><pre class="mermaid">flowchart TD
     A[&quot;민감한 입력 도착&quot;] --&gt; B{&quot;로컬에서 처리 가능한가?&quot;}
     B --&gt;|예| C[&quot;NPU/로컬 런타임 실행&quot;]
     B --&gt;|아니오| D[&quot;로컬 전처리/마스킹&quot;]
@@ -96,7 +96,7 @@ $$</div>
     E --&gt;|예| F[&quot;로컬 응답 완료&quot;]
     E --&gt;|아니오| G[&quot;필수 정보만 cloud로 전송&quot;]
     D --&gt; G
-    G --&gt; H[&quot;cloud 보강 응답&quot;]</pre>
+    G --&gt; H[&quot;cloud 보강 응답&quot;]</pre></div>
 <h3 id="part-4-private-inference는-pure-edge와-같은-말이-아니다">Part 4. private inference는 pure edge와 같은 말이 아니다</h3>
 <p><strong>학습자:</strong> private inference 요구가 늘어난다고 해서 결국 다 edge로 간다는 뜻은 아니군요.</p>
 <p><strong>교수자:</strong> 그렇죠. private inference는 종종 <code>원문은 로컬</code>, <code>대규모 추론은 서버</code>, <code>로그는 최소화</code> 같은 조합으로 구현됩니다. 예를 들어 회의 녹취에서는 로컬에서 음성 전사와 PII 마스킹을 하고, 정제된 요약 요청만 클라우드로 보내는 구성이 가능합니다. 이러면 개인정보 노출 위험을 줄이면서도 긴 문맥 요약은 서버 자원을 활용할 수 있습니다.</p>
@@ -186,7 +186,14 @@ $$</div>
   <script type="module" src="../../assets/app.js"></script>
   <script type="module">
     import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs';
-    mermaid.initialize({ startOnLoad: true, theme: 'neutral', securityLevel: 'loose' });
+    mermaid.initialize({
+      startOnLoad: true,
+      theme: 'neutral',
+      securityLevel: 'loose',
+      flowchart: { useMaxWidth: false },
+      sequence: { useMaxWidth: false },
+      gantt: { useMaxWidth: false }
+    });
   </script>
   <script>
     window.MathJax = {

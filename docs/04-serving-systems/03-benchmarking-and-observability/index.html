@@ -58,12 +58,12 @@
 <p><strong>교수자:</strong> 이름은 같아도 질문이 다릅니다. benchmark는 조건을 고정하고 구성을 비교합니다. observability는 조건이 흔들리는 상태에서 원인을 좁힙니다. 그래서 같은 <code>TTFT</code>라도 benchmark에서는 &quot;어느 설정이 더 빠른가&quot;를 묻고, observability에서는 &quot;왜 오늘 p95가 튀었는가&quot;를 묻습니다.</p>
 <p>| 지금 답하려는 질문 | benchmark에서 먼저 보는 값 | observability에서 같이 보는 값 | 섞어 쓰면 생기는 오해 | | --- | --- | --- | --- | | 어떤 설정이 더 빠른가 | 고정 prompt/output 길이의 <code>TTFT</code>, throughput | 실트래픽 비중, 시간대, 배포 버전 | benchmark 승자가 운영 승자라고 단정 | | 오늘 왜 느려졌는가 | 재현용 replay benchmark | <code>TTFT p95</code>, queue wait, phase별 latency | 평균 한 줄이면 충분하다고 착각 |</p>
 <div class="table-wrap"><table><thead><tr><th>어디가 병목인가</th><th>bucket별 synthetic run</th><th>queue, prefill, first-token, retry</th><th>총 latency 하나로 원인을 찾으려 함</th></tr></thead><tbody></tbody></table></div>
-<pre class="mermaid">flowchart TB
+<div class="mermaid-wrap"><pre class="mermaid">flowchart TB
     A[새 serving 설정 또는 장애 신호] --&gt; B{지금 필요한 답}
     B --&gt;|구성 비교| C[Benchmark scorecard]
     B --&gt;|원인 추적| D[Observability dashboard]
     C --&gt; E[고정된 입력 길이&lt;br/&gt;고정된 동시성&lt;br/&gt;재현성]
-    D --&gt; F[시계열 변화&lt;br/&gt;percentile&lt;br/&gt;phase 분해]</pre>
+    D --&gt; F[시계열 변화&lt;br/&gt;percentile&lt;br/&gt;phase 분해]</pre></div>
 <h3 id="세션-2-benchmark는-현실을-버리는-대신-비교력을-산다">세션 2. benchmark는 현실을 버리는 대신 비교력을 산다</h3>
 <p><strong>학습자:</strong> 그러면 benchmark는 현실을 덜 닮을수록 오히려 좋은 건가요?</p>
 <p><strong>교수자:</strong> 비교가 목적이라면 그렇습니다. 입력 길이, 출력 길이, 동시성, warm-up 상태를 묶어 두어야 A와 B를 선명하게 비교할 수 있습니다. 이 장에서는 최신 serving 문서 용어 기준선으로 vLLM Documentation을 함께 보지만 [S1], 그 문서가 곧바로 운영 대시보드 설계를 대신해 주는 것은 아닙니다. 문맥을 맞추는 기준선과 운영 판단은 분리해야 합니다.</p>
@@ -87,7 +87,7 @@ $$</div>
 <p><strong>학습자:</strong> 그러면 benchmark도 phase를 따로 설계해야 합니까?</p>
 <p><strong>교수자:</strong> 그렇습니다. 긴 문서 요약은 prefill 부담이 먼저 튀고, 짧은 채팅은 decode 반복과 queue 체감이 먼저 튑니다. 둘을 한 평균 total latency로 합치면 어떤 최적화가 누구에게 이익이었는지 흐려집니다.</p>
 <p><strong>교수자:</strong> 참고 이미지 <code>I2</code>도 여기서 보조적으로 쓸 수 있습니다. transformer 구조도는 serving phase를 직접 설명하는 그림은 아니지만, 입력을 넓게 읽는 attention 경로와 출력 토큰을 이어 가는 경로의 성격 차이를 직관적으로 상기시키는 데는 도움이 됩니다. 이 이미지는 phase 분리의 직접 근거가 아니라 설명 보조물입니다.</p>
-<pre class="mermaid">flowchart LR
+<div class="mermaid-wrap"><pre class="mermaid">flowchart LR
     A[운영 알람 또는 사용자 불만] --&gt; B{무엇이 먼저 나빠졌는가}
     B --&gt;|TTFT 상승| C[queue와 prefill 분리 측정]
     B --&gt;|throughput 하락| D[decode 단계와 동시성 확인]
@@ -95,7 +95,7 @@ $$</div>
     C --&gt; F[replay benchmark]
     D --&gt; F
     E --&gt; F
-    F --&gt; G[정책 조정 또는 롤백]</pre>
+    F --&gt; G[정책 조정 또는 롤백]</pre></div>
 <p><img src="./assets/img-02.png" alt="I2. Transformer model architecture"></p>
 <h3 id="세션-5-structured-output은-속도-외의-운영선이-하나-더-필요하다">세션 5. structured output은 속도 외의 운영선이 하나 더 필요하다</h3>
 <p><strong>학습자:</strong> throughput은 올랐는데 팀이 배포를 싫어하는 경우도 있습니까?</p>
@@ -177,7 +177,14 @@ $$</div>
   <script type="module" src="../../assets/app.js"></script>
   <script type="module">
     import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs';
-    mermaid.initialize({ startOnLoad: true, theme: 'neutral', securityLevel: 'loose' });
+    mermaid.initialize({
+      startOnLoad: true,
+      theme: 'neutral',
+      securityLevel: 'loose',
+      flowchart: { useMaxWidth: false },
+      sequence: { useMaxWidth: false },
+      gantt: { useMaxWidth: false }
+    });
   </script>
   <script>
     window.MathJax = {

@@ -64,7 +64,7 @@
 q = \operatorname{clip}\left(\operatorname{round}\left(\frac{x}{s}\right) + z,\ q_{\min},\ q_{\max}\right)
 $$</div>
 <p>여기서 \(x\)는 원래 값, \(s\)는 scale, \(z\)는 zero-point다. 양자화 artifact를 저장한다는 말은 결국 이 파라미터들이 tensor 또는 channel 단위로 고정된다는 뜻이다 [S1][S2].</p>
-<pre class="mermaid">flowchart LR
+<div class="mermaid-wrap"><pre class="mermaid">flowchart LR
     A[&quot;FP32 ONNX 모델&quot;] --&gt; B{&quot;양자화 경로 선택&quot;}
     B --&gt; C[&quot;정적 양자화 + calibration [S1][S2]&quot;]
     B --&gt; D[&quot;QAT 후 export [S2]&quot;]
@@ -73,7 +73,7 @@ $$</div>
     E --&gt; F[&quot;QOperator ONNX [S1]&quot;]
     E --&gt; G[&quot;QDQ ONNX [S1][S2]&quot;]
     F --&gt; H[&quot;runtime import / NPU partition 확인&quot;]
-    G --&gt; H</pre>
+    G --&gt; H</pre></div>
 <p><strong>교수자:</strong> 여기서 많이 하는 실수가 있습니다. 모델 카드에는 <code>Int8 완료</code>라고 써 두고, 실제 파일이 <code>QDQ</code>인지 <code>QOperator</code>인지 확인하지 않는 겁니다. 그 상태에서는 import 실패 원인이 calibration인지, 표현 형식인지, runtime partition인지 분리되지 않습니다.</p>
 <h3 id="part-3-calibration은-정확도-보정이면서-재현성-고정이다">Part 3. Calibration은 정확도 보정이면서 재현성 고정이다</h3>
 <p><strong>학습자:</strong> calibration은 대표 샘플 몇 개 돌려서 범위를 잡는 과정이라고만 알고 있었어요.</p>
@@ -100,7 +100,7 @@ $$</div>
 <p><strong>교수자:</strong> 두 번째 장면은 <code>NNCF + OpenVINO NPU</code>입니다. NNCF는 PTQ, QAT, calibration dataset, preset, <code>target_device</code> 같은 최적화 문맥을 제공합니다 [S2]. OpenVINO NPU 문서는 NPU를 명시적 device target과 runtime mode로 다룹니다 [S4]. 그래서 이 경로에서는 <code>어떤 quantization artifact를 만들었는가</code>뿐 아니라 <code>어느 device 문맥을 상정하고 최적화했는가</code>가 더 드러납니다.</p>
 <p><strong>학습자:</strong> 그러면 두 사례 다 Int8일 수 있어도 질문 순서는 다르겠네요.</p>
 <p><strong>교수자:</strong> 그렇습니다. QNN EP 쪽은 <code>partition과 import</code>가 먼저 보이고 [S3], OpenVINO 쪽은 <code>optimization 설정과 target device</code>가 먼저 보입니다 [S2][S4].</p>
-<pre class="mermaid">flowchart TD
+<div class="mermaid-wrap"><pre class="mermaid">flowchart TD
     A[&quot;양자화 완료된 artifact&quot;] --&gt; B{&quot;먼저 무엇을 확인할까?&quot;}
     B --&gt; C[&quot;표현 형식: QDQ / QOperator [S1]&quot;]
     B --&gt; D[&quot;calibration 설정 고정 여부 [S1][S2]&quot;]
@@ -108,7 +108,7 @@ $$</div>
     D --&gt; F[&quot;OpenVINO target_device / NPU 경로 점검 [S2][S4]&quot;]
     E --&gt; G[&quot;boundary / requant 비용 판단&quot;]
     F --&gt; G
-    G --&gt; H[&quot;품질과 deployability를 분리해 평가&quot;]</pre>
+    G --&gt; H[&quot;품질과 deployability를 분리해 평가&quot;]</pre></div>
 <h3 id="part-6-이-챕터에서-권하는-디버깅-순서">Part 6. 이 챕터에서 권하는 디버깅 순서</h3>
 <p><strong>학습자:</strong> 실제로 문제가 생기면 어디부터 보시나요?</p>
 <p><strong>교수자:</strong> 저는 거의 항상 같은 순서로 봅니다.</p>
@@ -193,7 +193,14 @@ $$</div>
   <script type="module" src="../../assets/app.js"></script>
   <script type="module">
     import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs';
-    mermaid.initialize({ startOnLoad: true, theme: 'neutral', securityLevel: 'loose' });
+    mermaid.initialize({
+      startOnLoad: true,
+      theme: 'neutral',
+      securityLevel: 'loose',
+      flowchart: { useMaxWidth: false },
+      sequence: { useMaxWidth: false },
+      gantt: { useMaxWidth: false }
+    });
   </script>
   <script>
     window.MathJax = {

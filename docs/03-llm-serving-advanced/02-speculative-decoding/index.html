@@ -47,7 +47,7 @@
 <h2 id="수업-개요">수업 개요</h2>
 <p>이 챕터는 &quot;더 작은 모델이 먼저 몇 토큰을 써 보고, 큰 모델이 그 묶음을 한 번에 검사한다&quot;는 speculative decoding의 운영 관점을 다룬다. 핵심 질문은 알고리즘 자체보다 단순하다. <code>draft model을 한 번 더 돌리는 비용</code>보다 <code>target model 호출 횟수를 줄여 얻는 이익</code>이 더 큰가, 그리고 그 차이를 좌우하는 승인율이 workload마다 어떻게 달라지는가다 [S4]. 2026년 기준 serving 엔진은 speculative decoding을 별도 backend 기능으로 드러내는 흐름이며, 동시에 structured outputs와 tool calling 같은 제약된 decoding 경로와 함께 운영해야 한다 [S4][S5][S6]. 그래서 이 주제는 &quot;속도 꼼수&quot;가 아니라 route별 정책 설계 문제다.</p>
 <h2 id="학습-목표">학습 목표</h2>
-<ul><li>speculative decoding이 <code>draft 제안 -&amp;gt; target 검증 -&amp;gt; 승인/rollback</code> 흐름으로 decode latency를 줄이는 원리를 설명할 수 있다.</li><li>승인율, draft 비용, rollback 길이가 속도 이득을 어떻게 바꾸는지 수식으로 설명할 수 있다.</li><li>free-form 생성, structured output, tool calling처럼 출력 제약이 다른 경로에서 speculative decoding의 우선순위를 구분할 수 있다.</li><li>속도 향상이 안 나올 때 <code>decode 병목 여부 -&amp;gt; 승인율 -&amp;gt; draft 비용 -&amp;gt; 스케줄링</code> 순서로 점검할 수 있다.</li></ul>
+<ul><li>speculative decoding이 <code>draft 제안 -&gt; target 검증 -&gt; 승인/rollback</code> 흐름으로 decode latency를 줄이는 원리를 설명할 수 있다.</li><li>승인율, draft 비용, rollback 길이가 속도 이득을 어떻게 바꾸는지 수식으로 설명할 수 있다.</li><li>free-form 생성, structured output, tool calling처럼 출력 제약이 다른 경로에서 speculative decoding의 우선순위를 구분할 수 있다.</li><li>속도 향상이 안 나올 때 <code>decode 병목 여부 -&gt; 승인율 -&gt; draft 비용 -&gt; 스케줄링</code> 순서로 점검할 수 있다.</li></ul>
 <h2 id="수업-전에-생각할-질문">수업 전에 생각할 질문</h2>
 <ul><li>출력이 40토큰밖에 안 되는 JSON 응답에도 speculative decoding을 켜는 것이 항상 이득일까?</li><li>승인율이 90%인 route와 35%인 route가 있다면, 둘 다 같은 <code>k=4</code>를 쓰는 것이 합리적일까?</li><li>긴 입력 때문에 느린 서비스와 긴 출력 때문에 느린 서비스는 왜 다른 최적화를 먼저 써야 할까?</li></ul>
 <h2 id="강의-스크립트">강의 스크립트</h2>
@@ -62,7 +62,7 @@ T_{\mathrm{token}}^{\mathrm{spec}} \approx \frac{k \cdot T_{\mathrm{draft}} + T_
 $$</div>
 <p>여기서 $k$는 draft가 한 번에 제안하는 토큰 수, $T_{\mathrm{draft}}$는 draft가 토큰 하나를 제안하는 평균 비용, $T_{\mathrm{verify}}$는 target이 검증 패스를 수행하는 비용, $\alpha$는 토큰 승인율이다. 분모가 커질수록 target 한 번당 확정되는 토큰 수가 늘어나므로 유리하다. 반대로 $\alpha$가 낮으면 분모가 줄어들어 speculative decoding의 장점이 빠르게 사라진다.</p>
 <h4 id="시각-자료-1-draft-target-검증-사이클">시각 자료 1. draft-target 검증 사이클</h4>
-<pre class="mermaid">flowchart LR
+<div class="mermaid-wrap"><pre class="mermaid">flowchart LR
     A[현재 prefix] --&gt; B[Draft model이 k개 토큰 제안]
     B --&gt; C[Target model이 한 번에 검증]
     C --&gt; D{앞에서부터 몇 개 승인?}
@@ -70,7 +70,7 @@ $$</div>
     D --&gt;|일부만 승인| F[승인된 구간만 확정]
     F --&gt; G[불일치 지점에서 target 토큰 채택]
     E --&gt; H[다음 speculative cycle]
-    G --&gt; H</pre>
+    G --&gt; H</pre></div>
 <p><strong>학습자:</strong> 이 흐름이면 draft가 틀리더라도 target이 막아 주는 대신, 자꾸 틀리면 검증할 가치가 없어지는 구조네요.</p>
 <p><strong>교수자:</strong> 맞습니다. 그래서 speculative decoding은 &quot;작은 모델을 하나 더 붙이면 무조건 빨라진다&quot;가 아니라 &quot;draft가 target의 다음 토큰 분포를 얼마나 잘 따라가느냐&quot;가 전부입니다.</p>
 <h3 id="part-2-승인율이-높은-route와-낮은-route는-왜-이렇게-다르게-보이나">Part 2. 승인율이 높은 route와 낮은 route는 왜 이렇게 다르게 보이나</h3>
@@ -94,7 +94,7 @@ $$</div>
 <p><strong>학습자:</strong> 셋째는 긴 입력 요약인가요?</p>
 <p><strong>교수자:</strong> 맞습니다. 이사회 회의록 30k 토큰을 넣고 120토큰짜리 요약을 받는 서비스라면 병목은 decode보다 prefill일 가능성이 큽니다. 이 경우 speculative decoding은 &quot;틀린 최적화&quot;가 아니라 &quot;우선순위가 뒤인 최적화&quot;입니다. prefix caching, KV cache reuse, disaggregated prefill/decode를 먼저 검토해야 합니다 [S1][S2][S3].</p>
 <h4 id="시각-자료-2-적용-우선순위-판단-흐름">시각 자료 2. 적용 우선순위 판단 흐름</h4>
-<pre class="mermaid">flowchart TD
+<div class="mermaid-wrap"><pre class="mermaid">flowchart TD
     A[Latency가 높다] --&gt; B{긴 입력이 원인인가?}
     B --&gt;|Yes| C[Prefix caching / KV reuse / Disaggregated prefill 우선 검토]
     B --&gt;|No| D{출력이 길고 decode 비중이 큰가?}
@@ -103,7 +103,7 @@ $$</div>
     F --&gt;|Yes| G[Speculative decoding 우선 적용]
     F --&gt;|No| H{JSON/schema/tool route인가?}
     H --&gt;|Yes| I[k 축소 또는 route별 비활성화]
-    H --&gt;|No| J[Draft 크기/샘플링/스케줄 재조정]</pre>
+    H --&gt;|No| J[Draft 크기/샘플링/스케줄 재조정]</pre></div>
 <p><strong>교수자:</strong> 이 그림에서 핵심은 speculative decoding을 만능 가속기처럼 다루지 않는 겁니다. 먼저 병목 구간이 prefill인지 decode인지 나누고, decode라면 그다음에 승인율과 draft 비용을 봅니다.</p>
 <h3 id="part-4-디버깅은-어떤-순서로-해야-하나">Part 4. 디버깅은 어떤 순서로 해야 하나</h3>
 <p><strong>학습자:</strong> 실제로 성능 향상이 안 나오면 어디부터 봐야 합니까?</p>
@@ -133,7 +133,7 @@ $$</div>
 <h2 id="핵심-정리">핵심 정리</h2>
 <ul><li>speculative decoding은 draft model이 여러 토큰을 먼저 제안하고, target model이 묶음 검증으로 decode 단계를 압축하는 방식이다.</li><li>속도 개선은 승인율 하나로 결정되지 않는다. 승인율, draft 비용, 검증 비용, 출력 제약을 같이 봐야 한다.</li><li>free-form 장문 생성에는 잘 맞을 수 있지만, structured outputs와 tool calling route에서는 rollback이 많아질 수 있다 [S5][S6].</li><li>긴 입력이 병목이면 speculative decoding보다 prefix caching, KV cache reuse, disaggregated prefill/decode가 먼저다 [S1][S2][S3].</li><li>2026년 serving 엔진에서는 speculative decoding이 backend 기능으로 자리 잡고 있으며, route별 정책으로 운영하는 시각이 중요하다 [S4].</li></ul>
 <h2 id="복습-체크리스트">복습 체크리스트</h2>
-<ul><li>speculative decoding의 한 사이클을 <code>draft 제안 -&amp;gt; target 검증 -&amp;gt; 승인/rollback</code>으로 설명할 수 있는가?</li><li>승인율이 낮을 때 왜 draft model이 추가 비용으로만 남을 수 있는지 수식으로 설명할 수 있는가?</li><li>JSON schema나 tool calling route에서 rollback이 잦아지는 이유를 말할 수 있는가?</li><li>긴 입력/짧은 출력 workload에서 왜 speculative decoding이 우선순위가 아닐 수 있는지 설명할 수 있는가?</li><li>속도 향상이 안 날 때 <code>decode 병목 여부 -&amp;gt; 승인율 -&amp;gt; draft 비용 -&amp;gt; route 제약 -&amp;gt; 엔진 배치</code> 순으로 점검할 수 있는가?</li></ul>
+<ul><li>speculative decoding의 한 사이클을 <code>draft 제안 -&gt; target 검증 -&gt; 승인/rollback</code>으로 설명할 수 있는가?</li><li>승인율이 낮을 때 왜 draft model이 추가 비용으로만 남을 수 있는지 수식으로 설명할 수 있는가?</li><li>JSON schema나 tool calling route에서 rollback이 잦아지는 이유를 말할 수 있는가?</li><li>긴 입력/짧은 출력 workload에서 왜 speculative decoding이 우선순위가 아닐 수 있는지 설명할 수 있는가?</li><li>속도 향상이 안 날 때 <code>decode 병목 여부 -&gt; 승인율 -&gt; draft 비용 -&gt; route 제약 -&gt; 엔진 배치</code> 순으로 점검할 수 있는가?</li></ul>
 <h2 id="대안과-비교">대안과 비교</h2>
 <p>| 기법 | 주로 줄이는 비용 | 먼저 적용할 workload | 운영상 주의점 | | --- | --- | --- | --- | | Speculative decoding | decode 단계의 target 순차 검증 횟수 | 장문 자유 서술, decode-heavy route | 승인율과 draft 비용을 함께 봐야 함 [S4] | | Prefix caching | 반복되는 공통 prefix의 prefill | 같은 system/context/schema가 길게 반복되는 서비스 | hit율과 invalidation 정책 관리 필요 [S3] | | KV cache reuse | 이미 계산한 KV의 재연결/재사용 | 엔진 차원에서 재사용 기회를 넓히고 싶을 때 | prefix caching과 개념 범위를 섞지 않도록 주의 [S3] | | Disaggregated prefill/decode | prefill과 decode 자원 분리 | 긴 context와 multi-tenant 환경 | 네트워크 이동과 스케줄 복잡도 증가 [S1][S2] |</p>
 <div class="table-wrap"><table><thead><tr><th>Structured output / tool calling 최적화</th><th>형식 제약으로 생기는 rollback, retry 비용</th><th>JSON, schema, agent route</th><th>speculative decoding과 함께 route별 정책 조정 필요 [S5][S6]</th></tr></thead><tbody></tbody></table></div>
@@ -198,7 +198,14 @@ $$</div>
   <script type="module" src="../../assets/app.js"></script>
   <script type="module">
     import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs';
-    mermaid.initialize({ startOnLoad: true, theme: 'neutral', securityLevel: 'loose' });
+    mermaid.initialize({
+      startOnLoad: true,
+      theme: 'neutral',
+      securityLevel: 'loose',
+      flowchart: { useMaxWidth: false },
+      sequence: { useMaxWidth: false },
+      gantt: { useMaxWidth: false }
+    });
   </script>
   <script>
     window.MathJax = {

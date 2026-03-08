@@ -66,7 +66,7 @@ w_{\mathrm{lat}} S_{\mathrm{lat}}
 $$</div>
 <p><strong>교수자:</strong> 여기서 중요한 건 숫자 자체보다 가중치입니다. 문서 검색 SaaS는 <code>w_lat</code>와 <code>w_cost</code>가 커지고, 기업용 오프라인 비서라면 <code>w_priv</code>와 <code>w_port</code>가 커집니다. 같은 모델도 가중치가 바뀌면 정답 스택이 달라집니다.</p>
 <h4 id="시각-자료-1-선택-순서">시각 자료 1. 선택 순서</h4>
-<pre class="mermaid">flowchart TD
+<div class="mermaid-wrap"><pre class="mermaid">flowchart TD
     A[&quot;요구사항 기록&lt;br/&gt;요청 길이, 동시성, 개인정보, 하드웨어&quot;] --&gt; B{&quot;주요 병목은 어디인가?&quot;}
     B --&gt;|긴 프롬프트/높은 TTFT| C[&quot;클라우드 serving 기능 검토&lt;br/&gt;disaggregated prefill, speculative decoding&quot;]
     B --&gt;|장치 내 실행/배터리| D[&quot;on-device runtime 검토&lt;br/&gt;Windows ML, QNN EP, OpenVINO, Ryzen AI&quot;]
@@ -74,7 +74,7 @@ $$</div>
     C --&gt; F[&quot;운영 복잡도와 비용 비교&quot;]
     D --&gt; F
     E --&gt; F
-    F --&gt; G[&quot;최종 스택 결정&quot;]</pre>
+    F --&gt; G[&quot;최종 스택 결정&quot;]</pre></div>
 <p><strong>학습자:</strong> 결국 &quot;뭘 쓸까?&quot;보다 &quot;어디서 망가질까?&quot;를 먼저 찾는 구조네요.</p>
 <p><strong>교수자:</strong> 맞습니다. 이 다이어그램은 기능 목록이 아니라 디버깅 순서입니다. 제품 팀이 흔히 하는 실수는 모델 정확도 표를 먼저 보고, 그다음 배포 플랫폼을 고르는 겁니다. 시스템 설계는 반대 순서가 더 안전합니다.</p>
 <h3 id="part-2-시나리오-a-긴-문서가-몰리는-클라우드-요약-서비스">Part 2. 시나리오 A: 긴 문서가 몰리는 클라우드 요약 서비스</h3>
@@ -100,14 +100,14 @@ $$</div>
 <p><strong>교수자:</strong> AMD 쪽은 <code>Hybrid On-Device GenAI workflow</code>라는 이름이 힌트를 줍니다. 하이브리드라는 말은 단순히 &quot;장치에서 돈다&quot;가 아니라, 장치 내부 자원과 실행 경로를 조합해 사용성을 맞추겠다는 뜻입니다. Windows 노트북에서 발열과 응답성 균형을 맞춰야 할 때 이런 흐름이 중요해집니다. [S5]</p>
 <p><strong>교수자:</strong> Intel 계열 장치라면 OpenVINO의 <code>NPU device</code> 문서처럼 목표 장치를 분명히 두고 런타임 모드를 조정하는 사고가 필요합니다. 여기서 중요한 질문은 &quot;정말 대부분의 연산이 NPU로 가는가&quot;입니다. 장치 이름만 NPU라고 해서 전체 그래프가 자동으로 최적으로 배치되지는 않습니다. [S6]</p>
 <h4 id="시각-자료-2-windows-배포에서의-분기">시각 자료 2. Windows 배포에서의 분기</h4>
-<pre class="mermaid">flowchart LR
+<div class="mermaid-wrap"><pre class="mermaid">flowchart LR
     A[&quot;Windows 앱&quot;] --&gt; B[&quot;공통 추론 진입점&quot;]
     B --&gt; C[&quot;Windows ML 우선 적용&quot;]
     C --&gt; D{&quot;추가 최적화가 필요한가?&quot;}
     D --&gt;|Qualcomm 중심| E[&quot;ONNX Runtime + QNN EP&quot;]
     D --&gt;|AMD 노트북| F[&quot;Ryzen AI Hybrid Workflow&quot;]
     D --&gt;|Intel 장치| G[&quot;OpenVINO NPU target&quot;]
-    D --&gt;|아직 불명확| H[&quot;공통 경로 유지 후 계측 강화&quot;]</pre>
+    D --&gt;|아직 불명확| H[&quot;공통 경로 유지 후 계측 강화&quot;]</pre></div>
 <p><strong>학습자:</strong> 이 그림을 보니까 &quot;범용 경로를 먼저 세우고, 병목이 확인되면 벤더별로 내려간다&quot;가 핵심 같네요.</p>
 <p><strong>교수자:</strong> 정확합니다. 처음부터 벤더별 SDK만 붙잡으면 섞여 있는 PC 자산을 관리하기 어려워집니다. 반대로 끝까지 공통 경로만 고집하면 특정 장치에서 얻을 수 있는 latency와 전력 이득을 놓칠 수 있죠. 이 챕터의 핵심 tradeoff가 바로 그 균형입니다. [S3] [S4] [S5] [S6]</p>
 <h3 id="part-4-시나리오-c-npu를-썼는데-왜-더-느리죠라는-디버깅">Part 4. 시나리오 C: &quot;NPU를 썼는데 왜 더 느리죠?&quot;라는 디버깅</h3>
@@ -200,7 +200,14 @@ $$</div>
   <script type="module" src="../../assets/app.js"></script>
   <script type="module">
     import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs';
-    mermaid.initialize({ startOnLoad: true, theme: 'neutral', securityLevel: 'loose' });
+    mermaid.initialize({
+      startOnLoad: true,
+      theme: 'neutral',
+      securityLevel: 'loose',
+      flowchart: { useMaxWidth: false },
+      sequence: { useMaxWidth: false },
+      gantt: { useMaxWidth: false }
+    });
   </script>
   <script>
     window.MathJax = {

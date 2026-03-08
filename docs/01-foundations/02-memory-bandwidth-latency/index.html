@@ -75,13 +75,13 @@ $$</div>
 \mathrm{Perf}_{\max}\le\min\left(\mathrm{Peak\ FLOPs},\ \mathrm{Bandwidth}\times\mathrm{AI}\right)
 $$</div>
 <p><strong>교수자:</strong> arithmetic intensity가 낮으면, 연산 유닛이 남아 있어도 메모리 이동이 먼저 성능을 자릅니다. 이때 compute 최적화를 계속 밀면 수고에 비해 개선이 너무 작을 수 있습니다.</p>
-<pre class="mermaid">flowchart TD
+<div class="mermaid-wrap"><pre class="mermaid">flowchart TD
     A[최적화 시도] --&gt; B{모델 축소 또는 커널 튜닝 후\n개선폭이 충분한가?}
     B --&gt;|예| C[compute 최적화 계속]
     B --&gt;|아니오| D[bytes moved 재점검]
     D --&gt; E{문맥 길이에 따라\nTPOT이 악화되는가?}
     E --&gt;|예| F[decode 경로와 KV read 조사]
-    E --&gt;|아니오| G[prefill 고정비, weight read,\n요청 경로 조사]</pre>
+    E --&gt;|아니오| G[prefill 고정비, weight read,\n요청 경로 조사]</pre></div>
 <p><strong>학습자:</strong> 결국 Roofline은 &quot;이제 다른 질문으로 넘어가라&quot;는 신호를 주는 셈이네요.</p>
 <p><strong>교수자:</strong> 정확합니다. 이 장에서는 그 전환 시점을 잡는 감각을 익히는 게 중요합니다.</p>
 <h3 id="part-3-prefill과-decode는-입문-용어가-아니라-서로-다른-비용표다">Part 3. prefill과 decode는 입문 용어가 아니라 서로 다른 비용표다</h3>
@@ -94,7 +94,7 @@ $$</div>
 <p><strong>교수자:</strong> 네 가지 신호를 먼저 봅니다.</p>
 <ul><li>모델 크기 축소나 커널 튜닝 후 개선폭이 예상보다 매우 작다.</li><li>문맥 길이가 길어질수록 <code>TPOT</code>이 더 나빠진다.</li><li>첫 토큰보다 후반 토큰이 더 흔들린다.</li><li>utilization 숫자는 높아 보이는데, 문맥 길이 변화가 latency를 훨씬 더 크게 흔든다.</li></ul>
 <p><strong>교수자:</strong> 이런 신호가 모이면 <code>compute를 더 깎자</code>보다 <code>이번 토큰에서 실제로 얼마나 읽고 쓰는가</code>를 다시 적는 편이 낫습니다.</p>
-<pre class="mermaid">flowchart LR
+<div class="mermaid-wrap"><pre class="mermaid">flowchart LR
     A[새 토큰] --&gt; B[작은 새 계산]
     W[가중치 읽기] --&gt; B
     B --&gt; C[과거 KV 읽기]
@@ -104,7 +104,7 @@ $$</div>
     W -. 레이어마다 누적 .-&gt; F
     F --&gt; G{어느 상한이 더 낮은가?}
     G --&gt;|Bandwidth 쪽| H[데이터 이동 최적화 재검토]
-    G --&gt;|Compute 쪽| I[연산량 최적화 유지]</pre>
+    G --&gt;|Compute 쪽| I[연산량 최적화 유지]</pre></div>
 <p><strong>학습자:</strong> 이 그림을 보니 <code>새 토큰 계산량</code>만 보면 왜 오진이 생기는지 알겠습니다.</p>
 <p><strong>교수자:</strong> 맞습니다. decode에서 문제를 만드는 건 &quot;새 계산이 작다&quot;보다 &quot;작은 계산을 위해 긴 메모리 산책을 한다&quot;는 점입니다.</p>
 <h3 id="part-5-실패-사례로-보면-판단-프레임이-더-선명해진다">Part 5. 실패 사례로 보면 판단 프레임이 더 선명해진다</h3>
@@ -206,7 +206,14 @@ $$</div>
   <script type="module" src="../../assets/app.js"></script>
   <script type="module">
     import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs';
-    mermaid.initialize({ startOnLoad: true, theme: 'neutral', securityLevel: 'loose' });
+    mermaid.initialize({
+      startOnLoad: true,
+      theme: 'neutral',
+      securityLevel: 'loose',
+      flowchart: { useMaxWidth: false },
+      sequence: { useMaxWidth: false },
+      gantt: { useMaxWidth: false }
+    });
   </script>
   <script>
     window.MathJax = {

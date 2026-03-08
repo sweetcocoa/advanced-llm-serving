@@ -56,14 +56,14 @@
 <p><strong>교수자:</strong> vLLM 문서가 TP, PP, EP를 각각 별도 병렬화 축으로 다룬다는 점부터 출발하자 [S1]. 이건 세 방법이 같은 문제를 푸는 세 가지 메뉴가 아니라, 모델 내부에서 다른 지점을 분할한다는 뜻이다.</p>
 <p><strong>학습자:</strong> 그래서 같은 &quot;병렬화&quot;여도 운영자가 보는 지표가 달라진다는 건가요?</p>
 <p><strong>교수자:</strong> 맞다. TP는 같은 레이어 안에서 쪼갠 결과를 다시 합쳐야 한다. PP는 레이어 묶음을 순서대로 넘겨야 한다. EP는 expert 선택이 고르게 되지 않으면 일부 expert만 바빠진다. 이름보다 먼저 &quot;무엇이 서로를 기다리게 만드는가&quot;를 잡아야 한다.</p>
-<pre class="mermaid">flowchart TB
+<div class="mermaid-wrap"><pre class="mermaid">flowchart TB
     A[추론 요청 1개] --&gt; B{어디를 분할하는가}
     B --&gt; C[TP&lt;br/&gt;같은 레이어 내부 shard]
     B --&gt; D[PP&lt;br/&gt;레이어 묶음을 stage로 분할]
     B --&gt; E[EP&lt;br/&gt;MoE expert를 분산]
     C --&gt; C1[먼저 보는 비용&lt;br/&gt;per-layer collective]
     D --&gt; D1[먼저 보는 비용&lt;br/&gt;bubble과 hand-off]
-    E --&gt; E1[먼저 보는 비용&lt;br/&gt;expert별 load imbalance]</pre>
+    E --&gt; E1[먼저 보는 비용&lt;br/&gt;expert별 load imbalance]</pre></div>
 <h3 id="장면-2-tp는-메모리를-나누는-대신-레이어마다-통신을-반복한다">장면 2. TP는 메모리를 나누는 대신 레이어마다 통신을 반복한다</h3>
 <p><strong>교수자:</strong> dense 모델이 한 장비 메모리에 안 들어갈 때 TP가 먼저 떠오르는 이유는 단순하다. 같은 레이어의 weight를 여러 shard로 나누기 때문이다 [S1]. 메모리 관점에서는 직관적이다. 하지만 추론 경로에서는 레이어를 지날 때마다 다시 합치는 순간이 생긴다.</p>
 <div class="math-block">$$
@@ -84,7 +84,7 @@ $$</div>
 <p><strong>교수자:</strong> 그렇다. PP의 실패는 &quot;장비는 다 켜져 있는데 놀고 있는 stage가 계속 보이는&quot; 형태로 나온다. 그래서 PP는 FLOPs 숫자만 보지 않고 stage balance와 bubble을 함께 봐야 한다.</p>
 <p><strong>학습자:</strong> PP와 disaggregated serving이 비슷해 보이는 건 왜 자꾸 헷갈리죠?</p>
 <p><strong>교수자:</strong> 둘 다 무언가를 나누기 때문이다. 하지만 S2가 설명하는 disaggregated serving은 prefill과 decode를 다른 worker pool로 분리하는 구조다 [S2]. PP는 한 요청이 stage를 순차 통과하는 레이어 분할이고, disaggregation은 phase를 분리해 서로 다른 자원 특성에 맞춘다. 겉모양이 아니라 무엇을 분할하는지로 구분해야 한다.</p>
-<pre class="mermaid">flowchart TD
+<div class="mermaid-wrap"><pre class="mermaid">flowchart TD
     A[모델이 한 장치에 안 올라감] --&gt; B{병목 가설}
     B --&gt; C[링크가 빠르고&lt;br/&gt;같은 레이어를 잘게 쪼개도 됨]
     B --&gt; D[링크가 약하거나&lt;br/&gt;stage 분리가 더 자연스러움]
@@ -95,7 +95,7 @@ $$</div>
     A --&gt; I{모델이 MoE인가}
     I --&gt;|예| J[EP 추가 검토]
     I --&gt;|아니오| K[EP는 적용 지점이 없음]
-    J --&gt; L[점검: expert 분산, skew]</pre>
+    J --&gt; L[점검: expert 분산, skew]</pre></div>
 <h3 id="장면-4-ep는-moe에서-강하지만-평균값이-아니라-쏠림을-의심하게-만든다">장면 4. EP는 MoE에서 강하지만, 평균값이 아니라 쏠림을 의심하게 만든다</h3>
 <p><strong>교수자:</strong> vLLM 문서가 expert parallel을 따로 잡아 두었다는 사실은, MoE 계열에서는 expert 분산이 독립적인 설계 축이라는 뜻으로 읽을 수 있다 [S1]. 여기서부터는 수업용 해석을 조금 보태겠다. EP의 실무 질문은 &quot;expert가 모두 고르게 바쁜가&quot;이지 &quot;전체 평균 GPU 사용률이 높은가&quot;가 아니다.</p>
 <p><strong>학습자:</strong> dense 모델에는 왜 같은 논리가 안 통하죠?</p>
@@ -189,7 +189,14 @@ $$</div>
   <script type="module" src="../../assets/app.js"></script>
   <script type="module">
     import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs';
-    mermaid.initialize({ startOnLoad: true, theme: 'neutral', securityLevel: 'loose' });
+    mermaid.initialize({
+      startOnLoad: true,
+      theme: 'neutral',
+      securityLevel: 'loose',
+      flowchart: { useMaxWidth: false },
+      sequence: { useMaxWidth: false },
+      gantt: { useMaxWidth: false }
+    });
   </script>
   <script>
     window.MathJax = {

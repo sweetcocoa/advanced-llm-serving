@@ -68,7 +68,7 @@ $$</div>
 <p><strong>학습자:</strong> top-k를 1에서 2로 올리는 건 보통 품질을 위한 선택 아닌가요?</p>
 <p><strong>교수자:</strong> 품질만의 문제는 아닙니다. GShard의 top-2 gating은 한 토큰이 두 expert 경로를 타게 만들고 [S2], Switch Transformer가 top-1 routing을 택한 이유 중 하나도 이 dispatch 복잡도를 줄이기 위해서입니다 [S3]. top-k가 커지면 토큰 복제와 combine 대기 경로도 함께 늘어납니다 [S2][S3].</p>
 <p><strong>교수자:</strong> capacity factor도 비슷합니다. capacity를 낮추면 expert당 예약 슬롯은 줄지만 overflow 가능성은 높아집니다 [S2][S3]. overflow를 reroute하든, drop하든, delay하든 tail latency에는 비용이 남습니다 [합성] [S2][S3].</p>
-<pre class="mermaid">flowchart LR
+<div class="mermaid-wrap"><pre class="mermaid">flowchart LR
     A[Token batch] --&gt; B[Router top-k]
     B --&gt; C1[Expert 3&lt;br/&gt;14 tokens]
     B --&gt; C2[Expert 7&lt;br/&gt;5 tokens]
@@ -81,7 +81,7 @@ $$</div>
     D --&gt;|n_e &lt;= C_e| E[Run expert FFN]
     D --&gt;|n_e &gt; C_e| F[Overflow / reroute / delay]
     E --&gt; G[Combine]
-    F --&gt; G</pre>
+    F --&gt; G</pre></div>
 <p><strong>학습자:</strong> 결국 <code>capacity factor를 낮추면 메모리가 준다</code>만 보면 안 되겠네요.</p>
 <p><strong>교수자:</strong> 그렇죠. serving에서는 <code>overflow 비율</code>, <code>expert별 queue depth</code>, <code>dispatch bytes</code>, balancedness 같은 운영 지표를 같이 봐야 합니다 [합성] [S2][S3][S4].</p>
 <h3 id="part-3-expert-parallelism의-병목은-dense-tensor-parallel과-다르다">Part 3. expert parallelism의 병목은 dense tensor parallel과 다르다</h3>
@@ -95,7 +95,7 @@ T_{\mathrm{dispatch}} &amp;\propto \frac{B \cdot k \cdot H}{BW_{\mathrm{fabric}}
 \end{aligned}
 $$</div>
 <p>이 식은 S1-S3의 routing, capacity, sharding 설명을 serving step 지연으로 묶은 학습용 식이다 [합성] [S1][S2][S3]. <code>H</code>는 hidden state 크기다. 평균 expert 시간이 아니라 <code>가장 늦은 expert</code>와 <code>fabric 대역폭</code>이 tail을 만든다는 점이 핵심이다.</p>
-<pre class="mermaid">flowchart TB
+<div class="mermaid-wrap"><pre class="mermaid">flowchart TB
     subgraph N1[Node A]
         A1[E1]
         A2[E2]
@@ -114,7 +114,7 @@ $$</div>
     A2 --&gt; X
     B2 --&gt; X
     B3 --&gt; X
-    X --&gt; Y[Combine on next layer]</pre>
+    X --&gt; Y[Combine on next layer]</pre></div>
 <p><strong>학습자:</strong> 그러면 hot expert 쌍이 서로 다른 노드에 놓여 있으면 fabric이 먼저 울겠네요.</p>
 <p><strong>교수자:</strong> 맞습니다. expert placement가 잘못되면 <code>연산이 느린 모델</code>이 아니라 <code>경로가 나쁜 모델</code>이 됩니다 [합성] [S2][S3].</p>
 <h3 id="part-4-low-batch-interactive-serving에서는-amortization이-깨진다">Part 4. low-batch interactive serving에서는 amortization이 깨진다</h3>
@@ -190,7 +190,7 @@ $$</div>
 <p>야간 대량 문서 분류 파이프라인과 낮 시간 인터랙티브 상담 봇이 같은 MoE 클러스터를 공유한다. 운영자는 두 workload에 동일한 <code>top-k</code>, <code>capacity factor</code>, <code>expert placement</code> 정책을 쓰고 있다.</p>
 <p>다음을 포함해 설명하라.</p>
 <ol><li>왜 같은 정책이 두 workload에 모두 최적이 아닐 수 있는가</li><li>batch size와 skew가 두 workload에서 다르게 작동하는 방식</li><li>어느 workload가 MoE의 장점을 더 잘 살리고, 어느 workload가 dense에 더 가까운 선택을 요구하는지</li></ol><details class="answer-key"><summary>정답 및 해설 보기</summary><h2 id="정답-및-해설">정답 및 해설</h2>
-<ul><li>객관식 1 정답: 1. GShard와 Switch Transformer는 expert capacity와 load balancing을 핵심 장치로 설명한다 [S2][S3]. 그래서 평균 utilization이 멀쩡해도 hot expert의 queue depth와 overflow가 p99를 먼저 망가뜨릴 수 있다 [합성] [S2][S3].</li><li>객관식 2 정답: 1. GShard의 top-2 gating은 토큰이 두 expert 경로를 타게 만들고 [S2], Switch Transformer가 top-1을 택한 이유 중 하나도 이 복잡도를 줄이기 위해서다 [S3]. 작은 batch에서는 이 dispatch/combine 비용이 amortize되지 못해 latency가 바로 드러난다 [합성] [S2][S3].</li><li>객관식 3 정답: 1. placement 문제는 <code>어떤 expert가 어디에 놓였는가</code>와 <code>그 결과 remote dispatch bytes가 얼마나 생기는가</code>로 가장 직접적으로 드러난다 [S2].</li><li>짧은 서술형 1 예시: MoE latency는 활성 파라미터 수뿐 아니라 router, dispatch, combine, expert queue에 의해 결정된다 [S1][S2][S3]. 특히 토큰이 특정 expert로 쏠리면 평균 계산량이 작아도 가장 바쁜 expert가 전체 step을 늦춘다 [합성] [S1][S2]. 그래서 active parameter만 보면 overflow와 all-to-all tail 비용을 놓치게 된다.</li><li>짧은 서술형 2 예시: <code>router histogram 또는 balancedness 지표 확인 -&amp;gt; capacity overflow와 reroute 비율 확인 -&amp;gt; 자주 같이 선택되는 expert의 placement와 remote dispatch bytes 확인 -&amp;gt; EPLB나 재배치 정책 검토 -&amp;gt; batch size, top-k, microbatch 정책 확인 -&amp;gt; workload 자체가 low-batch interactive인지 재판단</code> 순서가 적절하다 [합성] [S1][S2][S3][S4].</li><li>심화 설명형 1 포인트: 낮은 동시성 때문에 dispatch 오버헤드가 amortize되지 않고 [합성] [S1][S2][S3], top-k=2라 remote all-to-all이 더 자주 일어나며 [S2], 낮은 capacity factor 때문에 overflow나 지연이 겹쳐 p99가 튈 수 있다 [S2][S3]. 우선순위는 <code>hot pair co-placement 또는 remote traffic 감소 -&amp;gt; capacity factor 재조정 -&amp;gt; top-k 재검토 -&amp;gt; dense 대안 재평가</code>가 합리적이다. 계속 low-batch interactive이고 routing 비용이 품질 이득보다 크면 dense가 더 실용적일 수 있다 [합성] [S1][S2][S3].</li><li>심화 설명형 2 포인트: 야간 대량 문서 분류는 batch가 크고 skew가 평균화되기 쉬워 MoE의 active parameter 절감이 throughput 개선으로 이어질 가능성이 높다 [합성] [S1][S2][S3]. 반면 낮 시간 상담 봇은 batch가 작아 top-k와 dispatch 고정 비용이 크게 보이고, 우연한 expert 편중도 바로 p99로 드러난다 [합성] [S1][S2][S3]. 따라서 두 workload에 같은 top-k와 capacity factor를 쓰면 하나에는 과보수, 다른 하나에는 과공격적 정책이 될 수 있다.</li></ul></details>
+<ul><li>객관식 1 정답: 1. GShard와 Switch Transformer는 expert capacity와 load balancing을 핵심 장치로 설명한다 [S2][S3]. 그래서 평균 utilization이 멀쩡해도 hot expert의 queue depth와 overflow가 p99를 먼저 망가뜨릴 수 있다 [합성] [S2][S3].</li><li>객관식 2 정답: 1. GShard의 top-2 gating은 토큰이 두 expert 경로를 타게 만들고 [S2], Switch Transformer가 top-1을 택한 이유 중 하나도 이 복잡도를 줄이기 위해서다 [S3]. 작은 batch에서는 이 dispatch/combine 비용이 amortize되지 못해 latency가 바로 드러난다 [합성] [S2][S3].</li><li>객관식 3 정답: 1. placement 문제는 <code>어떤 expert가 어디에 놓였는가</code>와 <code>그 결과 remote dispatch bytes가 얼마나 생기는가</code>로 가장 직접적으로 드러난다 [S2].</li><li>짧은 서술형 1 예시: MoE latency는 활성 파라미터 수뿐 아니라 router, dispatch, combine, expert queue에 의해 결정된다 [S1][S2][S3]. 특히 토큰이 특정 expert로 쏠리면 평균 계산량이 작아도 가장 바쁜 expert가 전체 step을 늦춘다 [합성] [S1][S2]. 그래서 active parameter만 보면 overflow와 all-to-all tail 비용을 놓치게 된다.</li><li>짧은 서술형 2 예시: <code>router histogram 또는 balancedness 지표 확인 -&gt; capacity overflow와 reroute 비율 확인 -&gt; 자주 같이 선택되는 expert의 placement와 remote dispatch bytes 확인 -&gt; EPLB나 재배치 정책 검토 -&gt; batch size, top-k, microbatch 정책 확인 -&gt; workload 자체가 low-batch interactive인지 재판단</code> 순서가 적절하다 [합성] [S1][S2][S3][S4].</li><li>심화 설명형 1 포인트: 낮은 동시성 때문에 dispatch 오버헤드가 amortize되지 않고 [합성] [S1][S2][S3], top-k=2라 remote all-to-all이 더 자주 일어나며 [S2], 낮은 capacity factor 때문에 overflow나 지연이 겹쳐 p99가 튈 수 있다 [S2][S3]. 우선순위는 <code>hot pair co-placement 또는 remote traffic 감소 -&gt; capacity factor 재조정 -&gt; top-k 재검토 -&gt; dense 대안 재평가</code>가 합리적이다. 계속 low-batch interactive이고 routing 비용이 품질 이득보다 크면 dense가 더 실용적일 수 있다 [합성] [S1][S2][S3].</li><li>심화 설명형 2 포인트: 야간 대량 문서 분류는 batch가 크고 skew가 평균화되기 쉬워 MoE의 active parameter 절감이 throughput 개선으로 이어질 가능성이 높다 [합성] [S1][S2][S3]. 반면 낮 시간 상담 봇은 batch가 작아 top-k와 dispatch 고정 비용이 크게 보이고, 우연한 expert 편중도 바로 p99로 드러난다 [합성] [S1][S2][S3]. 따라서 두 workload에 같은 top-k와 capacity factor를 쓰면 하나에는 과보수, 다른 하나에는 과공격적 정책이 될 수 있다.</li></ul></details>
       </div>
     </section>
     <nav class="pager">
@@ -212,7 +212,14 @@ $$</div>
   <script type="module" src="../../assets/app.js"></script>
   <script type="module">
     import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs';
-    mermaid.initialize({ startOnLoad: true, theme: 'neutral', securityLevel: 'loose' });
+    mermaid.initialize({
+      startOnLoad: true,
+      theme: 'neutral',
+      securityLevel: 'loose',
+      flowchart: { useMaxWidth: false },
+      sequence: { useMaxWidth: false },
+      gantt: { useMaxWidth: false }
+    });
   </script>
   <script>
     window.MathJax = {

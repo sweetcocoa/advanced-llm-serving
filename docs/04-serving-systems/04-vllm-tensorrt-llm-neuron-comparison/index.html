@@ -59,14 +59,14 @@
 \mathrm{DecisionScore}(b) = w_p P_b + w_s S_b + w_o O_b - w_l L_b
 $$</div>
 <p>여기서 $P$는 배포 생산성, $S$는 성능 상한, $O$는 운영 적합성, $L$은 장비 종속성이다. 이 수식은 실제 점수 계산기보다 &quot;우리 팀이 어떤 항목을 빼먹었는가&quot;를 드러내는 틀로 쓰면 된다.</p>
-<pre class="mermaid">flowchart TD
+<div class="mermaid-wrap"><pre class="mermaid">flowchart TD
     A[&quot;팀 상황 정리&quot;] --&gt; B{&quot;가장 큰 비용은?&quot;}
     B --&gt;|모델 교체 지연| C[&quot;vLLM 먼저 검토 [S1]&quot;]
     B --&gt;|stage별 병목과 GPU 활용률| D[&quot;TensorRT-LLM 먼저 검토 [S2]&quot;]
     B --&gt;|전용 하드웨어와 릴리스 검증| E[&quot;AWS Neuron 먼저 검토 [S3][S4]&quot;]
     C --&gt; F[&quot;모델 교체 속도, serving 표면 확인&quot;]
     D --&gt; G[&quot;prefill/decode 분리 가치 확인&quot;]
-    E --&gt; H[&quot;지원 조합, 버전, 릴리스 주기 확인&quot;]</pre>
+    E --&gt; H[&quot;지원 조합, 버전, 릴리스 주기 확인&quot;]</pre></div>
 <h3 id="2-vllm은-바로-시작해야-하는-팀의-기준선이-된다">2. vLLM은 &#x27;바로 시작해야 하는 팀&#x27;의 기준선이 된다</h3>
 <p><strong>학습자:</strong> 그럼 vLLM은 어떤 팀에서 가장 설득력이 큰가요?</p>
 <p><strong>교수자:</strong> 모델 후보가 자주 바뀌고, serving 기능을 넓게 시도해야 하고, 우선 서비스를 띄워서 피드백을 받아야 하는 팀입니다. 이 챕터에서 vLLM은 &quot;가장 빠르다&quot;보다 &quot;가장 빨리 운영 실험을 시작하게 해 주는 기준선&quot;으로 두는 편이 정확합니다. [S1]</p>
@@ -80,7 +80,7 @@ $$</div>
 \mathrm{TTFT}_{\mathrm{split}} = T_{\mathrm{queue}} + T_{\mathrm{prefill}} + T_{\mathrm{handoff}} + T_{\mathrm{first\ decode}}
 $$</div>
 <p>분리형 서빙에서는 $T_{\mathrm{handoff}}$가 새로 드러난다. 대신 $T_{\mathrm{prefill}}$과 $T_{\mathrm{first\ decode}}$를 서로 다른 자원 정책으로 다룰 수 있다.</p>
-<pre class="mermaid">sequenceDiagram
+<div class="mermaid-wrap"><pre class="mermaid">sequenceDiagram
     participant U as User
     participant R as Router
     participant P as Prefill Service
@@ -90,7 +90,7 @@ $$</div>
     P--&gt;&gt;R: 상태 반환
     R-&gt;&gt;D: decode 세션 전달
     D--&gt;&gt;U: 첫 토큰 스트림
-    Note over P,D: 분리의 이득과 handoff 비용을 함께 본다. [S2]</pre>
+    Note over P,D: 분리의 이득과 handoff 비용을 함께 본다. [S2]</pre></div>
 <h3 id="4-aws-neuron은-성능-수치보다-지원-조합-검증이-먼저다">4. AWS Neuron은 성능 수치보다 지원 조합 검증이 먼저다</h3>
 <p><strong>학습자:</strong> Neuron은 왜 자꾸 release notes 이야기가 따라오나요?</p>
 <p><strong>교수자:</strong> 이 챕터에서 Neuron은 범용 라이브러리라기보다 전용 운영 스택으로 보는 편이 맞기 때문입니다. 2025년 8월 6일 AWS Neuron 2.25 announcement와 2026년 3월 8일 기준 2.26.0 release notes가 함께 필요한 이유도 여기에 있습니다. &quot;무엇이 추가됐는가&quot;와 &quot;지금 무엇이 지원되는가&quot;를 같이 봐야 실제 배포 판단이 되기 때문입니다. [S3] [S4]</p>
@@ -175,7 +175,14 @@ $$</div>
   <script type="module" src="../../assets/app.js"></script>
   <script type="module">
     import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs';
-    mermaid.initialize({ startOnLoad: true, theme: 'neutral', securityLevel: 'loose' });
+    mermaid.initialize({
+      startOnLoad: true,
+      theme: 'neutral',
+      securityLevel: 'loose',
+      flowchart: { useMaxWidth: false },
+      sequence: { useMaxWidth: false },
+      gantt: { useMaxWidth: false }
+    });
   </script>
   <script>
     window.MathJax = {

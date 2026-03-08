@@ -56,7 +56,7 @@
 <p><strong>교수자:</strong> 저는 utilization 그래프보다 trace를 먼저 엽니다. ORT profiling은 어떤 노드가 어느 순서로 실행됐는지 보여 주고, QNN EP 관점에서는 그중 무엇이 실제로 장치 경계 밖에 남았는지를 확인하게 해 줍니다 [S1][S3].</p>
 <p><strong>학습자:</strong> 그래도 긴 막대 하나를 찾는 게 먼저 아닌가요?</p>
 <p><strong>교수자:</strong> NPU workload에서는 꼭 그렇지 않습니다. 짧은 host 구간이 여러 번 끼면 device 계산 시간보다 경계 비용이 커질 수 있어서, 먼저 partition이 어떻게 쪼개졌는지 봐야 합니다 [S1].</p>
-<pre class="mermaid">flowchart TD
+<div class="mermaid-wrap"><pre class="mermaid">flowchart TD
     A[&quot;증상: NPU 이벤트는 보이는데 p95가 그대로&quot;] --&gt; B[&quot;1. ORT profiling trace 열기&quot;]
     B --&gt; C{&quot;partition 사이에 host 구간이 보이는가?&quot;}
     C -- 예 --&gt; D[&quot;2. logging/tracing으로 fallback 이유 확인&quot;]
@@ -66,7 +66,7 @@
     F -- 예 --&gt; G[&quot;boundary cost가 지배적일 가능성&quot;]
     F -- 아니오 --&gt; H[&quot;4. request 수와 performance hint 확인&quot;]
     G --&gt; H
-    H --&gt; I[&quot;마지막에 utilization과 throughput 숫자를 참고&quot;]</pre>
+    H --&gt; I[&quot;마지막에 utilization과 throughput 숫자를 참고&quot;]</pre></div>
 <div class="math-block">$$
 T_{total} = T_{device} + T_{host\_fallback} + T_{cast/qdq} + T_{transfer/sync} + T_{request\_setup}
 $$</div>
@@ -81,7 +81,7 @@ $$</div>
 <p><strong>교수자:</strong> 맞습니다. ORT logging/tracing은 unsupported op, provider 선택, 세션 구성 같은 맥락을 붙여 줍니다 [S2]. QNN EP 문맥에서는 CPU fallback을 막았을 때 세션이 깨지는지 여부도 중요한 진단 신호입니다 [S3].</p>
 <p><strong>학습자:</strong> 세션이 깨지면 그건 성능 문제가 아니라 성립 조건 문제군요.</p>
 <p><strong>교수자:</strong> 정확합니다. 그 경우는 per-node latency를 더 보는 것보다 unsupported op, shape 조건, export artifact를 먼저 고쳐야 합니다 [S3].</p>
-<pre class="mermaid">sequenceDiagram
+<div class="mermaid-wrap"><pre class="mermaid">sequenceDiagram
     participant Trace as ORT Trace
     participant Log as Logging/Tracing
     participant Graph as Graph/EP Settings
@@ -90,7 +90,7 @@ $$</div>
     NPU--&gt;&gt;Trace: device span 반환
     Trace-&gt;&gt;Log: host gap 지점 대조
     Log--&gt;&gt;Graph: unsupported op or config reason
-    Graph--&gt;&gt;Trace: 다시 측정할 수정 지점 결정</pre>
+    Graph--&gt;&gt;Trace: 다시 측정할 수정 지점 결정</pre></div>
 <h3 id="part-4-cast와-qdq는-작은-막대가-아니라-경계-비용의-출발점이다">Part 4. cast와 QDQ는 작은 막대가 아니라 경계 비용의 출발점이다</h3>
 <p><strong>학습자:</strong> cast나 QDQ는 trace에서 짧게 보이던데, 정말 우선순위를 높게 둬야 하나요?</p>
 <p><strong>교수자:</strong> 길이만 보면 짧을 수 있습니다. 하지만 그 짧은 막대가 host fallback과 transfer 경계를 만드는 순간 의미가 달라집니다. 아래 <code>참고 이미지 1</code>을 보면 노란 <code>Cast/QDQ</code> 구간 앞뒤에 빨간 <code>Host fallback</code>과 파란 <code>Transfer</code>가 붙어 있습니다. 이 그림에서 병목 판단을 바꾸는 지점은 연산 시간 자체가 아니라, 그 세 경계가 한 번의 attention block 안에서 두 번 반복된다는 사실입니다.</p>
@@ -199,7 +199,14 @@ $$</div>
   <script type="module" src="../../assets/app.js"></script>
   <script type="module">
     import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs';
-    mermaid.initialize({ startOnLoad: true, theme: 'neutral', securityLevel: 'loose' });
+    mermaid.initialize({
+      startOnLoad: true,
+      theme: 'neutral',
+      securityLevel: 'loose',
+      flowchart: { useMaxWidth: false },
+      sequence: { useMaxWidth: false },
+      gantt: { useMaxWidth: false }
+    });
   </script>
   <script>
     window.MathJax = {

@@ -220,7 +220,11 @@ class MarkdownRenderer:
                 index += 1
                 code = "\n".join(code_lines)
                 if language == "mermaid":
-                    chunks.append(f'<pre class="mermaid">{html.escape(code)}</pre>')
+                    chunks.append(
+                        "<div class=\"mermaid-wrap\">"
+                        f'<pre class="mermaid">{html.escape(code)}</pre>'
+                        "</div>"
+                    )
                 else:
                     class_name = f' class="language-{html.escape(language)}"' if language else ""
                     chunks.append(
@@ -355,7 +359,7 @@ class MarkdownRenderer:
             return token
 
         def code_replace(match: re.Match[str]) -> str:
-            code = html.escape(match.group(1))
+            code = html.escape(html.unescape(match.group(1)))
             return reserve(f"<code>{code}</code>")
 
         escaped = re.sub(r"`([^`]+)`", code_replace, html.escape(text))
@@ -516,7 +520,14 @@ def page_shell(
   <script type="module" src="{assets}/app.js"></script>
   <script type="module">
     import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs';
-    mermaid.initialize({{ startOnLoad: true, theme: 'neutral', securityLevel: 'loose' }});
+    mermaid.initialize({{
+      startOnLoad: true,
+      theme: 'neutral',
+      securityLevel: 'loose',
+      flowchart: {{ useMaxWidth: false }},
+      sequence: {{ useMaxWidth: false }},
+      gantt: {{ useMaxWidth: false }}
+    }});
   </script>
   <script>
     window.MathJax = {{

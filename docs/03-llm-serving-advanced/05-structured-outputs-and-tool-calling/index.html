@@ -62,14 +62,14 @@
 \rho_t = \frac{|V_{\mathrm{valid}}(t)|}{|V|}
 $$</div>
 <p>여기서 $\rho_t$는 시점 $t$에서 실제로 선택 가능한 토큰 비율이다. $\rho_t$가 작아질수록 형식은 단단해지지만 모델의 표현 자유도는 줄어든다. strict schema가 항상 공짜인 이유가 없는 것도 이 때문이다.</p>
-<pre class="mermaid">flowchart LR
+<div class="mermaid-wrap"><pre class="mermaid">flowchart LR
     A[Prompt + Schema] --&gt; B[Decoder Step t]
     B --&gt; C[현재 상태에서 허용 토큰 계산]
     C --&gt; D{후보 토큰이 유효한가}
     D --&gt;|예| E[토큰 채택]
     D --&gt;|아니오| F[후보 제거]
     F --&gt; B
-    E --&gt; G[다음 schema 상태로 이동]</pre>
+    E --&gt; G[다음 schema 상태로 이동]</pre></div>
 <p><strong>교수자:</strong> 운영에서 자주 보는 첫 번째 실수는 모든 필드를 같은 강도로 묶는 것이다. downstream이 바로 읽는 필드와 사람이 검토하는 필드를 구분하지 않으면 decode는 불필요하게 경직된다.</p>
 <p><strong>학습자:</strong> 예를 들면 어떤 경우죠?</p>
 <p><strong>교수자:</strong> 정산 분류 파이프라인을 보자. <code>category</code>, <code>tax_type</code>, <code>needs_review</code>는 기계가 바로 읽으니 strict schema가 맞다. 반면 <code>explanation</code>은 사람이 보는 필드라면 길이 상한이나 금칙어 정도만 두고 조금 느슨하게 두는 편이 낫다. 설명 필드까지 enum처럼 다 묶으면 형식은 예쁘지만 운영 이득이 거의 없는 비용을 낸다.</p>
@@ -83,7 +83,7 @@ $$</div>
 T_{\mathrm{session}} = T_{\mathrm{prefill}}^{(0)} + \sum_{k=1}^{K}\left(T_{\mathrm{decode},k}^{\mathrm{constr}} + T_{\mathrm{tool},k} + T_{\mathrm{reprompt},k} + T_{\mathrm{validate},k}\right)
 $$</div>
 <p>여기서 $K$는 tool round 수다. 잘못된 첫 선택으로 $K$가 한 번만 늘어나도 사용자는 &quot;모델이 느리다&quot;라고 느낀다. 실제 원인은 decode가 아니라 도구 공간 설계나 재시도 정책일 수 있다 [S6].</p>
-<pre class="mermaid">sequenceDiagram
+<div class="mermaid-wrap"><pre class="mermaid">sequenceDiagram
     participant U as User
     participant M as Model
     participant X as Tool Executor
@@ -94,7 +94,7 @@ $$</div>
     O-&gt;&gt;X: 외부 호출
     X--&gt;&gt;O: tool 결과
     O-&gt;&gt;M: 결과 재주입
-    M--&gt;&gt;U: 최종 응답 또는 추가 tool 요청</pre>
+    M--&gt;&gt;U: 최종 응답 또는 추가 tool 요청</pre></div>
 <p><strong>교수자:</strong> 구매 승인 agent를 예로 들자. <code>lookup_stock</code>, <code>check_policy</code>, <code>create_order</code> 세 개의 도구가 있는데, 설명이 겹치면 첫 선택 정확도가 떨어진다. 그러면 재호출이 늘고, 최종 응답은 맞더라도 세션 p95가 튄다. 이때 GPU utilization만 보고 있으면 진단 순서가 어긋난다.</p>
 <h3 id="3-structured-output과-tool-calling은-다른-최적화와-충돌도-하고-협력도-한다">3. structured output과 tool calling은 다른 최적화와 충돌도 하고 협력도 한다</h3>
 <p><strong>학습자:</strong> 앞 챕터의 speculative decoding이나 disaggregated prefill/decode는 여기서도 그대로 이득을 주나요?</p>
@@ -203,7 +203,14 @@ $$</div>
   <script type="module" src="../../assets/app.js"></script>
   <script type="module">
     import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs';
-    mermaid.initialize({ startOnLoad: true, theme: 'neutral', securityLevel: 'loose' });
+    mermaid.initialize({
+      startOnLoad: true,
+      theme: 'neutral',
+      securityLevel: 'loose',
+      flowchart: { useMaxWidth: false },
+      sequence: { useMaxWidth: false },
+      gantt: { useMaxWidth: false }
+    });
   </script>
   <script>
     window.MathJax = {

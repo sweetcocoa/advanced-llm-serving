@@ -60,7 +60,7 @@
 <p>\[ E[T] = T_{\text{decode}} + (1-h)\,T_{\text{prefill}} \]</p>
 <ul><li>\(h\): prefix cache hit율</li><li>\(T_{\text{prefill}}\): 공통 prefix를 새로 읽을 때 드는 시간</li><li>\(T_{\text{decode}}\): 토큰 생성 단계 시간</li></ul>
 <p>이 식이 말하는 바는 분명합니다. decode는 그대로 남고, prefix caching은 prefill만 줄입니다. 그래서 decode가 병목인 워크로드에는 체감이 약하고, 긴 공통 prompt 때문에 prefill이 큰 워크로드에서는 체감이 큽니다.</p>
-<pre class="mermaid">sequenceDiagram
+<div class="mermaid-wrap"><pre class="mermaid">sequenceDiagram
     participant C as Client
     participant R as Router
     participant X as Prefix Cache
@@ -79,7 +79,7 @@
         P--&gt;&gt;X: store reusable prefix state
         R-&gt;&gt;D: continue decode
         D--&gt;&gt;C: response
-    end</pre>
+    end</pre></div>
 <p>이 시퀀스를 보면 왜 [S1], [S2]의 disaggregated prefill/serving 문서가 prefix caching 챕터와 연결되는지 드러납니다. miss가 나는 순간 비싼 일은 prefill 쪽에서 벌어지고, hit가 나면 decode만 남기 때문입니다. [S1][S2]</p>
 <h3 id="2-prefix-caching과-kv-cache-reuse는-같은-말이-아니다">2. prefix caching과 KV cache reuse는 같은 말이 아니다</h3>
 <p><strong>학습자:</strong> 그런데 source 목록에 KV Cache Reuse가 따로 있네요. prefix caching과 그냥 같은 개념 아닌가요?</p>
@@ -99,7 +99,7 @@
 <p><strong>교수자:</strong> 그렇게 단순하지 않습니다. hit율이 낮더라도 miss가 몰리는 구간이 prefill 병목이라면, prefill/decode 분리 설계는 여전히 유효합니다. [S1], [S2]가 중요한 이유가 여기 있습니다. 캐시 최적화와 자원 분리는 경쟁 관계가 아니라 보완 관계입니다.</p>
 <p><strong>학습자:</strong> 어떤 순서로 보완하죠?</p>
 <p><strong>교수자:</strong> 먼저 prefix를 표준화해 hit율을 올릴 수 있는지 봅니다. 그다음 miss가 남는다면 그 miss가 prefill 자원을 얼마나 오래 점유하는지 봅니다. 긴 공통 문맥을 가진 multi-tenant 서비스라면 두 전략을 같이 써야 할 때가 많습니다.</p>
-<pre class="mermaid">flowchart TD
+<div class="mermaid-wrap"><pre class="mermaid">flowchart TD
     A[새 요청 도착] --&gt; B{공통 prefix가&lt;br/&gt;버전 고정인가?}
     B -- 아니오 --&gt; C[프롬프트 템플릿 정리&lt;br/&gt;동적 값 분리]
     C --&gt; D{hit율 개선됨?}
@@ -111,7 +111,7 @@
     I --&gt; J{cache hit?}
     J -- 예 --&gt; K[decode 단계로 바로 진입]
     J -- 아니오 --&gt; L[prefill 후 cache 저장]
-    L --&gt; K</pre>
+    L --&gt; K</pre></div>
 <p>이 플로우에서 [S4]는 비교 기준으로 쓰면 좋습니다. speculative decoding은 decode를 빠르게 만드는 축이고, prefix caching은 prefill을 줄이는 축입니다. 둘 다 latency 최적화지만 겨냥하는 병목이 다릅니다. [S4]</p>
 <h3 id="5-디버깅-순서는-보통-이렇게-잡는다">5. 디버깅 순서는 보통 이렇게 잡는다</h3>
 <p><strong>학습자:</strong> 운영 중인데 응답 시간이 갑자기 늘었습니다. prefix cache 문제부터 어떻게 확인하죠?</p>
@@ -199,7 +199,14 @@
   <script type="module" src="../../assets/app.js"></script>
   <script type="module">
     import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs';
-    mermaid.initialize({ startOnLoad: true, theme: 'neutral', securityLevel: 'loose' });
+    mermaid.initialize({
+      startOnLoad: true,
+      theme: 'neutral',
+      securityLevel: 'loose',
+      flowchart: { useMaxWidth: false },
+      sequence: { useMaxWidth: false },
+      gantt: { useMaxWidth: false }
+    });
   </script>
   <script>
     window.MathJax = {
