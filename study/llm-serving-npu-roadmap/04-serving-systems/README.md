@@ -12,6 +12,7 @@
 - [Model Parallelism: TP, PP, EP](./02-model-parallelism-tp-pp-ep/README.md): tensor parallelism, pipeline parallelism, expert parallelism을 추론 관점으로 비교한다.
 - [Benchmarking and Observability](./03-benchmarking-and-observability/README.md): 성능 측정과 운영 관찰을 구분하면서 연결한다.
 - [vLLM, TensorRT-LLM, Neuron Comparison](./04-vllm-tensorrt-llm-neuron-comparison/README.md): 대표 서빙 프레임워크의 강점과 제약을 비교한다.
+- [Rack-Scale Hardware and Networking](./05-rack-scale-hardware-and-networking/README.md): LLM serving을 서버 프로세스가 아니라 rack, fabric, KV transfer, power/cooling 단위로 다시 본다.
 
 ## 선행 관계
 - 같은 모듈에서는 위 순서를 따르는 것이 좋다.

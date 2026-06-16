@@ -10,18 +10,19 @@ visuals:
   formulas: 2
   mermaid: 2
   external_images: 2
-updated_at: "2026-03-08"
-source_count: 6
+updated_at: "2026-06-16"
+source_count: 12
 ---
 
 # 2026 Trend Watch
 
 ## 수업 개요
-이 챕터는 2026년 3월 8일 기준 제공된 공식 자료만으로, 무엇이 이미 반복 가능한 운영 패턴이 되었고 무엇이 아직 실험 신호에 머무는지 가르는 수업이다. 이번 소스 묶음이 직접 다루는 축은 세 가지다. cloud 쪽의 `prefill/decode 분리` [S1], decode 가속 카드인 `speculative decoding` [S2], 그리고 on-device 쪽의 `provider 기반 NPU offload`와 `hybrid execution` [S3][S4][S5][S6]이다. chapter-context가 함께 언급한 `structured outputs`는 이번 챕터에서 별도 인프라 기술로 분류하지 않는다. 현재 소스 집합에는 그것을 직접 설명하는 문서가 없기 때문이다. 대신 `structured outputs`를 제품이 인프라에 가하는 요구 신호로 다룬다. 즉, 출력 형식 준수 요구가 validation path, retry 비용, local/cloud 라우팅 압력을 키운다는 관점으로 읽는다.
+이 챕터는 2026년 6월 16일 기준 공식 문서, 벤더 기술 블로그, 공개 프로젝트 자료를 바탕으로, 무엇이 반복 가능한 운영 패턴이 되었고 무엇이 아직 실험 신호에 머무는지 가르는 수업이다. 3월 버전의 중심축은 cloud 쪽의 `prefill/decode 분리` [S1], decode 가속 카드인 `speculative decoding` [S2], 그리고 on-device 쪽의 `provider 기반 NPU offload`와 `hybrid execution` [S3][S4][S5][S6]이었다. 2026년 상반기 보강 이후에는 여기에 `KV transfer/NIXL`, `rack-scale topology`, `wide expert parallel`, `topology-aware scheduling`, `facility-aware throughput`을 추가한다 [S7][S8][S9][S10][S11][S12]. `structured outputs`는 여전히 별도 하드웨어 기술로 분류하지 않는다. 다만 최신 vLLM 문서가 structured outputs와 tool calling을 serving 표면의 일부로 드러내므로, 제품 요구가 validation, retry, routing 비용을 키운다는 해석은 유지한다 [S1].
 
 ## 학습 목표
 - 2026년 기술을 `채택 신호`, `실험 신호`, `비분류 요구 신호`로 구분할 수 있다.
 - disaggregated serving, speculative decoding, provider 기반 NPU offload, hybrid execution을 같은 판단 축으로 설명할 수 있다.
+- 2026년 상반기에 새로 강해진 `KV transfer`, `NIXL/RDMA`, `rack-scale topology`, `wide expert parallel`, `power/cooling headroom` 키워드를 serving 관점으로 설명할 수 있다.
 - `structured outputs`를 인프라 기술이 아니라 제품 요구 신호로 봐야 하는 이유와, 현재 소스 범위에서는 왜 `비분류`로 두는지 설명할 수 있다.
 - cloud 서비스와 AI PC 앱 사례에서 latency budget, validation path, fallback 정책을 연결해 의사결정을 정리할 수 있다.
 
@@ -172,6 +173,23 @@ sequenceDiagram
 | Structured outputs | 비분류인 제품 요구 신호 | 현재 소스 묶음이 이를 직접 문서화하지 않으므로 별도 인프라 maturity 판정은 유보한다. 대신 형식 준수 요구가 validation, repair, routing 비용을 늘려 cloud/hybrid 선택 압력을 높인다고 본다. 이 평가는 본문 수식과 [S1][S2][S3][S4][S5][S6]을 연결한 수업용 추론이다. | schema 실패가 나면 어디서 고치고, 그때 latency budget은 얼마나 남는가? |
 | 단일 경로의 범용 NPU 이식성 | 아직 실험 | 제공된 자료가 모두 runtime, provider, workflow, target별 경계를 전제로 한다 [S3][S4][S5][S6] | 장치군이 넓어졌을 때 검증 비용이 감당 가능한가? |
 
+### Part 5-1. 2026년 상반기 보강: serving 키워드는 더 시스템 쪽으로 이동했다
+**학습자:** 3월 기준 표에서 최신 자료를 더 보면 무엇이 바뀌나요?
+
+**교수자:** 방향이 더 또렷해졌습니다. 2026년 상반기 키워드는 `더 빠른 서버 엔진`보다 `더 큰 시스템에서 상태를 어떻게 옮기고 배치할 것인가`에 가깝습니다. vLLM의 disaggregated prefilling 문서는 prefill/decode 사이 KV cache transfer를 connector 문제로 드러내고 [S7], NIXL은 point-to-point data transfer와 RDMA/GPU-Direct 계열 backend를 독립 레이어로 설명합니다 [S8]. NVIDIA Dynamo 1.0 자료는 disaggregated serving과 wide expert parallel을 GB200 NVL72 같은 rack-scale 환경에서 함께 언급합니다 [S9]. NVL72 하드웨어 문서는 72 GPU L1 domain과 NVLink switch tray를 구체적으로 드러내며 [S10], GB300 NVL72 페이지는 liquid cooling, attention 성능, per-MW throughput을 reasoning inference 맥락에 둡니다 [S11]. 마지막으로 topology-aware scheduling 자료는 rack-scale fabric을 flat GPU pool로 보면 안 된다는 운영 메시지를 줍니다 [S12].
+
+| 2026 H1 키워드 | 상태 | 왜 중요한가 | 먼저 볼 운영 질문 |
+| --- | --- | --- | --- |
+| KV transfer / NIXL | 주류 진입 후보 | disaggregated serving이 KV cache 이동을 핵심 경로로 만들었다 [S7][S8] | prefill과 decode 사이 전송 p95를 계측하는가? |
+| Rack-scale topology | 주류 진입 후보 | NVLink domain, rack partition, scheduler abstraction이 SLO와 직접 연결된다 [S10][S12] | GPU count가 아니라 fabric locality를 보고 배치하는가? |
+| Wide expert parallel / MoE serving | 선별 도입 | MoE는 compute 절감과 all-to-all 통신 비용을 동시에 만든다 [S9] | expert routing이 rack boundary를 넘는가? |
+| Facility-aware throughput | 주류 운영 지표 후보 | liquid cooling, per-MW throughput, power/cooling headroom이 serving capacity로 올라왔다 [S11] | TPS뿐 아니라 TPS/MW와 throttling 신호를 보는가? |
+| Structured outputs / tool calling surface | 제품 요구 신호 | serving API 표면에는 올라왔지만 병목은 validation, retry, routing으로 나타난다 [S1] | schema 실패를 어디서 복구하고 비용을 어떻게 재는가? |
+
+**학습자:** 결론은 2026년 상반기에는 "LLM serving을 잘한다"가 점점 "상태 이동과 배치를 잘한다"로 바뀌는군요.
+
+**교수자:** 바로 그겁니다. kernel, scheduler, network, rack, power가 한 문장 안에서 같이 움직이기 시작했습니다.
+
 ### Part 6. 두 가지 사례로 최종 점검하자
 **교수자:** 첫 번째 사례는 `규정 점검 API`입니다. 입력은 길고, 출력은 짧은 JSON입니다. 여기서 채택 신호는 prefill 병목 계측이 되는지와 validator 실패가 얼마나 잦은지입니다. 실험 신호는 "JSON이 필요하니 decode 최적화부터"라고 단정하는 태도예요. 이런 서비스는 구조화 출력 요구가 강해도, 실제 시스템 병목은 여전히 prefill일 수 있습니다 [S1].
 
@@ -201,6 +219,7 @@ sequenceDiagram
 - 2026년 트렌드는 기술 이름보다 `채택 신호`와 `실험 신호`로 읽는 편이 안전하다.
 - cloud에서는 disaggregated serving이 `주류 진입`, speculative decoding이 `선별 도입`에 가깝다 [S1][S2].
 - on-device에서는 provider 기반 NPU offload와 hybrid execution이 `주류 진입`에 가깝지만, 여전히 coverage와 fallback 계측이 핵심이다 [S3][S4][S5][S6].
+- 2026년 상반기 추가 신호는 serving이 rack-scale topology, KV transfer, NIXL/RDMA, expert parallel placement, power/cooling headroom을 함께 다루는 방향으로 이동했다는 점이다 [S7][S8][S9][S10][S11][S12].
 - structured outputs는 이번 챕터에서 `비분류인 제품 요구 신호`다. 직접적인 인프라 출처가 없기 때문에 maturity 판정은 유보하고, 대신 validation path와 routing 비용을 늘리는 압력으로 해석한다.
 - 03 챕터의 실전 포인트는 벤더 목록이 아니라 `체크리스트`: 병목 계측, fallback 가시성, validator 경계, cloud escalation 조건이다.
 
@@ -219,6 +238,7 @@ sequenceDiagram
 | Provider 기반 NPU offload [S3][S4][S6] | operator coverage와 fallback 비율을 계측한다 | NPU 사용 여부만 보고 성능을 추정한다 | "무엇이 NPU에 남고 무엇이 되돌아오는가?" |
 | Hybrid execution [S4][S5][S6] | local/cloud 경계와 escalation 규칙이 문서화돼 있다 | 실패 시 무조건 cloud로 넘겨 privacy 약속이 흔들린다 | "어떤 단계만 cloud를 써야 하는가?" |
 | Structured outputs 대응 | validator와 repair 경로를 latency budget 안에 넣어 설계한다 | 생성 뒤에 검증을 덧붙여 route 폭발이 난다 | "schema 실패를 어디서 복구할 것인가?" |
+| Rack-scale serving 대응 [S7][S8][S10][S12] | KV transfer, topology locality, power/cooling headroom을 SLO 옆에 둔다 | GPU 수와 평균 utilization만 보고 배치한다 | "이 요청은 어떤 fabric 안에서 끝나는가?" |
 
 ## 참고 이미지
 ![vLLM logo](./assets/img-01.png)
@@ -242,3 +262,9 @@ sequenceDiagram
 | [S4] | Windows ML overview | Microsoft Learn | 2026-03-08 (accessed) | [https://learn.microsoft.com/en-us/windows/ai/new-windows-ml/overview](https://learn.microsoft.com/en-us/windows/ai/new-windows-ml/overview) | on-device runtime surface와 배포 범위 논의를 설명하기 위해 사용 |
 | [S5] | Hybrid On-Device GenAI workflow | AMD Ryzen AI docs | 2026-03-08 (accessed) | [https://ryzenai.docs.amd.com/en/1.6/hybrid_oga.html](https://ryzenai.docs.amd.com/en/1.6/hybrid_oga.html) | hybrid execution을 제품 설계 패턴으로 분류하기 위해 사용 |
 | [S6] | NPU device | OpenVINO | 2026-03-08 (accessed) | [https://docs.openvino.ai/2025/openvino-workflow/running-inference/inference-devices-and-modes/npu-device.html](https://docs.openvino.ai/2025/openvino-workflow/running-inference/inference-devices-and-modes/npu-device.html) | NPU target과 fallback/coverage 판단 축을 설명하기 위해 사용 |
+| [S7] | Disaggregated Prefilling (experimental) | vLLM project | 2026-06-16 (accessed) | [https://docs.vllm.ai/en/latest/features/disagg_prefill/](https://docs.vllm.ai/en/latest/features/disagg_prefill/) | prefill/decode 인스턴스와 KV cache transfer 구조를 최신 vLLM 문서 기준으로 보강 |
+| [S8] | Enhancing Distributed Inference Performance with the NVIDIA Inference Transfer Library | NVIDIA Developer Blog | 2026-03-17 | [https://developer.nvidia.com/blog/enhancing-distributed-inference-performance-with-the-nvidia-inference-transfer-library/](https://developer.nvidia.com/blog/enhancing-distributed-inference-performance-with-the-nvidia-inference-transfer-library/) | NIXL, RDMA, point-to-point transfer를 2026 H1 키워드로 추가 |
+| [S9] | How NVIDIA Dynamo 1.0 Powers Multi-Node Inference at Production Scale | NVIDIA Developer Blog | 2026-03-10 | [https://developer.nvidia.com/blog/nvidia-dynamo-1-production-ready/](https://developer.nvidia.com/blog/nvidia-dynamo-1-production-ready/) | disaggregated serving과 wide expert parallel의 production-scale 신호 |
+| [S10] | System Hardware & Components: NVIDIA NVL72 AI Factory | NVIDIA Enterprise Reference Architecture | 2026-06-16 (accessed) | [https://docs.nvidia.com/enterprise-reference-architectures/nvl72-ai-factory/latest/components.html](https://docs.nvidia.com/enterprise-reference-architectures/nvl72-ai-factory/latest/components.html) | NVLink switch tray와 72 GPU L1 domain으로 rack-scale topology 보강 |
+| [S11] | NVIDIA GB300 NVL72 | NVIDIA | 2026-06-16 (accessed) | [https://www.nvidia.com/en-us/data-center/gb300-nvl72/](https://www.nvidia.com/en-us/data-center/gb300-nvl72/) | liquid-cooled rack-scale architecture, reasoning inference, per-MW 성능 맥락 |
+| [S12] | Running AI Workloads on Rack-Scale Supercomputers | NVIDIA Developer Blog | 2026-04-07 | [https://developer.nvidia.com/blog/running-ai-workloads-on-rack-scale-supercomputers-from-hardware-to-topology-aware-scheduling/](https://developer.nvidia.com/blog/running-ai-workloads-on-rack-scale-supercomputers-from-hardware-to-topology-aware-scheduling/) | topology-aware scheduling과 scheduler abstraction 보강 |

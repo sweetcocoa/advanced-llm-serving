@@ -17,6 +17,7 @@ DOCS_ROOT = REPO_ROOT / "docs"
 STATIC_ROOT = REPO_ROOT / "site" / "static"
 NUMBERED_DIR = re.compile(r"^\d{2}-")
 PUBLIC_MODULE_DIR = re.compile(r"^(0[1-9]|[1-9]\d)-")
+CITATION_REF = re.compile(r"\[(S|I)(\d+)\]")
 
 
 @dataclass
@@ -168,6 +169,14 @@ def truncate_text(text: str, limit: int = 220) -> str:
     return normalized[: limit - 1].rstrip() + "…"
 
 
+def render_plain_inline(text: str) -> str:
+    escaped = html.escape(text)
+    return CITATION_REF.sub(
+        lambda match: f'<sup class="citation-ref">[{match.group(1)}{match.group(2)}]</sup>',
+        escaped,
+    )
+
+
 def rewrite_link(url: str) -> str:
     if not url or url.startswith(("http://", "https://", "mailto:", "#")):
         return url
@@ -187,7 +196,10 @@ def split_table_row(line: str) -> list[str]:
 
 
 def is_table_divider(line: str) -> bool:
-    stripped = line.strip().strip("|").replace(":", "").replace("-", "")
+    marker = line.strip()
+    if "|" not in marker or "-" not in marker:
+        return False
+    stripped = marker.replace("|", "").replace(":", "").replace("-", "").replace(" ", "")
     return stripped == ""
 
 
@@ -220,6 +232,12 @@ class MarkdownRenderer:
                 index += 1
                 code = "\n".join(code_lines)
                 if language == "mermaid":
+                    code = CITATION_REF.sub(
+                        lambda match: (
+                            f"<sup class='citation-ref'>[{match.group(1)}{match.group(2)}]</sup>"
+                        ),
+                        code,
+                    )
                     chunks.append(
                         "<div class=\"mermaid-wrap\">"
                         f'<pre class="mermaid">{html.escape(code)}</pre>'
@@ -360,6 +378,12 @@ class MarkdownRenderer:
 
         def code_replace(match: re.Match[str]) -> str:
             code = html.escape(html.unescape(match.group(1)))
+            code = CITATION_REF.sub(
+                lambda citation: (
+                    f'<sup class="citation-ref">[{citation.group(1)}{citation.group(2)}]</sup>'
+                ),
+                code,
+            )
             return reserve(f"<code>{code}</code>")
 
         escaped = re.sub(r"`([^`]+)`", code_replace, html.escape(text))
@@ -380,6 +404,13 @@ class MarkdownRenderer:
         escaped = re.sub(r"\[([^\]]+)\]\(([^)]+)\)", link_replace, escaped)
         escaped = re.sub(r"\*\*([^*]+)\*\*", r"<strong>\1</strong>", escaped)
         escaped = re.sub(r"(?<!\*)\*([^*]+)\*(?!\*)", r"<em>\1</em>", escaped)
+
+        def citation_replace(match: re.Match[str]) -> str:
+            return reserve(
+                f'<sup class="citation-ref">[{match.group(1)}{match.group(2)}]</sup>'
+            )
+
+        escaped = CITATION_REF.sub(citation_replace, escaped)
 
         for token, value in placeholders.items():
             escaped = escaped.replace(token, value)
@@ -420,7 +451,7 @@ def toc_markup(headings: list[Heading]) -> str:
     for heading in headings:
         indent = " sub" if heading.level == 3 else ""
         items.append(
-            f'<a class="toc-link{indent}" href="#{heading.anchor}">{html.escape(heading.title)}</a>'
+            f'<a class="toc-link{indent}" href="#{heading.anchor}">{render_plain_inline(heading.title)}</a>'
         )
     return "".join(items)
 
@@ -436,7 +467,7 @@ def chapter_cards_markup(chapters: list[Chapter], page_dir: Path) -> str:
             f'data-progress-id="{html.escape(chapter.source_path)}" href="{href}">'
             f"<span class=\"chapter-module\">{html.escape(chapter.module_title)}</span>"
             f"<h3>{html.escape(chapter.title)}</h3>"
-            f"<p>{html.escape(display_summary)}</p>"
+            f"<p>{render_plain_inline(display_summary)}</p>"
             "<div class=\"chapter-card-meta\">"
             f"<span>{html.escape(chapter.reading_time or '읽기 시간 미정')}</span>"
             f"<span>{html.escape(chapter.updated_at or '날짜 미정')}</span>"
@@ -456,7 +487,7 @@ def module_cards_markup(modules: list[Module], page_dir: Path) -> str:
             f'href="{href}">'
             f"<span class=\"module-index\">{html.escape(module.slug.split('-', 1)[0])}</span>"
             f"<h3>{html.escape(module.title)}</h3>"
-            f"<p>{html.escape(module.summary)}</p>"
+            f"<p>{render_plain_inline(module.summary)}</p>"
             "<div class=\"module-card-meta\">"
             f"<span>{len(module.chapters)} chapters</span>"
             "</div></a>"
@@ -492,7 +523,7 @@ def page_shell(
   <meta name="theme-color" content="#10182a">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+KR:wght@400;500;600;700&family=Space+Grotesk:wght@500;700&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Noto+Sans+KR:wght@400;500;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="{assets}/style.css">
 </head>
 <body class="{body_class}" data-page-kind="{page_kind}" data-page-id="{html.escape(page_id)}" data-root-prefix="{root}">
@@ -623,7 +654,7 @@ def render_home_page(course_title: str, course_summary: str, modules: list[Modul
       <div class="hero-copy">
         <p class="eyebrow">Static Learning Roadmap</p>
         <h1>{html.escape(course_title)}</h1>
-        <p class="hero-summary">{html.escape(course_summary)}</p>
+        <p class="hero-summary">{render_plain_inline(course_summary)}</p>
       </div>
       <div class="hero-stats">
         <div class="stat-card"><strong>{len(modules)}</strong><span>modules</span></div>
@@ -691,7 +722,7 @@ def render_module_page(module: Module, modules: list[Module]) -> str:
       <div class="hero-copy">
         <p class="eyebrow">Module</p>
         <h1>{html.escape(module.title)}</h1>
-        <p class="hero-summary">{html.escape(module.summary)}</p>
+        <p class="hero-summary">{render_plain_inline(module.summary)}</p>
       </div>
       <div class="hero-stats">
         <div class="stat-card"><strong>{len(module.chapters)}</strong><span>chapters</span></div>
@@ -767,7 +798,7 @@ def render_chapter_page(chapter: Chapter, modules: list[Module]) -> str:
       <div class="hero-copy">
         <p class="eyebrow">{html.escape(chapter.module_title)}</p>
         <h1>{html.escape(chapter.title)}</h1>
-        <p class="hero-summary">{html.escape(chapter.summary)}</p>
+        <p class="hero-summary">{render_plain_inline(chapter.summary)}</p>
       </div>
       <div class="hero-stats">
         <div class="stat-card"><strong>{html.escape(chapter.reading_time or '시간 미정')}</strong><span>reading time</span></div>
