@@ -34,7 +34,7 @@ source_count: 6
 ### Part 1. Speculative Decoding이 실제로 줄이는 것은 무엇인가
 **교수자:** speculative decoding은 "작은 모델이 대신 답한다"가 아닙니다. 최종 정답은 여전히 target model이 책임집니다. 다만 draft model이 다음 토큰 몇 개를 먼저 제안하고, target model이 그 묶음을 한 번에 검증해서 맞는 부분만 통과시키는 방식이죠 [S4].
 
-**학습자:** 그러면 품질을 버리고 속도를 얻는 기법은 아닌 건가요?
+**학습자:** draft가 제안하더라도 target이 검증한다면, 품질을 포기하는 가속이라고 보면 안 되겠네요?
 
 **교수자:** target이 검증한다는 점에서 품질을 포기하는 방식과는 다릅니다. 대신 승인율이 낮으면 rollback이 많아지고, draft를 돌린 비용까지 얹히니 오히려 손해가 날 수 있습니다. 이 챕터의 tradeoff가 바로 그 지점입니다. 추가 모델 비용과 토큰 승인율을 같이 봐야 합니다.
 
@@ -139,7 +139,7 @@ flowchart TD
 - disaggregated prefill/decode는 prefill과 decode를 다른 자원에 배치해 병목을 분리한다 [S1][S2].
 - speculative decoding은 decode 단계에서 target의 순차 검증 횟수를 줄인다 [S4].
 
-**학습자:** 그러면 긴 prompt 서비스에서 speculative decoding만 열심히 만지는 건 본질을 피할 수 있겠네요.
+**학습자:** 긴 prompt에 짧은 답을 주는 서비스라면 speculative decoding보다 prefill 최적화를 먼저 봐야 합니까?
 
 **교수자:** 정확합니다. 긴 입력에 짧은 답이면 speculative decoding보다 prefill 최적화가 먼저고, 짧은 입력에 긴 자유 서술이면 speculative decoding 우선순위가 올라갑니다. tool calling과 structured outputs는 그 사이에서 route별 예외 규칙을 만들게 합니다 [S5][S6].
 
@@ -148,7 +148,7 @@ flowchart TD
 
 **교수자:** 두 번째 이미지는 Roofline model입니다. speculative decoding이 잘 먹히는 이유를 "FLOPs 몇 퍼센트 절감"보다 "비싼 target step을 덜 자주 밟는다"는 감각으로 이해하는 데 도움이 됩니다. decode가 메모리 대역과 순차 의존에 갇힐수록, target 한 번당 여러 토큰을 승인하는 이득이 분명해집니다 [S2][S4].
 
-**학습자:** 정리하면 speculative decoding의 핵심 문장은 이렇게 말할 수 있겠네요. "draft를 붙일지 말지는 모델 크기가 아니라 승인율과 출력 제약이 결정한다."
+**학습자:** draft 모델을 붙일지 결정할 때는 모델 크기보다 acceptance와 출력 제약을 먼저 측정해야겠네요.
 
 **교수자:** 그 문장이 이 챕터의 결론입니다.
 

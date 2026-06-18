@@ -74,7 +74,7 @@ $$
 
 이 식은 "보이는 대기열"과 "이미 서비스 중이라도 남은 비용을 들고 있는 세션"을 한 숫자로 묶어 보려는 운영 모델이다. `실무적 추론`
 
-**학습자:** 결국 요청 수가 같아도 비용은 다를 수 있다는 말이군요.
+**학습자:** request count만으로 admission을 걸면, 긴 prompt 몇 개가 만드는 비용을 늦게 발견하겠네요.
 
 **교수자:** 맞습니다. prompt가 긴 요청 몇 개가 짧은 요청 수십 개보다 더 큰 부담일 수 있습니다. 그래서 admission을 request count로만 자르면 늦게 막고, scheduler만 손보면 해결될 문제처럼 착각하기 쉽습니다.
 
@@ -128,7 +128,7 @@ sequenceDiagram
 
 **교수자:** TensorRT-LLM의 disaggregated serving이 보여 주는 것은 "phase를 분리할 수 있다"는 비교 기준입니다. [S2] prefill과 decode를 나누면 긴 입력 준비 작업과 짧은 토큰 생성 작업을 같은 풀에서 섞어 보지 않아도 됩니다. [S2] 그다음에 "어느 phase의 budget을 먼저 닫을 것인가"를 정하는 것은 `실무적 추론`으로 넘어갑니다.
 
-**학습자:** 그러면 scheduler가 단순해지는 건 아니군요.
+**학습자:** prefill/decode를 나누면 문제가 사라지는 게 아니라, 각 queue와 handoff를 따로 운영해야 하는 거네요.
 
 **교수자:** 오히려 더 선명해집니다. shared pool에서는 한 queue 안에서 엉켜 보이던 문제가, 분리 후에는 prefill overload인지 decode 보호 실패인지 더 분명히 보입니다. tenant별 우선순위나 phase별 최소 보장량을 둘지는 다시 `운영 휴리스틱`의 영역입니다.
 

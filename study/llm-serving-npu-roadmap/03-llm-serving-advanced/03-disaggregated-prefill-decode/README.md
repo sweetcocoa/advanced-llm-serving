@@ -40,7 +40,7 @@ source_count: 6
 
 **교수자:** 현장에서 차이가 꽤 큽니다. 긴 입력을 먹는 prefill 요청 몇 개가 들어오면 shared GPU의 front queue를 오래 점유합니다. 그동안 이미 응답을 스트리밍 중이던 decode 세션도 scheduler 경쟁을 겪게 됩니다. 반대로 decode 세션이 많은 시간대에는 짧은 요청조차 prefill 시작이 늦어질 수 있습니다. vLLM과 TensorRT-LLM이 disaggregated serving을 별도 기능으로 설명하는 이유가 바로 이 분리된 병목을 다루기 위해서입니다 [S1][S2].
 
-**학습자:** 그러면 이 설계의 목적은 "prefill이 빠른 GPU"와 "decode가 빠른 GPU"를 따로 고르는 것만은 아니겠네요.
+**학습자:** 이 설계의 목적은 GPU 종류를 나누는 것보다, 서로 다른 queue와 state 이동 경로를 분리하는 데 더 가깝나요?
 
 **교수자:** 맞습니다. 더 본질적인 목적은 `서로 다른 대기열을 만들고 간섭을 줄이는 것`입니다. 하드웨어가 같더라도 풀을 나누면 tail latency가 달라질 수 있습니다. 특히 긴 context 요청과 짧은 채팅 요청이 섞인 multi-tenant 환경에서 그 차이가 크게 보입니다 [S1][S2].
 
@@ -84,7 +84,7 @@ $$
 
 $\Delta_{\mathrm{benefit}} > 0$이면 분리 구조가 유리하다. 즉 shared 큐에서 줄어든 대기 시간이 KV 이동 시간보다 커야 한다. 이 식이 중요한 이유는, 분리 설계의 성공 여부가 모델 FLOPs가 아니라 `실제 운영 큐 길이`와 `KV 전달 경로`에 달려 있다는 점을 보여 주기 때문이다.
 
-**학습자:** 결국 모델 자체보다 traffic mix가 더 중요하군요.
+**학습자:** 같은 모델이어도 긴 prompt/짧은 응답 비중과 짧은 prompt/긴 응답 비중이 다르면 결론이 달라지겠네요.
 
 **교수자:** 맞습니다. 같은 모델이라도 `입력 32k, 출력 100` 서비스와 `입력 1k, 출력 700` 서비스는 전혀 다른 결론을 냅니다.
 
@@ -110,7 +110,7 @@ $\Delta_{\mathrm{benefit}} > 0$이면 분리 구조가 유리하다. 즉 shared 
 - disaggregated prefill/decode는 `같이 기다리지 않기`에 가깝습니다. prefill과 decode를 다른 자원으로 분리해 큐 간섭을 줄입니다 [S1][S2].
 - speculative decoding은 decode 단계에서 target의 순차 진행 횟수를 줄이는 기법입니다. 즉 decode 자체를 더 빨리 끝내려는 방향입니다 [S4].
 
-**학습자:** 그러면 긴 입력 때문에 느린 서비스에서는 speculative decoding보다 disaggregation이 먼저일 수 있겠네요.
+**학습자:** 병목이 decode가 아니라 긴 prefill이면 speculative decoding보다 disaggregation이나 prefix reuse가 먼저인가요?
 
 **교수자:** 정확합니다. 입력 40k, 출력 80이라면 decode를 조금 줄이는 것보다 prefill 병목을 떼어내는 쪽이 더 큰 변화를 만들 가능성이 큽니다. 반대로 입력 1k, 출력 800이라면 speculative decoding의 우선순위가 올라갑니다 [S2][S4].
 
@@ -141,7 +141,7 @@ flowchart TD
 4. `decode 풀 포화도`를 봅니다. prefill만 분리하고 decode 풀을 너무 작게 잡으면 병목 위치만 옮겨 놓게 됩니다.
 5. `cache 재사용과의 상호작용`을 봅니다. prefix caching이나 KV reuse가 이미 큰 효과를 내는 요청이라면, 분리 대상은 cache miss가 큰 요청 위주로 다시 나눠야 합니다 [S3].
 
-**학습자:** 결국 "분리했는데 안 빨랐다"는 말은 설계 자체가 틀렸다기보다, 어떤 큐를 줄였고 어떤 비용을 새로 만들었는지 계산이 빠졌다는 뜻이군요.
+**학습자:** 분리했는데 빨라지지 않았다면, 줄어든 queue 시간과 새로 생긴 KV 이동 비용을 같이 회계해야겠네요.
 
 **교수자:** 그렇습니다. 이 챕터에서 중요한 디버깅 습관은 `GPU utilization` 하나로 판단하지 않는 것입니다. utilization이 높아도 prefill queue와 decode queue가 분리되어 tail latency가 좋아질 수 있고, utilization이 비슷해도 KV 이동 때문에 손해가 날 수 있습니다.
 
@@ -157,7 +157,7 @@ flowchart TD
 
 **교수자:** 두 번째 이미지는 Roofline model입니다. 이 그림은 어떤 단계가 계산 집약적인지, 어떤 단계가 메모리와 이동 비용에 더 민감한지 생각할 때 유용합니다. prefill과 decode를 같은 그래프 위에 한 색으로 칠하지 말고, 서로 다른 자원 패턴으로 보는 습관을 들이라는 신호로 읽으면 좋습니다 [S2].
 
-**학습자:** 정리하면 이 챕터의 결론은 "prefill과 decode를 같은 모델 호출이라고 묶지 말고, 서로 다른 대기열과 이동 경로를 가진 두 작업으로 보라"는 말이네요.
+**학습자:** 이 챕터의 결론은 모델 호출을 하나의 덩어리로 보지 말고, prefill queue와 decode queue, 그리고 KV 이동 경로를 따로 계측하라는 쪽이겠네요.
 
 **교수자:** 바로 그 문장이 핵심입니다.
 

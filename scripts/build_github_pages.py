@@ -33,6 +33,7 @@ class Citation:
     title: str
     publisher: str = ""
     reason: str = ""
+    role: str = ""
 
 
 @dataclass
@@ -136,11 +137,14 @@ def parse_frontmatter(text: str) -> tuple[dict[str, object], str]:
 
 
 def strip_markdown(text: str) -> str:
+    arrow_placeholder = "__ARROW_RIGHT__"
+    text = text.replace("->", arrow_placeholder)
     text = re.sub(r"```.*?```", " ", text, flags=re.S)
     text = re.sub(r"\$\$.*?\$\$", " ", text, flags=re.S)
     text = re.sub(r"!\[([^\]]*)\]\([^)]+\)", r"\1", text)
     text = re.sub(r"\[([^\]]+)\]\([^)]+\)", r"\1", text)
     text = re.sub(r"[#>*_`~|-]", " ", text)
+    text = text.replace(arrow_placeholder, "->")
     text = re.sub(r"\s+", " ", text)
     return text.strip()
 
@@ -221,6 +225,19 @@ def citation_anchor(key: str) -> str:
     return f"source-{key.lower()}"
 
 
+def infer_citation_role(key: str, title: str, reason: str) -> str:
+    haystack = f"{title} {reason}".lower()
+    if key.startswith("I"):
+        return "이미지 근거"
+    if "최신" in reason or "release note" in haystack or "release notes" in haystack or "accessed" in haystack:
+        return "최신성 근거"
+    if "보조" in reason or "기준선" in reason or "맥락" in reason or "비교" in reason:
+        return "보조 근거"
+    if "합성" in reason or "수업용" in reason or "해석" in reason:
+        return "합성 근거"
+    return "핵심 근거"
+
+
 def parse_citations(markdown_text: str) -> dict[str, Citation]:
     citations: dict[str, Citation] = {}
     lines = markdown_text.splitlines()
@@ -242,6 +259,7 @@ def parse_citations(markdown_text: str) -> dict[str, Citation]:
                 title=last_image_caption or f"참고 이미지 {image_source_match.group(2)}",
                 publisher="참고 이미지",
                 reason="이미지 출처와 사용 맥락",
+                role="이미지 근거",
             )
             continue
         if not stripped.startswith("|"):
@@ -256,7 +274,13 @@ def parse_citations(markdown_text: str) -> dict[str, Citation]:
         title = strip_markdown_links(cells[1])
         publisher = strip_markdown_links(cells[2]) if len(cells) > 2 else ""
         reason = strip_markdown_links(cells[-1]) if len(cells) > 2 else ""
-        citations[key] = Citation(key=key, title=title, publisher=publisher, reason=reason)
+        citations[key] = Citation(
+            key=key,
+            title=title,
+            publisher=publisher,
+            reason=reason,
+            role=infer_citation_role(key, title, reason),
+        )
     return citations
 
 
@@ -364,11 +388,21 @@ class MarkdownRenderer:
                 body_rows = []
                 for row in rows[1:]:
                     row_id = ""
+                    citation_key = ""
                     if row:
                         key_match = re.fullmatch(r"\[(S|I)(\d+)\]", strip_markdown_links(row[0]))
                         if key_match:
-                            row_id = f' id="{citation_anchor(key_match.group(1) + key_match.group(2))}"'
-                    cells = "".join(f"<td>{self._inline(cell)}</td>" for cell in row)
+                            citation_key = key_match.group(1) + key_match.group(2)
+                            row_id = f' id="{citation_anchor(citation_key)}"'
+                    rendered_cells = []
+                    for cell_index, cell in enumerate(row):
+                        rendered = self._inline(cell)
+                        citation = self.citations.get(citation_key)
+                        if cell_index == 0 and citation and citation.role:
+                            role = html.escape(citation.role)
+                            rendered += f'<span class="source-role-badge">{role}</span>'
+                        rendered_cells.append(f"<td>{rendered}</td>")
+                    cells = "".join(rendered_cells)
                     body_rows.append(f"<tr{row_id}>{cells}</tr>")
                 chunks.append(
                     "<div class=\"table-wrap\"><table><thead><tr>"
@@ -488,14 +522,28 @@ class MarkdownRenderer:
         title_parts = [citation.title]
         if citation.publisher:
             title_parts.append(citation.publisher)
+        if citation.role:
+            title_parts.append(citation.role)
         if citation.reason:
             title_parts.append(citation.reason)
         tooltip = html.escape(" | ".join(part for part in title_parts if part), quote=True)
         aria = html.escape(f"{label} {citation.title} 출처로 이동", quote=True)
         href = f"#{citation_anchor(key)}"
+        role = html.escape(citation.role or "출처", quote=True)
+        title = html.escape(citation.title, quote=True)
+        publisher = html.escape(citation.publisher, quote=True)
+        reason = html.escape(citation.reason, quote=True)
         return (
             f'<sup class="citation-ref">'
-            f'<a href="{href}" title="{tooltip}" aria-label="{aria}">{label}</a>'
+            f'<a href="{href}" title="{tooltip}" aria-label="{aria}" data-citation-role="{role}">'
+            f"{label}"
+            f'<span class="citation-popover" role="tooltip">'
+            f'<strong>{label} {title}</strong>'
+            f'<span>{role}</span>'
+            f"{f'<span>{publisher}</span>' if publisher else ''}"
+            f"{f'<em>{reason}</em>' if reason else ''}"
+            f"</span>"
+            f"</a>"
             f"</sup>"
         )
 

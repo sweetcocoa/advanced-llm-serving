@@ -46,7 +46,7 @@ $$
 
 첫 식은 토큰당 실제로 깨우는 파라미터 양을 보여 주고, 둘째 식은 GShard와 Switch Transformer가 설명하는 expert capacity 개념을 수업용으로 정리한 식이다 [합성] [S2][S3]. 여기서 `k`는 top-k, `E`는 expert 수, `B`는 함께 처리하는 토큰 수, `\alpha`는 capacity factor다.
 
-**학습자:** 그러면 active parameter만 보고 `dense보다 싸다`라고 말하면 반쪽짜리군요.
+**학습자:** active parameter가 줄어도 router, dispatch, overflow 비용이 새로 생기면 전체 비용은 따로 봐야겠네요?
 
 **교수자:** 맞습니다. active parameter가 줄어도 router, dispatch, combine, overflow 처리가 새로 생깁니다 [S1][S2][S3]. MoE의 실전 병목은 평균 expert가 아니라 `가장 바쁜 expert`가 만드는 경우가 많습니다 [합성] [S1][S2][S3].
 
@@ -74,7 +74,7 @@ flowchart LR
     F --> G
 ```
 
-**학습자:** 결국 `capacity factor를 낮추면 메모리가 준다`만 보면 안 되겠네요.
+**학습자:** capacity factor를 낮출 때는 메모리 절감뿐 아니라 drop, reroute, expert별 queue도 같이 봐야 하나요?
 
 **교수자:** 그렇죠. serving에서는 `overflow 비율`, `expert별 queue depth`, `dispatch bytes`, balancedness 같은 운영 지표를 같이 봐야 합니다 [합성] [S2][S3][S4].
 
@@ -116,7 +116,7 @@ flowchart TB
     X --> Y[Combine on next layer]
 ```
 
-**학습자:** 그러면 hot expert 쌍이 서로 다른 노드에 놓여 있으면 fabric이 먼저 울겠네요.
+**학습자:** hot expert가 서로 다른 노드에 흩어져 있으면, 평균 FLOPs보다 fabric 경로가 tail latency를 만들 수 있나요?
 
 **교수자:** 맞습니다. expert placement가 잘못되면 `연산이 느린 모델`이 아니라 `경로가 나쁜 모델`이 됩니다 [합성] [S2][S3].
 
@@ -147,7 +147,7 @@ flowchart TB
 4. `batch size와 top-k`를 함께 봅니다. 작은 batch에서는 top-k 증분이 곧 latency 증분일 수 있습니다 [합성] [S1][S2][S3][S4].
 5. 마지막으로 `이 workload가 원래 MoE에 맞는지`를 다시 판단합니다. low-batch interactive라면 dense가 더 단순한 선택일 수 있습니다 [합성] [S1][S2][S3].
 
-**학습자:** 결국 MoE 운영의 핵심은 `active parameter가 적다`를 증명하는 게 아니라 `어떤 경로가 tail을 만들었는지`를 증명하는 거군요.
+**학습자:** MoE 운영에서는 active parameter 수보다 router, expert queue, fabric hop 중 무엇이 tail을 만들었는지 증명하는 쪽이 핵심이겠네요.
 
 **교수자:** 바로 그 점입니다. dense tensor parallel에서는 계산과 메모리 분해가 중심이었다면, expert parallel에서는 `경로`, `편중`, `배치`, `배치 위치`가 중심입니다 [합성] [S1][S2][S3].
 

@@ -582,6 +582,7 @@ p {
 }
 
 :where(.citation-ref a) {
+  position: relative;
   border-radius: 999px;
   color: inherit;
   padding: 0.03rem 0.12rem;
@@ -594,12 +595,71 @@ p {
   text-underline-offset: 0.14em;
 }
 
+:where(.citation-popover) {
+  position: absolute;
+  z-index: 20;
+  left: 50%;
+  bottom: calc(100% + 8px);
+  display: none;
+  width: min(320px, calc(100vw - 48px));
+  transform: translateX(-50%);
+  padding: 10px 12px;
+  border: 1px solid rgba(19, 38, 31, 0.14);
+  border-radius: var(--radius-sm);
+  background: #fffefa;
+  box-shadow: 0 16px 36px rgba(19, 38, 31, 0.16);
+  color: var(--ink);
+  font-size: 0.78rem;
+  font-weight: 500;
+  line-height: 1.35;
+  white-space: normal;
+}
+
+:where(.citation-popover strong, .citation-popover span, .citation-popover em) {
+  display: block;
+}
+
+:where(.citation-popover strong) {
+  margin-bottom: 4px;
+  font-size: 0.82rem;
+  font-weight: 800;
+}
+
+:where(.citation-popover span) {
+  color: var(--muted);
+}
+
+:where(.citation-popover em) {
+  margin-top: 6px;
+  color: var(--ink);
+  font-style: normal;
+}
+
+:where(.citation-ref a:hover .citation-popover, .citation-ref a:focus-visible .citation-popover) {
+  display: block;
+}
+
 :where(tr[id^="source-"], li[id^="source-"]) {
   scroll-margin-top: 96px;
 }
 
 :where(tr[id^="source-"]:target, li[id^="source-"]:target) {
   background: rgba(244, 194, 75, 0.16);
+}
+
+:where(.source-role-badge) {
+  display: inline-block;
+  margin-left: 0.35rem;
+  padding: 0.1rem 0.36rem;
+  border: 1px solid rgba(31, 118, 101, 0.22);
+  border-radius: 999px;
+  background: rgba(31, 118, 101, 0.08);
+  color: var(--teal-deep);
+  font-size: 0.72rem;
+  font-weight: 800;
+  line-height: 1.2;
+  vertical-align: middle;
+  white-space: nowrap;
 }
 
 :where(.prose pre, .article-content pre, article pre, [data-prose] pre) {
