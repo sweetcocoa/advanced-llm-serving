@@ -168,19 +168,6 @@ flowchart TD
 | Edge | 오프라인 사용, 민감 데이터, 빠른 체감 반응, 단말 독립성 | 메모리 제약, 전력/발열, 장치 편차 | 회의 메모 정리, 현장 점검 보조 |
 | Hybrid | 원문 보호와 고품질 생성이 동시에 필요 | 라우팅 설계와 디버깅이 복잡 | 로컬 마스킹 후 cloud 요약, local classifier + server LLM |
 
-## 참고 이미지
-![vLLM logo](./assets/img-01.png)
-
-- [I1] 캡션: vLLM logo
-- 출처 번호: [I1]
-- 왜 이 그림이 필요한지: 클라우드 측 최적화 사례로 언급한 disaggregated prefill의 문맥을 시각적으로 고정하기 위해 사용한다.
-
-![Open Neural Network Exchange logo](./assets/img-02.svg)
-
-- [I2] 캡션: Open Neural Network Exchange logo
-- 출처 번호: [I2]
-- 왜 이 그림이 필요한지: edge 경로에서 ONNX Runtime QNN EP와 모델 이식성 논의를 연결하는 시각적 기준점으로 사용한다.
-
 ## 출처
 | 번호 | 제목 | 발행 주체 | 날짜 | URL | 사용 이유 |
 | --- | --- | --- | --- | --- | --- |

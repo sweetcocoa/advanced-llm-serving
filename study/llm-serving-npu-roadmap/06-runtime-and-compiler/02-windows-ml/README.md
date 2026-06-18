@@ -180,12 +180,6 @@ flowchart TD
 | 추천 상황 | 빠른 제품 통합, Copilot+ PC 계열 기능, 폭넓은 Windows 배포 [S1] [S2] | 특정 장치 성능이 핵심 경쟁력이고 저수준 분석을 감수할 때 [S4] |
 
 ## 참고 이미지
-![Open Neural Network Exchange logo](./assets/img-01.svg)
-
-- [I1] 캡션: Open Neural Network Exchange logo
-- 출처 번호: [I1]
-- 왜 이 그림이 필요한지: Windows ML이 독립 모델 포맷이 아니라 ONNX 생태계 위에서 앱 배포 경로와 연결된다는 점을 시각적으로 상기시킨다.
-
 ![OpenVINO AI visual](./assets/img-02.png)
 
 - [I2] 캡션: OpenVINO AI visual

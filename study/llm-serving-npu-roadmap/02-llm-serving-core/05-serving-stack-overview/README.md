@@ -183,12 +183,6 @@ $$
 | 주의점 | 내부 병목이 가려질 수 있다 | observability 없이 운영하면 queue와 cache 문제를 놓치기 쉽다 | 기능을 켠 뒤 상태를 못 읽으면 복잡도만 늘어난다 |
 
 ## 참고 이미지
-![vLLM logo](./assets/img-01.png)
-
-- [I1] 캡션: vLLM logo
-- 출처 번호: [I1]
-- 활용 이유: 범용 runtime과 OpenAI-compatible serving을 함께 설명할 때 대표 사례의 시각적 식별점으로 사용한다.
-
 ![Roofline model](./assets/img-02.png)
 
 - [I2] 캡션: Roofline model

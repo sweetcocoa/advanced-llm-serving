@@ -34,7 +34,7 @@ source_count: 6
 ### Part 1. Serving의 최소 단위가 서버에서 rack으로 올라간다
 **교수자:** 예전에는 LLM serving을 한 서버 안의 GPU 몇 장 문제로 설명해도 꽤 많은 것을 말할 수 있었습니다. 그런데 긴 문맥, reasoning, MoE, disaggregated serving이 겹치면 최소 단위가 커집니다. 이제 질문은 "몇 GPU인가"가 아니라 "이 GPU들이 어떤 fabric 안에서 서로 이야기하는가"입니다.
 
-**학습자:** 그러면 rack은 그냥 장비를 꽂아 놓는 물리 단위가 아니군요.
+**학습자:** rack을 물리 장비 묶음이 아니라 scheduling 단위로 봐야 하는 이유가 있나요?
 
 **교수자:** 맞습니다. NVIDIA의 rack-scale 자료는 GB300 NVL72를 liquid-cooled rack-scale architecture로 설명하고, 72개 Blackwell Ultra GPU와 36개 Grace CPU를 한 platform으로 묶습니다 [S4]. NVL72 AI Factory 문서는 각 rack에 9개 NVLink fifth-generation switch tray가 있고, 72 GPU가 fully connected L1 domain을 이룰 수 있다고 설명합니다 [S3]. 이 정도면 rack은 배선 상자가 아니라 scheduling과 isolation의 단위입니다.
 
@@ -91,7 +91,7 @@ flowchart LR
 
 **교수자:** 2026년 rack-scale 환경에서는 부족합니다. NVIDIA의 rack-scale scheduling 글은 flat GPU pool로 보면 계층적이고 topology-sensitive한 설계를 놓친다고 설명합니다 [S6]. 또 cluster UUID와 clique ID 같은 식별자가 NVLink domain과 partition을 scheduler가 이해할 수 있는 정보로 올려 준다고 설명합니다 [S6].
 
-**학습자:** 결국 scheduler가 "가까운 GPU"와 "멀리 있는 GPU"를 구분해야 하네요.
+**학습자:** scheduler가 GPU 수뿐 아니라 GPU 사이 거리까지 알아야 하는 이유가 tail latency 때문인가요?
 
 **교수자:** 맞습니다. 같은 16 GPU도 한 NVLink partition 안에 있으면 고대역폭 block처럼 움직이지만, rack 경계를 잘못 넘으면 통신 비용과 예측 불가능성이 커집니다. serving팀 입장에서는 topology-aware placement를 "인프라팀의 고급 기능"이 아니라 SLO 관리 기능으로 봐야 합니다.
 

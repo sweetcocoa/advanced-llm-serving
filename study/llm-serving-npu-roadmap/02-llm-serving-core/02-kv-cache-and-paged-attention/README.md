@@ -181,12 +181,6 @@ flowchart LR
 | disaggregated serving + cache placement 최적화 | prefill과 decode를 다른 자원 풀에서 운영할 때 | 각 workload에 맞는 자원 배치가 가능하다 [S4] | cache 전달 경로, placement 정책, 운영 복잡도가 함께 증가한다 |
 
 ## 참고 이미지
-![vLLM logo](./assets/img-01.png)
-
-- [I1] 캡션: vLLM logo
-- 출처 번호: [I1]
-- 활용 맥락: PagedAttention이 실제 serving 엔진 기능으로 연결된다는 점을 상기시키는 참고 이미지
-
 ![Roofline model](./assets/img-02.png)
 
 - [I2] 캡션: Roofline model

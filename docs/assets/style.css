@@ -581,6 +581,27 @@ p {
   white-space: nowrap;
 }
 
+:where(.citation-ref a) {
+  border-radius: 999px;
+  color: inherit;
+  padding: 0.03rem 0.12rem;
+  text-decoration: none;
+}
+
+:where(.citation-ref a:hover, .citation-ref a:focus-visible) {
+  background: rgba(31, 118, 101, 0.12);
+  text-decoration: underline;
+  text-underline-offset: 0.14em;
+}
+
+:where(tr[id^="source-"], li[id^="source-"]) {
+  scroll-margin-top: 96px;
+}
+
+:where(tr[id^="source-"]:target, li[id^="source-"]:target) {
+  background: rgba(244, 194, 75, 0.16);
+}
+
 :where(.prose pre, .article-content pre, article pre, [data-prose] pre) {
   overflow-x: auto;
   padding: 18px;

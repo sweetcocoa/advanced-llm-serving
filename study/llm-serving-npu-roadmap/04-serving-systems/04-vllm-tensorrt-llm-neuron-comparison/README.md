@@ -151,19 +151,6 @@ sequenceDiagram
 | 먼저 볼 문서 | 범용 serving 문서 [S1] | disaggregated serving 문서 [S2] | announcement + release notes [S3] [S4] |
 | 흔한 오해 | "쉽게 시작되니 항상 최종 답이다" | "분리하면 성능만 좋아지고 복잡도는 그대로다" | "AWS 환경이면 자동으로 바로 맞는다" |
 
-## 참고 이미지
-![vLLM logo](./assets/img-01.png)
-
-- [I1] 캡션: vLLM logo
-- 출처 번호: [I1]
-- 왜 이 그림이 필요한지: 이 챕터에서 vLLM을 범용 서빙의 출발점으로 놓고 비교한다는 점을 시각적으로 고정하기 위해 사용한다.
-
-![Open Neural Network Exchange logo](./assets/img-02.svg)
-
-- [I2] 캡션: Open Neural Network Exchange logo
-- 출처 번호: [I2]
-- 왜 이 그림이 필요한지: 모델 포맷의 이식 가능성과 serving backend의 운영 적합성이 같은 문제가 아니라는 점을 상기시키기 위해 넣었다.
-
 ## 출처
 | 번호 | 제목 | 발행 주체 | 날짜 | URL | 사용 이유 |
 | --- | --- | --- | --- | --- | --- |

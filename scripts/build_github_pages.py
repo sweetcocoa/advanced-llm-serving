@@ -28,6 +28,14 @@ class Heading:
 
 
 @dataclass
+class Citation:
+    key: str
+    title: str
+    publisher: str = ""
+    reason: str = ""
+
+
+@dataclass
 class Chapter:
     module_slug: str
     module_title: str
@@ -203,10 +211,60 @@ def is_table_divider(line: str) -> bool:
     return stripped == ""
 
 
+def strip_markdown_links(text: str) -> str:
+    text = re.sub(r"!\[([^\]]*)\]\([^)]+\)", r"\1", text)
+    text = re.sub(r"\[([^\]]+)\]\([^)]+\)", r"\1", text)
+    return strip_markdown(text)
+
+
+def citation_anchor(key: str) -> str:
+    return f"source-{key.lower()}"
+
+
+def parse_citations(markdown_text: str) -> dict[str, Citation]:
+    citations: dict[str, Citation] = {}
+    lines = markdown_text.splitlines()
+    last_image_caption = ""
+    for line in lines:
+        stripped = line.strip()
+        image_match = re.match(r"!\[([^\]]*)\]\(", stripped)
+        if image_match:
+            last_image_caption = strip_markdown_links(image_match.group(1))
+            continue
+        caption_match = re.match(r"-\s+(?:\[I\d+\]\s+)?캡션:\s+(.+)$", stripped)
+        if caption_match:
+            last_image_caption = strip_markdown_links(caption_match.group(1))
+        image_source_match = re.search(r"출처 번호:\s+\[(I)(\d+)\]", stripped)
+        if image_source_match:
+            key = f"{image_source_match.group(1)}{image_source_match.group(2)}"
+            citations[key] = Citation(
+                key=key,
+                title=last_image_caption or f"참고 이미지 {image_source_match.group(2)}",
+                publisher="참고 이미지",
+                reason="이미지 출처와 사용 맥락",
+            )
+            continue
+        if not stripped.startswith("|"):
+            continue
+        cells = split_table_row(stripped)
+        if len(cells) < 2:
+            continue
+        key_match = re.fullmatch(r"\[(S|I)(\d+)\]", strip_markdown_links(cells[0]))
+        if not key_match:
+            continue
+        key = f"{key_match.group(1)}{key_match.group(2)}"
+        title = strip_markdown_links(cells[1])
+        publisher = strip_markdown_links(cells[2]) if len(cells) > 2 else ""
+        reason = strip_markdown_links(cells[-1]) if len(cells) > 2 else ""
+        citations[key] = Citation(key=key, title=title, publisher=publisher, reason=reason)
+    return citations
+
+
 class MarkdownRenderer:
-    def __init__(self) -> None:
+    def __init__(self, citations: dict[str, Citation] | None = None) -> None:
         self.headings: list[Heading] = []
         self._used_ids: dict[str, int] = {}
+        self.citations = citations or {}
 
     def render(self, markdown_text: str) -> tuple[str, list[Heading]]:
         lines = markdown_text.splitlines()
@@ -305,8 +363,13 @@ class MarkdownRenderer:
                 header_cells = "".join(f"<th>{self._inline(cell)}</th>" for cell in rows[0])
                 body_rows = []
                 for row in rows[1:]:
+                    row_id = ""
+                    if row:
+                        key_match = re.fullmatch(r"\[(S|I)(\d+)\]", strip_markdown_links(row[0]))
+                        if key_match:
+                            row_id = f' id="{citation_anchor(key_match.group(1) + key_match.group(2))}"'
                     cells = "".join(f"<td>{self._inline(cell)}</td>" for cell in row)
-                    body_rows.append(f"<tr>{cells}</tr>")
+                    body_rows.append(f"<tr{row_id}>{cells}</tr>")
                 chunks.append(
                     "<div class=\"table-wrap\"><table><thead><tr>"
                     + header_cells
@@ -325,16 +388,20 @@ class MarkdownRenderer:
                     if not current:
                         break
                     item_text = current.group(3).strip()
+                    item_id = ""
+                    image_source_match = re.search(r"출처 번호:\s+\[(I)(\d+)\]", item_text)
+                    if image_source_match:
+                        item_id = f' id="{citation_anchor(image_source_match.group(1) + image_source_match.group(2))}"'
                     checkbox = re.match(r"^\[( |x|X)\]\s+(.*)$", item_text)
                     if checkbox:
                         checked = checkbox.group(1).lower() == "x"
                         item_body = self._inline(checkbox.group(2))
                         marker = "checked" if checked else "unchecked"
                         items.append(
-                            f'<li class="task-item {marker}"><span class="task-box" aria-hidden="true"></span>{item_body}</li>'
+                            f'<li{item_id} class="task-item {marker}"><span class="task-box" aria-hidden="true"></span>{item_body}</li>'
                         )
                     else:
-                        items.append(f"<li>{self._inline(item_text)}</li>")
+                        items.append(f"<li{item_id}>{self._inline(item_text)}</li>")
                     index += 1
                 chunks.append(f"<{kind}>" + "".join(items) + f"</{kind}>")
                 continue
@@ -379,9 +446,7 @@ class MarkdownRenderer:
         def code_replace(match: re.Match[str]) -> str:
             code = html.escape(html.unescape(match.group(1)))
             code = CITATION_REF.sub(
-                lambda citation: (
-                    f'<sup class="citation-ref">[{citation.group(1)}{citation.group(2)}]</sup>'
-                ),
+                lambda citation: self._citation_html(citation.group(1), citation.group(2)),
                 code,
             )
             return reserve(f"<code>{code}</code>")
@@ -406,15 +471,33 @@ class MarkdownRenderer:
         escaped = re.sub(r"(?<!\*)\*([^*]+)\*(?!\*)", r"<em>\1</em>", escaped)
 
         def citation_replace(match: re.Match[str]) -> str:
-            return reserve(
-                f'<sup class="citation-ref">[{match.group(1)}{match.group(2)}]</sup>'
-            )
+            return reserve(self._citation_html(match.group(1), match.group(2)))
 
         escaped = CITATION_REF.sub(citation_replace, escaped)
 
         for token, value in placeholders.items():
             escaped = escaped.replace(token, value)
         return escaped
+
+    def _citation_html(self, prefix: str, number: str) -> str:
+        key = f"{prefix}{number}"
+        citation = self.citations.get(key)
+        label = f"[{key}]"
+        if not citation:
+            return f'<sup class="citation-ref">{label}</sup>'
+        title_parts = [citation.title]
+        if citation.publisher:
+            title_parts.append(citation.publisher)
+        if citation.reason:
+            title_parts.append(citation.reason)
+        tooltip = html.escape(" | ".join(part for part in title_parts if part), quote=True)
+        aria = html.escape(f"{label} {citation.title} 출처로 이동", quote=True)
+        href = f"#{citation_anchor(key)}"
+        return (
+            f'<sup class="citation-ref">'
+            f'<a href="{href}" title="{tooltip}" aria-label="{aria}">{label}</a>'
+            f"</sup>"
+        )
 
 
 def render_quiz(markdown_text: str) -> str:
@@ -771,8 +854,9 @@ def render_module_page(module: Module, modules: list[Module]) -> str:
 def render_chapter_page(chapter: Chapter, modules: list[Module]) -> str:
     readme_text = (chapter.source_dir / "README.md").read_text(encoding="utf-8")
     _, body = parse_frontmatter(readme_text)
-    renderer = MarkdownRenderer()
+    renderer = MarkdownRenderer(parse_citations(body))
     content_html, headings = renderer.render(body)
+    summary_html = renderer._inline(chapter.summary)
     chapter.content_html = content_html
     chapter.toc = headings
 
@@ -798,7 +882,7 @@ def render_chapter_page(chapter: Chapter, modules: list[Module]) -> str:
       <div class="hero-copy">
         <p class="eyebrow">{html.escape(chapter.module_title)}</p>
         <h1>{html.escape(chapter.title)}</h1>
-        <p class="hero-summary">{render_plain_inline(chapter.summary)}</p>
+        <p class="hero-summary">{summary_html}</p>
       </div>
       <div class="hero-stats">
         <div class="stat-card"><strong>{html.escape(chapter.reading_time or '시간 미정')}</strong><span>reading time</span></div>

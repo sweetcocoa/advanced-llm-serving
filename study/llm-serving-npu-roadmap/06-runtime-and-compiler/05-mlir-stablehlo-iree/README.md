@@ -73,7 +73,7 @@ $$
 
 여기서 `N_required`는 다음 단계가 요구하는 연산, shape, type, layout 조건의 수이고, `N_legalized`는 그 조건을 실제로 충족한 수라고 읽으면 된다 [합성: S1,S2,S4]. ONNX import가 성공했다는 사실은 보통 "입력이 읽혔다"는 뜻이지, 바로 `R_lowering = 1`이라는 뜻은 아니다 [합성: S1,S2,S4].
 
-**학습자:** 결국 `import OK`와 `deploy OK` 사이에 dialect legality와 target lowering이 남아 있다는 말이군요.
+**학습자:** ONNX import가 성공했는데도 배포가 실패했다면, 다음 단계가 요구하는 dialect legality나 target lowering 조건을 따로 봐야 하나요?
 
 **교수자:** 그렇습니다. 그래서 이 챕터에서는 `파일을 읽었다`보다 `다음 단계가 이 표현을 받아들일 수 있는가`를 더 중요한 질문으로 둡니다 [합성: S1,S2,S4].
 
@@ -83,7 +83,7 @@ $$
 
 **교수자:** `항상`은 아닙니다. XLA Architecture는 높은 수준 연산 의미와 backend-specific lowering 사이의 층을 보여 주지만 [S3], 그 자체가 어떤 특정 target에서 자동으로 최적 코드를 보장한다는 뜻은 아닙니다 [합성: S1,S2,S3]. MLIR 문서는 progressive lowering과 dialect conversion을 강조하고 [S1], IREE 문서는 compiler와 runtime artifact path를 함께 다룹니다 [S2]. 이 둘을 합치면 "높은 수준 의미를 얼마나 오래 유지할지"는 최적화 기회와 하위 단계 부담을 함께 바꾸는 선택이라는 점이 보입니다 [합성: S1,S2,S3].
 
-**학습자:** 그러면 StableHLO는 portability와 의미 보존에 유리할 수 있지만, 최종 codegen 품질은 또 다른 문제라는 거네요.
+**학습자:** StableHLO를 쓰면 이식성은 좋아질 수 있어도, 최종 target codegen 품질은 별도로 검증해야 하나요?
 
 **교수자:** 정확합니다. StableHLO를 쓰는 이유와, 최종 backend codegen이 잘 나오느냐는 질문을 분리해야 합니다 [합성: S1,S2,S3].
 
@@ -97,7 +97,7 @@ $$
 
 `B_backend`는 더 낮은 수준으로 가면서 얻는 backend-specific 최적화 이익을, `C_dispatch`는 더 많은 dispatch 형성 비용을, `C_boundary`는 경계 간 전달과 동기화 비용을, `C_materialize`는 중간 결과 구체화 비용을 뜻한다 [합성: S1,S2,S3]. MLIR이 progressive lowering을 허용한다는 사실 [S1]과 IREE가 dispatch와 artifact 관점까지 드러낸다는 사실 [S2], 그리고 XLA 계층이 높은 수준 의미를 유지하는 이유 [S3]를 묶으면, 더 이른 decomposition이 항상 이득이 아니라는 결론이 나온다 [합성: S1,S2,S3].
 
-**학습자:** 그러면 decomposition으로 생기는 dispatch 증가는 문서에 딱 한 줄로 적혀 있다기보다, 여러 계층 설명을 합쳐야 보이는 결론이군요.
+**학습자:** decomposition을 빨리 하면 backend 최적화 기회도 생기지만 dispatch 경계도 늘 수 있습니다. 그 tradeoff는 어떤 로그나 artifact를 봐야 확인할 수 있나요?
 
 **교수자:** 맞습니다. 그래서 이 문장은 문서 직역이 아니라 `[합성]`으로 써야 정확합니다. `하나의 큰 의미 덩어리`를 너무 일찍 잘게 나누면 IREE가 더 많은 dispatch 경계를 만들 가능성이 있고, 그때는 `C_dispatch`와 `C_boundary`가 올라갈 수 있습니다 [합성: S1,S2,S3].
 
@@ -105,7 +105,7 @@ $$
 
 **교수자:** IREE가 여기서 중요한 이유는 "MLIR을 쓴다"에서 멈추지 않기 때문입니다. IREE 문서는 compiler와 runtime을 분리하면서도, compiler 결과가 runtime-loadable artifact로 이어지는 경로를 함께 설명합니다 [S2].
 
-**학습자:** 그러면 성능이나 실패 원인을 볼 때, 코드 생성만이 아니라 artifact 구성도 봐야겠네요.
+**학습자:** 성능 문제가 codegen 때문인지 runtime artifact 구성 때문인지 구분하려면 무엇을 먼저 열어 봐야 합니까?
 
 **교수자:** 그렇습니다. `dispatch가 몇 개로 나뉘었는가`, `runtime이 무엇을 실제로 로드하는가`, `어느 단계에서 target-specific executable이 만들어졌는가`가 모두 같은 문제 체인의 일부입니다 [합성: S1,S2]. 그래서 IREE를 쓰는 순간, compiler debugging과 runtime artifact inspection이 연결됩니다 [S2].
 
