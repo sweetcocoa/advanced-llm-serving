@@ -209,10 +209,6 @@ flowchart TD
 | Structured Outputs / Tool Calling 최적화 | 형식 제약, 짧은 응답, agent workflow 제약 | JSON 응답, 함수 호출, 제약된 출력 경로 | decode 길이가 짧으면 disaggregation ROI가 작아질 수 있음 [S5][S6] |
 
 ## 참고 이미지
-![vLLM logo](./assets/img-01.png)
-
-- [I1] vLLM 로고는 disaggregated prefill이 실제 serving 엔진 기능 표면에 올라와 있다는 점을 상기시키는 참고 이미지다. 본문 Part 1과 Part 7의 "운영 기능으로서의 분리 설계" 설명과 연결된다.
-
 ![Roofline model](./assets/img-02.png)
 
 - [I2] Roofline model은 prefill과 decode를 같은 부하로 뭉뚱그리지 말고, 계산 패턴과 이동 비용이 다른 두 단계로 봐야 한다는 감각을 보조한다. 본문 Part 2와 Part 7의 tradeoff 설명과 연결된다.

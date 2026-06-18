@@ -172,11 +172,6 @@ sequenceDiagram
 | tool calling + KV reuse/disagg | 긴 공통 prefix workload에서 효율이 좋다 | 캐시, 라우팅, 분리 아키텍처 운영 복잡도가 늘어난다 | policy-heavy agent [S1][S2][S3] |
 
 ## 참고 이미지
-### 이미지 1. vLLM logo
-![vLLM logo](./assets/img-01.png)
-
-이 챕터에서 다루는 structured outputs와 tool calling이 실제 serving 엔진 기능으로 문서화되어 있음을 상기시키는 참고 이미지다 [S5][S6].
-
 ### 이미지 2. Roofline model
 ![Roofline model](./assets/img-02.png)
 

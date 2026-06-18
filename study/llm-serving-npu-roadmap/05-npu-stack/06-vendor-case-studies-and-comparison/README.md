@@ -110,14 +110,14 @@ flowchart LR
 
 **교수자:** 생깁니다. Qualcomm의 precompiled package나 QNN context binary를 만들어 놓고, 그것을 Intel OpenVINO compiled model처럼 다른 vendor stack에서 재사용할 수 있다고 생각하면 바로 막힙니다. 교차 재사용이 가능한 것은 대체로 공통 모델 계층이지, vendor-specific artifact가 아닙니다. Qualcomm artifact는 Qualcomm runtime/QNN 문맥에서, Intel compiled model은 OpenVINO NPU 문맥에서 다시 만들어야 합니다. [S2] [S3] [S5]
 
-**학습자:** Google TPU는 실패 양상이 더 운영 쪽에 가깝겠네요. single-host 기준으로 잡은 serving 계획을 topology나 queued resource 제약이 다른 환경에 그대로 가져가면, 모델이 아니라 자원 준비 단계에서 막힐 수 있으니까요. [S10] [S11] [S12]
+**학습자:** Google TPU 쪽은 모델 변환보다 자원 준비 단계에서 먼저 막힐 수도 있나요? single-host 기준으로 만든 serving 계획을 topology나 queued resource 제약이 있는 환경에 그대로 가져가면 어디서 실패합니까? [S10] [S11] [S12]
 
 **교수자:** 바로 그 차이입니다. TPU는 모델 graph가 맞더라도 topology, quota, scheduling state가 맞지 않으면 시작선에 서지 못합니다. 그래서 TPU 문서는 accelerator 사양표보다 VM, topology, collection scheduling, `tpu-info`를 먼저 읽어야 합니다. [S10] [S11] [S12] [S13]
 
 ### Part 5. 벤더 선택 기준은 "무엇을 포기할 준비가 돼 있는가"다
 **교수자:** 이제 선택 기준을 정리해 봅시다. Qualcomm, Intel, Tenstorrent는 compile/toolchain을 더 깊게 받아들이는 대신 하드웨어 밀착 제어를 얻는 쪽입니다. AMD와 Hailo는 준비된 bundle/runtime stack으로 빠르게 시작하는 대신 제어점이 패키지에 묶이는 편이고, Apple과 Windows ML은 앱/OS 추상화의 편의성을 얻는 대신 내부 runtime 차이를 직접 들여다보는 표면이 상대적으로 줄어듭니다. Google TPU는 애초에 infra 운영 책임을 받아들이는 대신 데이터센터 수준의 serving 경로를 얻습니다. [S4] [S5] [S7] [S8] [S10] [S14] [S18]
 
-**학습자:** 결국 "이식성 대 최적화"라는 말도 추상적인 구호가 아니라, 어느 시점부터 vendor object를 받아들이고 어느 정도의 운영 표면적을 감수할지 결정하는 문제군요. [S2] [S5] [S9] [S12] [S18]
+**학습자:** "이식성 대 최적화"라고만 말하면 너무 추상적입니다. 실제 선택지로 바꾸면, 어느 시점부터 vendor object를 받아들이고 어떤 운영 표면적을 책임질지 정하는 문제인가요? [S2] [S5] [S9] [S12] [S18]
 
 **교수자:** 맞습니다. 공통 모델 계층을 오래 유지하면 실험 비교와 재사용이 쉬워지고, vendor object를 일찍 수용하면 특정 플랫폼 최적화와 관측 도구를 깊게 쓸 수 있습니다. 어느 쪽이 옳다는 게 아니라, 팀이 디버깅과 운영을 어디까지 책임질지 먼저 정해야 합니다. [S3] [S5] [S8] [S13] [S17]
 

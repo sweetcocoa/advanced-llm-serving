@@ -35,7 +35,7 @@ source_count: 12
 ### Part 1. 2026년 트렌드는 이름보다 채택 신호로 읽어야 한다
 **교수자:** 이 챕터는 기술 유행 정리를 하는 시간이 아닙니다. 더 정확히 말하면, `유행어를 채택 신호로 번역하는 시간`입니다. 2026년에 중요한 건 "새 기능이 나왔다"가 아니라 "반복 가능한 운영 절차가 생겼는가"예요.
 
-**학습자:** 그러면 기준을 먼저 정해야겠네요. 어떤 기술이 주류고, 어떤 기술이 아직 실험인지 무엇으로 가릅니까?
+**학습자:** 기능 이름만 보면 다 좋아 보입니다. 어떤 신호가 있어야 `주류`, 어떤 신호가 부족하면 `실험`으로 남겨야 합니까?
 
 **교수자:** 수업에서는 네 가지를 봅니다. `반복 가능성`, `관측 가능성`, `workload 적합성`, `fallback 비용`입니다. 이름이 화려해도 이 네 줄이 비면 아직 과감히 `실험`이라고 적는 편이 낫습니다.
 
@@ -68,7 +68,7 @@ flowchart TD
     E -- "아니오" --> Y
 ```
 
-**학습자:** 정리하면 2026년 트렌드라는 말은 사실 `운영 체크리스트`에 가깝군요.
+**학습자:** 그러면 이 장에서 볼 것은 기술 목록이 아니라, 운영팀이 실제로 재현하고 관측할 수 있는 조건이겠네요.
 
 **교수자:** 맞습니다. 이 챕터는 기술 이름 암기가 아니라, 채택 신호와 실험 신호를 읽는 훈련입니다.
 
@@ -115,7 +115,7 @@ sequenceDiagram
     V-->>P: 계약을 만족하는 최종 응답
 ```
 
-**학습자:** 그러면 structured outputs가 들어오면 단순히 "JSON 잘 나오나?"만 볼 게 아니라, 실패했을 때 어디로 보내는지도 설계해야겠네요.
+**학습자:** schema 실패가 1%만 있어도 p95가 흔들릴 수 있습니다. 이때는 생성 모델보다 repair와 route 정책을 먼저 봐야 하나요?
 
 **교수자:** 정확합니다. 그래서 이것을 인프라 기술 목록에 넣기보다, 인프라 선택을 밀어붙이는 제품 요구 신호로 읽는 겁니다.
 
@@ -134,7 +134,7 @@ sequenceDiagram
 
 **교수자:** 반대로 speculative decoding은 강력하지만 `선별 도입`입니다. decode 병목이 크고, draft/verify 경로를 운영할 준비가 된 팀에선 분명 매력적입니다 [S2]. 하지만 acceptance가 낮거나 응답이 짧으면 기대 이득이 흐려집니다.
 
-**학습자:** 그러면 structured outputs가 있는 서비스에서는 어떤 순서로 봐야 합니까?
+**학습자:** structured outputs가 붙은 서비스에서 prefill, decode, validation 중 무엇을 먼저 계측해야 합니까?
 
 **교수자:** 먼저 응답 계약을 적습니다. 그다음에 `형식 준수 실패 시 repair가 필요한가`, `repair를 로컬에서 할지 cloud에서 할지`, `그 비용이 decode보다 큰가`를 봅니다. 긴 prompt와 짧은 구조화 응답 서비스라면, structured outputs가 있어도 먼저 prefill 병목을 해결해야 할 가능성이 큽니다 [S1]. 반대로 응답이 길고 validation 실패율도 높다면 decode 최적화와 repair path 설계가 같이 올라옵니다 [S2].
 
@@ -197,7 +197,7 @@ sequenceDiagram
 
 **교수자:** `AI PC 현장 점검 도우미`입니다. 기본 동작은 로컬 요약과 체크리스트 생성이고, 복잡한 복구 조언만 cloud에 올립니다. 여기서 채택 신호는 provider coverage 계측, fallback 로그, cloud escalation 규칙이 문서로 남아 있는지입니다 [S3][S4][S5][S6]. 실험 신호는 데모에서 한 기기만 성공했는데 범용 배포를 약속하는 겁니다. structured outputs 요구가 강할수록, local validator와 cloud repair의 경계를 먼저 그려야 합니다.
 
-**학습자:** 결국 2026년 trend watch의 핵심은 "더 멋진 기능 찾기"가 아니라 "제품 계약이 어느 운영 비용을 새로 만들었는지 보기"군요.
+**학습자:** trend watch를 기능 목록으로 읽으면 놓치는 게 있겠네요. 제품 계약이 새로 만든 운영 비용을 같이 적어야 합니까?
 
 **교수자:** 그 문장이 이 챕터의 결론입니다.
 
@@ -239,19 +239,6 @@ sequenceDiagram
 | Hybrid execution [S4][S5][S6] | local/cloud 경계와 escalation 규칙이 문서화돼 있다 | 실패 시 무조건 cloud로 넘겨 privacy 약속이 흔들린다 | "어떤 단계만 cloud를 써야 하는가?" |
 | Structured outputs 대응 | validator와 repair 경로를 latency budget 안에 넣어 설계한다 | 생성 뒤에 검증을 덧붙여 route 폭발이 난다 | "schema 실패를 어디서 복구할 것인가?" |
 | Rack-scale serving 대응 [S7][S8][S10][S12] | KV transfer, topology locality, power/cooling headroom을 SLO 옆에 둔다 | GPU 수와 평균 utilization만 보고 배치한다 | "이 요청은 어떤 fabric 안에서 끝나는가?" |
-
-## 참고 이미지
-![vLLM logo](./assets/img-01.png)
-
-- [I1] 캡션: vLLM logo
-- 출처 번호: [I1]
-- 왜 이 그림이 필요한지: 본문에서 `disaggregated serving`을 2026년 cloud 주류 진입 사례로 다루기 때문에, 해당 생태계의 기준점을 시각적으로 고정한다. 실제 구조 설명은 위 Mermaid 도식이 담당한다.
-
-![Open Neural Network Exchange logo](./assets/img-02.svg)
-
-- [I2] 캡션: Open Neural Network Exchange logo
-- 출처 번호: [I2]
-- 왜 이 그림이 필요한지: provider 기반 offload와 runtime 경계라는 on-device 논의를 ONNX 계열 배포 문맥과 연결한다. 실제 fallback/coverage 설명은 본문 체크리스트와 Mermaid 도식이 담당한다.
 
 ## 출처
 | 번호 | 제목 | 발행 주체 | 날짜 | URL | 사용 이유 |

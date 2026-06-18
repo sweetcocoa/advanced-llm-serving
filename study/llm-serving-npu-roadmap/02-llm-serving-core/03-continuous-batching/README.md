@@ -182,12 +182,6 @@ flowchart LR
 | disaggregated serving | prefill-heavy와 decode-heavy 요청이 서로의 지연을 키울 때 | placement와 자원 풀을 분리해 각 단계에 다른 정책을 줄 수 있다 [S4] | 상태 이동과 운영 복잡도가 증가한다 |
 
 ## 참고 이미지
-![vLLM logo](./assets/img-01.png)
-
-- 참고 이미지 1. vLLM 로고.
-- 연결 포인트: vLLM은 PagedAttention과 continuous batching을 함께 실무화한 대표 엔진이어서, 이 챕터의 "scheduler + KV cache" 묶음을 상징적으로 보여 준다 [S1][S2].
-- 원본 출처: `assets/sources.md`의 `img-01.png` 항목.
-
 ![Roofline model](./assets/img-02.png)
 
 - 참고 이미지 2. Roofline model.

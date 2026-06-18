@@ -172,19 +172,6 @@ flowchart LR
 | 대표 예시 | Windows ML 기반 배포 [S4] | QNN EP, Ryzen AI hybrid, OpenVINO NPU, disaggregated serving [S1] [S3] [S5] [S6] |
 | 추천 상황 | 요구사항이 아직 흔들리거나 대상 장치가 넓게 퍼져 있을 때 | workload와 장치가 명확하고, 수치 목표가 빡빡할 때 |
 
-## 참고 이미지
-![vLLM logo](./assets/img-01.png)
-
-- [I1] 캡션: vLLM logo
-- 출처 번호: [I1]
-- 활용 맥락: 클라우드 serving 사례에서 `disaggregated prefill` 같은 기능이 왜 시스템 설계 선택지로 올라오는지 시각적 기준점을 준다.
-
-![Open Neural Network Exchange logo](./assets/img-02.svg)
-
-- [I2] 캡션: Open Neural Network Exchange logo
-- 출처 번호: [I2]
-- 활용 맥락: Windows on-device 배포에서 ONNX 기반 공통 실행 경로와 execution provider 사고방식을 설명할 때 연결점이 된다.
-
 ## 출처
 | 번호 | 제목 | 발행 주체 | 날짜 | URL | 사용 이유 |
 | --- | --- | --- | --- | --- | --- |

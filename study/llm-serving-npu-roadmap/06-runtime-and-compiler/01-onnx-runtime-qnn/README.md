@@ -190,12 +190,6 @@ flowchart TD
 | MLIR / IREE / XLA | compiler IR과 lowering을 다시 설계해야 하는가? | provider 교체가 아니라 compiler pipeline 재설계가 필요할 때 [S5] [S6] [S7] | 더 낮은 층의 표현과 코드 생성 제어 [S5] [S6] [S7] | 도입 복잡도와 재설계 비용 [S5] [S6] [S7] |
 
 ## 참고 이미지
-![Open Neural Network Exchange logo](./assets/img-01.svg)
-
-- [I1] 캡션: Open Neural Network Exchange logo
-- 출처 번호: [I1]
-- 왜 이 그림이 필요한지: QNN EP가 독자 포맷이 아니라 ONNX graph를 출발점으로 삼는다는 사실을 상기시킨다.
-
 ![IREE architecture](./assets/img-02.svg)
 
 - [I2] 캡션: IREE architecture

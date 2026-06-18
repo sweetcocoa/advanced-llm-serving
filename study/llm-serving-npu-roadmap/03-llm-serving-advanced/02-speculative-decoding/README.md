@@ -202,10 +202,6 @@ flowchart TD
 | Structured output / tool calling 최적화 | 형식 제약으로 생기는 rollback, retry 비용 | JSON, schema, agent route | speculative decoding과 함께 route별 정책 조정 필요 [S5][S6] |
 
 ## 참고 이미지
-![vLLM logo](./assets/img-01.png)
-
-- [I1] vLLM 로고는 speculative decoding을 단독 연구 기법이 아니라, structured outputs와 tool calling 같은 실서비스 기능과 함께 운영되는 backend 옵션으로 읽기 위한 연결점이다. 본문 Part 2와 Part 6의 route별 정책 설명에 대응한다.
-
 ![Roofline model](./assets/img-02.png)
 
 - [I2] Roofline model은 speculative decoding을 "더 많은 연산"이 아니라 "비싼 target step을 덜 자주 밟는 전략"으로 이해하게 돕는다. 본문 Part 1의 기대 비용 수식과 Part 6의 decode 병목 설명에 대응한다.
