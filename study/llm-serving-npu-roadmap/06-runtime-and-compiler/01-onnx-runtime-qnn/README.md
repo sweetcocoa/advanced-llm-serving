@@ -136,7 +136,7 @@ flowchart TD
 **교수자:** 이 흐름도는 QNN-specific 진단 순서다. "로그에 NPU가 떴다"는 사실을 출발점으로 삼되, partition, boundary, fallback, init/steady-state를 차례대로 자른다. 이 순서를 기억해 두면 README 전체가 하나의 진단 매뉴얼처럼 읽힐 겁니다. [S1]
 
 ### Part 6. 다른 선택지와 구분하는 법
-**학습자:** 결국 언제 QNN EP를 고르고, 언제 다른 경로를 봐야 하나요?
+**학습자:** QNN EP를 계속 밀어야 할 때와, 그래프를 고치거나 다른 경로를 봐야 할 때를 어떤 기준으로 나눕니까?
 
 **교수자:** 질문을 바꾸면 쉽습니다. Qualcomm NPU를 직접 겨냥하고 싶은가? 그렇다면 QNN EP가 가장 직선적인 선택지입니다. Windows 앱 배포 창구와 OS 통합이 더 중요한가? 그렇다면 Windows ML이 먼저입니다. AMD의 CPU/GPU/NPU hybrid 흐름이 제품의 기본 전제인가? Ryzen AI OGA 쪽 질문입니다. Intel NPU target을 중심에 놓는가? OpenVINO 문맥입니다. compiler IR과 lowering 재설계가 필요한가? 그때는 MLIR, IREE, XLA 쪽으로 내려가야 합니다. [S1] [S2] [S3] [S4] [S5] [S6] [S7]
 
@@ -151,7 +151,7 @@ flowchart TD
 ### 사례 1. Snapdragon PC에서 subgraph가 여섯 조각으로 갈린 경우
 **교수자:** 이 챕터를 대표하는 사례는 이겁니다. 모델 주요 블록은 Qualcomm NPU에 잘 맞는데, 중간의 몇 개 op 때문에 subgraph가 여섯 조각으로 갈렸습니다. 로그에는 QNN 사용이 찍히지만, 경계 copy와 CPU fallback이 반복돼 latency가 거의 줄지 않습니다. 여기서 먼저 볼 것은 kernel 미세 튜닝이 아니라 `조각 수`, `각 조각의 크기`, `조각 사이 복사`입니다. [S1]
 
-**학습자:** 그러면 해결도 "더 빠른 NPU"가 아니라 "더 큰 파티션"을 만드는 쪽이군요.
+**학습자:** 이 경우 해결책은 더 빠른 장치를 찾기보다, 더 큰 subgraph가 QNN partition에 들어가도록 만드는 쪽이겠네요.
 
 **교수자:** 그렇습니다. 이 사례는 QNN EP를 "가속기 이름"이 아니라 "partition 품질"로 봐야 한다는 점을 가장 잘 보여 줍니다.
 

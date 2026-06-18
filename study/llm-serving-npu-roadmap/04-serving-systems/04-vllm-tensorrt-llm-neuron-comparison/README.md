@@ -107,7 +107,7 @@ sequenceDiagram
 
 **교수자:** vLLM은 먼저 모델 교체 직후 설정 변화, serving 옵션, 요청 분포 변화를 묻는 편이 자연스럽습니다. TensorRT-LLM은 prefill/decode 어느 쪽 stage에서 지연이 튀는지부터 나눠 봐야 합니다. Neuron은 성능처럼 보이는 문제가 사실은 릴리스 조합이나 지원 범위 확인에서 시작되는 경우가 있어, announcement와 release notes를 먼저 다시 보는 절차가 중요합니다. [S1] [S2] [S3] [S4]
 
-**학습자:** 결국 backend 선택은 성능 숫자를 바꾸는 것만이 아니라, 장애를 읽는 문법을 바꾸는 일이군요.
+**학습자:** backend를 고른다는 건 benchmark 숫자뿐 아니라, 장애를 어떤 로그와 release note로 읽을지도 고르는 일이겠네요.
 
 **교수자:** 바로 그 점이 핵심입니다. 누구나 benchmark는 읽을 수 있어도, 아무나 운영 문제를 같은 속도로 해석하지는 못합니다.
 

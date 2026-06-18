@@ -188,11 +188,6 @@ flowchart TD
 | Speculative Decoding | decode latency | decode가 병목이고 승인율이 충분할 때 | 추가 모델 비용과 승인 실패를 봐야 한다 | [S4] |
 | Structured Outputs / Tool Calling | 형식 안정성과 actionability | agent 워크로드, JSON 출력 보장 | 스키마/tool 정의가 prefix 안정성을 해칠 수 있다 | [S5][S6] |
 
-## 참고 이미지
-### [I2] Roofline model
-![Roofline model](./assets/img-02.png)
-Roofline 이미지는 prefix caching을 단순 캐시 기법으로만 보지 않게 도와줍니다. 공통 prefix를 다시 읽지 않는다는 것은 소프트웨어 해시 최적화가 아니라, 결국 prefill 단계에서 반복되던 연산과 메모리 접근을 줄이는 선택이기 때문입니다. 그래서 hit율 저하는 곧 prefill 자원 압박으로 되돌아옵니다. [S1][S2]
-
 ## 출처
 | ID | 제목 | 발행처 | 날짜 | URL | 본문 연결 |
 | --- | --- | --- | --- | --- | --- |

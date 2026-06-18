@@ -44,7 +44,7 @@ $$
 
 **교수자:** `B_max`는 장비가 한 step에서 처리할 수 있는 최대 활성 시퀀스 수이고, `n_t`는 실제로 살아 있는 시퀀스 수입니다. static batching에서는 먼저 끝난 요청이 만든 빈칸이 다음 batch boundary까지 남아서 `S_idle`이 커집니다. continuous batching은 step 경계마다 새 요청을 태워 이 값을 줄이려 합니다 [S1][S2].
 
-**학습자:** 그러면 "큰 batch냐 작은 batch냐"보다 "빈칸을 언제 메우느냐"가 본질이군요.
+**학습자:** batch 크기 자체보다, decode 중 생기는 빈 slot을 언제 새 요청으로 채우는지가 핵심인가요?
 
 **교수자:** 맞습니다. continuous batching의 핵심은 배치를 없애는 게 아니라, 배치 경계를 더 잘게 쪼개는 것입니다.
 
@@ -77,7 +77,7 @@ $$
 
 **교수자:** `\Delta t`를 step당 평균 시간이라고 하면, 평균 활성 시퀀스 수가 높을수록 토큰 처리량이 올라갑니다. static batching은 남은 멤버가 줄어든 뒤에도 같은 경계 안에 묶여 있어 `n_t`가 떨어지고, queue의 새 요청은 기다립니다. continuous batching은 기존 요청 입장에서는 빈 장비 시간을 줄이고, 새 요청 입장에서는 다음 큰 batch를 기다리지 않게 하므로 throughput과 queueing latency를 동시에 개선할 수 있습니다 [S1][S2].
 
-**학습자:** 결국 TTFT도 queueing 구간이 줄어드는 쪽으로 이득을 보겠네요.
+**학습자:** continuous batching이 `TPOT`만이 아니라 `TTFT`에도 영향을 주려면 queueing 구간이 실제로 줄어야겠네요.
 
 **교수자:** 그렇습니다. 다만 이 이득은 "scheduler가 슬롯을 빨리 채울 수 있다"는 전제 위에서만 나옵니다.
 
@@ -117,7 +117,7 @@ flowchart LR
 
 **교수자:** 더 예민합니다. 같은 diff와 같은 리뷰 지시문으로 4개 후보를 생성하는 코드 리뷰 에이전트를 생각해 봅시다. 공통 prefix block은 재사용할 수 있지만, 분기 이후 tail은 후보별로 따로 자랍니다 [S1][S3]. 어떤 후보는 25토큰에서 끝나고, 어떤 후보는 200토큰 이상 갑니다. static batching이면 빨리 끝난 후보의 slot이 묶인 채 남고, continuous batching이면 그 자리에 다른 요청을 넣을 수 있습니다.
 
-**학습자:** 그러면 무조건 continuous batching이 정답인가요?
+**학습자:** 어떤 요청 분포에서는 continuous batching이 오히려 공정성이나 tail latency를 악화시킬 수도 있나요?
 
 **교수자:** scheduler 관점에서는 아직 아닙니다. 긴 후보 둘이 decode slot을 오래 점유하는 동안, 새 문서 요약 요청이 prefill queue에 몰리면 누굴 먼저 태울지가 문제입니다. decode를 너무 우선하면 새 요청 TTFT가 밀리고, prefill을 과하게 밀면 이미 스트리밍 중인 응답이 끊깁니다. 이 균형 때문에 현대 엔진 문서가 prefix reuse, cache reuse, disaggregated serving을 별도 주제로 다루는 것입니다 [S2][S3][S4].
 
