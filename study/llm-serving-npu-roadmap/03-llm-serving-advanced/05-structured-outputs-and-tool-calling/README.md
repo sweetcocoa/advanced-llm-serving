@@ -10,7 +10,7 @@ visuals:
   formulas: 2
   mermaid: 2
   external_images: 2
-updated_at: "2026-03-08"
+updated_at: "2026-07-14"
 source_count: 6
 ---
 
@@ -42,6 +42,55 @@ source_count: 6
 
 **교수자:** 정확하다. 예를 들어 `decision`, `risk_level`, `refund_amount`를 가진 JSON을 강제하면, 어떤 시점에는 중괄호나 따옴표, 특정 키 이름, enum 값만 허용된다. 자유 생성에서는 열려 있던 후보 집합이 갑자기 매우 좁아진다. 그 순간 tradeoff는 "문장이 자연스러운가"보다 "형식 보장 때문에 decode 자유도를 얼마나 포기할 것인가"가 된다 [S5].
 
+**학습자:** 그럼 JSON mode와 JSON Schema 기반 structured output은 같은 보장인가요?
+
+**교수자:** 아니다. JSON mode는 대체로 파싱 가능한 JSON이라는 **문법**을 목표로 한다. 반면 JSON Schema를 decode 제약으로 적용하면 필수 필드, 타입, enum, 추가 필드 금지처럼 **스키마**까지 제약할 수 있다. 예를 들어 아래 출력은 JSON으로는 유효하지만, `name`이 문자열이고 `age`가 정수여야 한다는 계약에는 맞지 않을 수 있다.
+
+```json
+{
+  "name": 123,
+  "age": "unknown"
+}
+```
+
+```json
+{
+  "type": "object",
+  "properties": {
+    "name": { "type": "string" },
+    "age": { "type": "integer" }
+  },
+  "required": ["name", "age"],
+  "additionalProperties": false
+}
+```
+
+**교수자:** 구현은 개념적으로 단순하다. schema를 grammar, finite-state machine(FSM), 또는 trie 같은 상태 기계로 컴파일하고, 매 decode step에서 현재 상태가 허용하는 토큰만 남긴다. 모델이 틀린 토큰을 "참는" 것이 아니라, serving 엔진이 그 토큰의 확률을 선택 불가능하게 만든다.
+
+```python
+logits = model.next_token_logits(prefix)
+allowed_tokens = grammar.allowed_tokens(state)
+logits[~allowed_tokens] = -float("inf")
+token = sample(logits)
+state = grammar.advance(state, token)
+```
+
+#### 2026년 7월 업데이트: tool calling에서 제약이 켜지는 조건
+tool calling이라고 해서 언제나 schema 제약이 적용되는 것은 아니다. vLLM의 현재 API에서는 요청 모드에 따라 다음처럼 달라진다 [S6].
+
+| 요청 모드 | schema-constrained decoding | 운영상 의미 |
+| --- | --- | --- |
+| named function | 적용 | 지정한 함수의 인자가 parameter schema에 맞는 JSON으로 생성된다 |
+| `tool_choice="required"` | 적용 | 하나 이상의 tool call과 schema 형식을 함께 요구한다 |
+| `tool_choice="auto"` + `strict: true` | 적용 | strict를 선언한 tool의 구조화 인자에 제약을 적용한다 |
+| `tool_choice="auto"` + strict 없음 | 미적용 | 모델이 자유 생성한 텍스트에서 tool call을 추출한다 |
+
+따라서 운영 지표도 모드를 구분해야 한다. named/required/strict 경로에서는 `schema-valid rate`보다 `finish reason`, schema 컴파일 캐시 적중, 업무 규칙 실패율이 더 직접적인 신호다. 반면 auto 비-strict 경로에서는 parser 실패와 형식 repair 비율을 따로 봐야 한다. 함수 호출이 처음 사용될 때는 FSM 컴파일 비용이 생기며, 이후 동일 제약은 캐시할 수 있다 [S6].
+
+**학습자:** 문법은 문자 단위인데 모델은 토큰 단위로 내보내잖아요. 그 사이가 어려운 부분인가요?
+
+**교수자:** 맞다. 하나의 tokenizer token이 `"age":`처럼 여러 문자를 포함할 수 있다. 그래서 엔진은 토큰 전체가 유효한지뿐 아니라, 그 토큰이 문법상 유효한 prefix를 이루는지와 적용 후 다음 상태가 무엇인지도 계산해야 한다. 매번 이미 생성한 문자열 전체를 다시 파싱하지 않도록 grammar state를 증분으로 유지하는 것이 serving 구현의 핵심이다.
+
 #### 수식 1. 시점별 유효 토큰 비율
 $$
 \rho_t = \frac{|V_{\mathrm{valid}}(t)|}{|V|}
@@ -59,6 +108,19 @@ flowchart LR
     F --> B
     E --> G[다음 schema 상태로 이동]
 ```
+
+#### 보장의 경계: 성공적으로 완료된 응답
+constrained decoding의 정확한 약속은 "요청마다 반드시 완성된 객체를 돌려준다"가 아니라, **정상 종료한 응답은 지원되는 grammar 또는 schema를 만족한다**에 가깝다. `max_tokens` 소진, 요청 취소, 서버 장애, 지원하지 않는 schema 기능, 빈 허용 토큰 집합, 구현 결함은 완전한 객체를 막을 수 있다. 따라서 호출자는 파싱과 비즈니스 규칙 검증을 남기고, 종료 이유도 확인해야 한다.
+
+```python
+if response.finish_reason != "stop":
+    raise IncompleteGenerationError("structured output was not completed")
+
+data = json.loads(response.text)
+validate_business_rules(data)  # 예: 출발지와 도착지가 서로 달라야 함
+```
+
+스키마는 `required`, 타입, enum, 길이·범위 같은 형식적 계약을 강하게 만들 수 있지만, 사실성·사용자 의도·DB에 실제로 존재하는 ID·필드 간 업무 규칙까지 자동으로 보장하지는 않는다. 그러므로 production 경로는 보통 `constrained decoding → parsing/schema 확인 → business-rule validation → retry·repair·reject`로 닫는다.
 
 **교수자:** 운영에서 자주 보는 첫 번째 실수는 모든 필드를 같은 강도로 묶는 것이다. downstream이 바로 읽는 필드와 사람이 검토하는 필드를 구분하지 않으면 decode는 불필요하게 경직된다.
 
@@ -131,6 +193,8 @@ sequenceDiagram
 
 ## 자주 헷갈리는 포인트
 - "JSON으로 보이면 structured output이다"는 오해. 보기 좋은 JSON과 schema-valid 결과는 다르다. 엄격한 필드 제약은 decode 중에 보장해야 한다 [S5].
+- "schema-valid이면 업무적으로도 맞다"는 오해. 스키마는 형식적 계약만 보장하므로, 실제 ID 존재 여부나 필드 간 업무 규칙은 별도 검증해야 한다.
+- "structured output은 항상 완성된 객체를 반환한다"는 오해. 종료 이유가 `stop`인지 확인하지 않으면 max token 도달이나 취소로 잘린 출력을 정상 결과로 취급할 수 있다.
 - "tool calling은 함수 몇 개 붙이는 UI 기능"이라는 오해. 실제로는 세션 round 수와 외부 실행 시간이 함께 들어가는 orchestration 문제다 [S6].
 - "strict schema일수록 항상 좋다"는 오해. 기계가 읽는 필드와 사람이 읽는 필드를 구분하지 않으면 자유도를 불필요하게 잃는다.
 - "speculative decoding은 어디에나 같은 비율로 이득을 준다"는 오해. 엄격한 제약이 있는 구간과 자유 서술 구간은 분리해서 봐야 한다 [S4][S5].
@@ -184,5 +248,5 @@ Roofline 이미지는 "병목이 무엇인가"를 계속 묻게 만든다. 이 �
 | [S2] | Disaggregated Serving | NVIDIA TensorRT-LLM | https://nvidia.github.io/TensorRT-LLM/1.2.0rc6/features/disagg-serving.html | 분리 아키텍처를 vendor 관점에서 비교하고 prefill 부담을 설명할 때 사용 |
 | [S3] | KV Cache Reuse | NVIDIA TensorRT-LLM | https://nvidia.github.io/TensorRT-LLM/advanced/kv-cache-reuse.html | agent round 간 공통 prefix 재사용과 긴 정책 문서 workload를 설명할 때 사용 |
 | [S4] | Speculative Decoding | NVIDIA TensorRT-LLM | https://nvidia.github.io/TensorRT-LLM/1.2.0rc3/features/speculative-decoding.html | 자유 서술 구간과 엄격한 제약 구간에서 기대 효과를 분리해서 볼 필요를 설명할 때 사용 |
-| [S5] | Structured Outputs | vLLM project | https://docs.vllm.ai/en/latest/features/structured_outputs.html | constrained decoding, schema-valid rate, strict schema tradeoff를 설명할 때 사용 |
-| [S6] | Tool Calling | vLLM project | https://docs.vllm.ai/en/latest/features/tool_calling.html | tool selection, argument generation, multi-round session latency를 설명할 때 사용 |
+| [S5] | Structured Outputs | vLLM project | https://docs.vllm.ai/en/stable/features/structured_outputs/ | constrained decoding, schema-valid rate, strict schema tradeoff를 설명할 때 사용 |
+| [S6] | Tool Calling | vLLM project | https://docs.vllm.ai/en/stable/features/tool_calling/ | tool selection, argument generation, mode별 schema 제약, multi-round session latency를 설명할 때 사용 |
