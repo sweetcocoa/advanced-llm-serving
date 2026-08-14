@@ -1,0 +1,40 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="680" viewBox="0 0 1200 680" role="img" aria-labelledby="title desc">
+  <title id="title">Ryzen AI execution mode and version contract</title>
+  <desc id="desc">Hybrid and NPU-only require mode-specific artifacts matched to Ryzen AI and OGA versions.</desc>
+  <rect width="1200" height="680" fill="#f7f8fa"/>
+  <text x="60" y="64" font-family="Arial, sans-serif" font-size="34" font-weight="700" fill="#20252a">Execution mode is an artifact contract</text>
+
+  <rect x="60" y="120" width="300" height="150" rx="8" fill="#e8f1fb" stroke="#2f71b2" stroke-width="3"/>
+  <text x="210" y="170" text-anchor="middle" font-family="Arial, sans-serif" font-size="28" font-weight="700" fill="#174a76">1. Runtime release</text>
+  <text x="210" y="214" text-anchor="middle" font-family="Arial, sans-serif" font-size="21" fill="#2d5e85">Ryzen AI + OGA + driver</text>
+  <text x="210" y="246" text-anchor="middle" font-family="Arial, sans-serif" font-size="18" fill="#426b8d">Record exact versions</text>
+
+  <rect x="450" y="120" width="300" height="150" rx="8" fill="#e5f3ea" stroke="#258052" stroke-width="3"/>
+  <text x="600" y="170" text-anchor="middle" font-family="Arial, sans-serif" font-size="28" font-weight="700" fill="#145333">2. Execution mode</text>
+  <text x="600" y="214" text-anchor="middle" font-family="Arial, sans-serif" font-size="21" fill="#286b49">hybrid or NPU-only</text>
+  <text x="600" y="246" text-anchor="middle" font-family="Arial, sans-serif" font-size="18" fill="#39775a">Do not treat as a runtime toggle</text>
+
+  <rect x="840" y="120" width="300" height="150" rx="8" fill="#fff0e0" stroke="#b96718" stroke-width="3"/>
+  <text x="990" y="170" text-anchor="middle" font-family="Arial, sans-serif" font-size="28" font-weight="700" fill="#743c0b">3. Model artifact</text>
+  <text x="990" y="214" text-anchor="middle" font-family="Arial, sans-serif" font-size="21" fill="#74491f">prepare for that mode</text>
+  <text x="990" y="246" text-anchor="middle" font-family="Arial, sans-serif" font-size="18" fill="#855d36">Match release and hardware</text>
+
+  <path d="M360 195 H435" stroke="#53606a" stroke-width="7"/>
+  <polygon points="435,195 413,181 413,209" fill="#53606a"/>
+  <path d="M750 195 H825" stroke="#53606a" stroke-width="7"/>
+  <polygon points="825,195 803,181 803,209" fill="#53606a"/>
+
+  <rect x="150" y="365" width="400" height="190" rx="8" fill="#edf7f1" stroke="#258052" stroke-width="3"/>
+  <text x="350" y="414" text-anchor="middle" font-family="Arial, sans-serif" font-size="27" font-weight="700" fill="#145333">Hybrid artifact</text>
+  <text x="350" y="458" text-anchor="middle" font-family="Arial, sans-serif" font-size="21" fill="#286b49">1.7.1: NPU prefill + iGPU token</text>
+  <text x="350" y="496" text-anchor="middle" font-family="Arial, sans-serif" font-size="19" fill="#39775a">Measure TTFT, TPS, handoff</text>
+  <text x="350" y="530" text-anchor="middle" font-family="Arial, sans-serif" font-size="19" fill="#39775a">and system energy</text>
+
+  <rect x="650" y="365" width="400" height="190" rx="8" fill="#e9edf1" stroke="#65727d" stroke-width="3"/>
+  <text x="850" y="414" text-anchor="middle" font-family="Arial, sans-serif" font-size="27" font-weight="700" fill="#303941">NPU-only artifact</text>
+  <text x="850" y="458" text-anchor="middle" font-family="Arial, sans-serif" font-size="21" fill="#3e4952">NPU prefill + NPU decode</text>
+  <text x="850" y="496" text-anchor="middle" font-family="Arial, sans-serif" font-size="19" fill="#4c5861">Choose supported optimization</text>
+  <text x="850" y="530" text-anchor="middle" font-family="Arial, sans-serif" font-size="19" fill="#4c5861">and context limit</text>
+
+  <text x="600" y="625" text-anchor="middle" font-family="Arial, sans-serif" font-size="22" font-weight="700" fill="#8a2932">On any release change: rebuild or reacquire artifacts and rerun regression tests.</text>
+</svg>

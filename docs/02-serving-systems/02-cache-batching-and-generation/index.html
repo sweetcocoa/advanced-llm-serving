@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Cache, Batching, and Generation | 서빙 시스템 설계</title>
+  <meta name="description" content="단일 요청의 생성 loop와 여러 요청의 동시 실행을 연결한다. AR의 KV cache뿐 아니라 diffusion의 mutable sequence state와 recurrent depth의 variable loop depth까지 같은 runtime 질문으로 비교한다.">
+  <meta name="theme-color" content="#10182a">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Noto+Sans+KR:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../../assets/style.css?v=20260814">
+</head>
+<body class="page-section" data-page-kind="section" data-page-id="02-serving-systems/02-cache-batching-and-generation" data-root-prefix="../../">
+  <div class="reading-progress" data-reading-progress></div>
+  <header class="site-header">
+    <a class="brand" href="../../">
+      <span class="brand-kicker">GitHub Pages Study</span>
+      <strong>LLM Models + Serving Systems</strong>
+    </a>
+    <nav class="top-nav"><a class="top-nav-link" href="../../01-llm-models/">LLM 모델 이론</a><a class="top-nav-link is-active" href="../">서빙 시스템 설계</a><a class="top-nav-link" href="../../03-system-design/">종합 시스템 설계</a></nav>
+    <div class="search-shell">
+      <input type="search" placeholder="챕터, 섹션, 트랙 검색" aria-label="검색" data-global-search>
+      <div class="search-results" data-search-results hidden></div>
+    </div>
+  </header>
+  <main class="page-frame">
+
+    <section class="hero">
+      <div class="hero-copy">
+        <p class="eyebrow">서빙 시스템 설계</p>
+        <h1>Cache, Batching, and Generation</h1>
+        <p class="hero-summary">단일 요청의 생성 loop와 여러 요청의 동시 실행을 연결한다. AR의 KV cache뿐 아니라 diffusion의 mutable sequence state와 recurrent depth의 variable loop depth까지 같은 runtime 질문으로 비교한다.</p>
+      </div>
+      <div class="hero-stats">
+        <div class="stat-card"><strong>7</strong><span>chapters</span></div>
+      </div>
+    </section>
+
+    <div class="page-layout">
+      <section class="page-main content-shell">
+
+    <article class="content-panel surface prose">
+      <h1 id="cache-batching-and-generation">Cache, Batching, and Generation</h1>
+<p>단일 요청의 생성 loop와 여러 요청의 동시 실행을 연결한다. AR의 KV cache뿐 아니라 diffusion의 mutable sequence state와 recurrent-depth의 variable loop depth까지 같은 runtime 질문으로 비교한다.</p>
+<h2 id="챕터-순서">챕터 순서</h2>
+<ul><li><a href="./01-kv-cache-and-paged-attention/">KV Cache and PagedAttention</a></li><li><a href="./02-continuous-batching/">Continuous Batching</a></li><li><a href="./03-prefix-caching/">Prefix Caching</a></li><li><a href="./04-speculative-decoding/">Speculative Decoding</a></li><li><a href="./05-structured-outputs-and-tool-calling/">Structured Outputs and Tool Calling</a></li><li><a href="./06-long-context-serving-and-kv-memory/">Long-Context Serving and KV Memory</a></li><li><a href="./07-iterative-generation-serving/">Iterative Generation Serving</a></li></ul>
+    </article>
+    <section class="content-panel surface">
+      <div class="section-heading">
+        <div>
+          <p class="eyebrow">Chapters</p>
+          <h2>Cache, Batching, and Generation 안의 학습 단위</h2>
+        </div>
+        <input type="search" placeholder="챕터 필터" aria-label="챕터 필터" data-card-filter>
+      </div>
+      <div class="chapter-grid" data-card-container>
+        <a class="chapter-card" data-search-card data-search-text="kv cache and pagedattention 이번 챕터는 &quot;왜 서빙 엔진이 kv cache를 붙잡고 사는가&quot;를 메모리 관점에서 해부하는 수업이다. decode 단계에서 과거 토큰의 key/value를 다시 계산하지 않기 위해 kv cache가 필요하고, 그 cache가 커질수록 이번에는 메모리 낭비와 fragmentation이 새 병목으로 등장한다. vllm의 pagedattention은 이 문제를 운영체제의 paging과 비슷한 방식으로 풀어, 시퀀스의 논리적 연속성과 물리 메모리의 연속성을 분리한다 [s1][s2]. 2026년 기준 최신 serving 엔진이 cache reuse와 cache placement를 별도 최적화 대상으로 다루는 이유도 여기서 이어진다 [s3][s4]. cache, batching, and generation 서빙 시스템 설계" data-progress-id="kv-cache-and-paged-attention" href="01-kv-cache-and-paged-attention/"><span class="chapter-module">Cache, Batching, and Generation</span><h3>KV Cache and PagedAttention</h3><p>이번 챕터는 &quot;왜 서빙 엔진이 KV cache를 붙잡고 사는가&quot;를 메모리 관점에서 해부하는 수업이다. decode 단계에서 과거 토큰의 key/value를 다시 계산하지 않기 위해 KV cache가 필요하고, 그 cache가 커질수록 이번에는 메모리 낭비와 fragmentation이 새 병목으로 등장한다. vLLM의 PagedAttention은 이 문제를 운영체제의 paging과 비슷한 방…</p><div class="chapter-card-meta"><span>35-50 min</span><span>2026-03-08</span><span class="chapter-progress-state">미완료</span></div></a><a class="chapter-card" data-search-card data-search-text="continuous batching 이번 챕터는 &quot;배치를 크게 잡으면 throughput이 오르고, 작게 잡으면 latency가 내려간다&quot;는 단순한 상식을 깨는 데서 출발한다. llm decode는 요청마다 한 토큰씩 전진하므로, 이미 끝난 요청의 빈자리를 다음 요청으로 바로 메우면 장비가 덜 논다. 그래서 현대 서빙 엔진은 정적인 request level batch보다 token level scheduler에 가까운 구조를 택한다 [s1][s2]. 다만 이 선택은 공짜가 아니다. scheduler는 prefill과 decode를 섞어 다뤄야 하고, kv cache와 prefix reuse, placement까지 함께 고려해야 한다 [s2][s3][s4]. cache, batching, and generation 서빙 시스템 설계" data-progress-id="continuous-batching" href="02-continuous-batching/"><span class="chapter-module">Cache, Batching, and Generation</span><h3>Continuous Batching</h3><p>이번 챕터는 &quot;배치를 크게 잡으면 throughput이 오르고, 작게 잡으면 latency가 내려간다&quot;는 단순한 상식을 깨는 데서 출발한다. LLM decode는 요청마다 한 토큰씩 전진하므로, 이미 끝난 요청의 빈자리를 다음 요청으로 바로 메우면 장비가 덜 논다. 그래서 현대 서빙 엔진은 정적인 request level batch보다 token level scheduler에 가까운 구조를…</p><div class="chapter-card-meta"><span>35-50 min</span><span>2026-03-08</span><span class="chapter-progress-state">미완료</span></div></a><a class="chapter-card" data-search-card data-search-text="prefix caching 이 챕터의 질문은 단순합니다. &quot;매 요청마다 똑같이 읽는 앞부분을 왜 계속 다시 prefill하나?&quot; prefix caching은 같은 system prompt, 공통 정책 문서, 고정된 rag 상단 문맥처럼 변하지 않는 입력 앞부분을 재사용해서 prefill 비용을 줄이려는 전략입니다. 이때 핵심 tradeoff는 캐시 hit율과 invalidation 비용입니다. hit율이 높으면 prefill이 거의 사라지지만, 프롬프트 안에 날짜, 사용자별 정책, 자주 바뀌는 tool 목록을 섞어 두면 캐시가 쉽게 깨집니다. [s1][s2][s3][s5][s6] cache, batching, and generation 서빙 시스템 설계" data-progress-id="prefix-caching" href="03-prefix-caching/"><span class="chapter-module">Cache, Batching, and Generation</span><h3>Prefix Caching</h3><p>이 챕터의 질문은 단순합니다. &quot;매 요청마다 똑같이 읽는 앞부분을 왜 계속 다시 prefill하나?&quot; Prefix caching은 같은 system prompt, 공통 정책 문서, 고정된 RAG 상단 문맥처럼 변하지 않는 입력 앞부분을 재사용해서 prefill 비용을 줄이려는 전략입니다. 이때 핵심 tradeoff는 캐시 hit율과 invalidation 비용입니다. hit율이 높으면 pr…</p><div class="chapter-card-meta"><span>35-50 min</span><span>2026-03-08</span><span class="chapter-progress-state">미완료</span></div></a><a class="chapter-card" data-search-card data-search-text="speculative decoding 이 챕터는 &quot;더 작은 모델이 먼저 몇 토큰을 써 보고, 큰 모델이 그 묶음을 한 번에 검사한다&quot;는 speculative decoding의 운영 관점을 다룬다. 핵심 질문은 알고리즘 자체보다 단순하다. draft model을 한 번 더 돌리는 비용 보다 target model 호출 횟수를 줄여 얻는 이익 이 더 큰가, 그리고 그 차이를 좌우하는 승인율이 workload마다 어떻게 달라지는가다 [s4]. 2026년 기준 serving 엔진은 speculative decoding을 별도 backend 기능으로 드러내는 흐름이며, 동시에 structured outputs와 tool calling 같은 제약된 decoding 경로와 함께 운영해야 한다 [s4][s5][s6]. 그래서 이 주제는 &quot;속도 꼼수&quot;가 아니라 route별 정책 설계 문제다. cache, batching, and generation 서빙 시스템 설계" data-progress-id="speculative-decoding" href="04-speculative-decoding/"><span class="chapter-module">Cache, Batching, and Generation</span><h3>Speculative Decoding</h3><p>이 챕터는 &quot;더 작은 모델이 먼저 몇 토큰을 써 보고, 큰 모델이 그 묶음을 한 번에 검사한다&quot;는 speculative decoding의 운영 관점을 다룬다. 핵심 질문은 알고리즘 자체보다 단순하다. draft model을 한 번 더 돌리는 비용 보다 target model 호출 횟수를 줄여 얻는 이익 이 더 큰가, 그리고 그 차이를 좌우하는 승인율이 workload마다 어떻게 달라지는가다…</p><div class="chapter-card-meta"><span>35-50 min</span><span>2026-03-08</span><span class="chapter-progress-state">미완료</span></div></a><a class="chapter-card" data-search-card data-search-text="structured outputs and tool calling 이 챕터는 structured output과 tool calling을 &quot;출력 포맷 옵션&quot;이 아니라 decode 경로와 세션 구조를 바꾸는 serving 기능으로 다룬다. vllm은 structured outputs 와 tool calling 을 독립 기능으로 문서화하고 있고 [s5][s6], 같은 시기 serving 엔진 문서들은 prefill/decode 분리, kv cache 재사용, speculative decoding을 별도 최적화 축으로 설명한다 [s1][s2][s3][s4]. 이 둘을 같이 보면 질문이 달라진다. &quot;json이 잘 나오나?&quot;가 아니라 &quot;형식 보장을 위해 decode 자유도를 얼마나 줄일 것인가, 그리고 tool round가 늘어날 때 세션 latency를 어디서 줄일 것인가?&quot;가 핵심이다. cache, batching, and generation 서빙 시스템 설계" data-progress-id="structured-outputs-and-tool-calling" href="05-structured-outputs-and-tool-calling/"><span class="chapter-module">Cache, Batching, and Generation</span><h3>Structured Outputs and Tool Calling</h3><p>이 챕터는 structured output과 tool calling을 &quot;출력 포맷 옵션&quot;이 아니라 decode 경로와 세션 구조를 바꾸는 serving 기능으로 다룬다. vLLM은 Structured Outputs 와 Tool Calling 을 독립 기능으로 문서화하고 있고 <sup class="citation-ref">[S5]</sup><sup class="citation-ref">[S6]</sup>, 같은 시기 serving 엔진 문서들은 prefill/decode 분리, KV cache 재사용,…</p><div class="chapter-card-meta"><span>35-50 min</span><span>2026-07-14</span><span class="chapter-progress-state">미완료</span></div></a><a class="chapter-card" data-search-card data-search-text="long-context serving and kv memory 이 챕터는 긴 입력을 하나의 막연한 &quot;메모리 문제&quot;로 다루지 않습니다. 긴 context가 먼저 prefill 계산 자원을 오래 붙잡는지, 아니면 계산이 끝난 뒤 kv cache 를 재사용하거나 다른 위치로 옮기는 경로에서 비용이 커지는지 분리해서 읽습니다. [s1][s2][s4][s5] cache, batching, and generation 서빙 시스템 설계" data-progress-id="long-context-serving-and-kv-memory" href="06-long-context-serving-and-kv-memory/"><span class="chapter-module">Cache, Batching, and Generation</span><h3>Long-Context Serving and KV Memory</h3><p>이 챕터는 긴 입력을 하나의 막연한 &quot;메모리 문제&quot;로 다루지 않습니다. 긴 context가 먼저 prefill 계산 자원을 오래 붙잡는지, 아니면 계산이 끝난 뒤 KV cache 를 재사용하거나 다른 위치로 옮기는 경로에서 비용이 커지는지 분리해서 읽습니다. <sup class="citation-ref">[S1]</sup><sup class="citation-ref">[S2]</sup><sup class="citation-ref">[S4]</sup><sup class="citation-ref">[S5]</sup></p><div class="chapter-card-meta"><span>35-50 min</span><span>2026-03-08</span><span class="chapter-progress-state">미완료</span></div></a><a class="chapter-card" data-search-card data-search-text="반복 생성 모델의 서빙과 런타임 2026년 8월 14일 현재 diffusion llm과 looped language model은 더 이상 모델 코드 한 파일로만 실행되는 연구 대상은 아닙니다. diffusiongemma는 vllm의 model runner v2와 modelstate 를 통해 native batched serving 경로에 들어왔고, vllm 본체에는 fixed length canvas와 denoising step을 표현하는 일반 diffusionconfig 및 dllm serving metric도 추가됐습니다. sglang은 llada2.0/2.1 block diffusion 계열과 전용 scheduler, dynamic batching, cuda graph, radix cache를 mainline에서 확장하고 있으며, lmdeploy는 sdar를 지원 목록에 올리고 block length와 denoising 설정을 노출합니다. 반면 tensorrt llm의 공식 모델 표에서 text dllm 지원은 확인되지 않습니다. 그 문서의 diffusion 지원은 image/video generation beta이므로 text generation과 구분해야 합니다. [s1][s2][s3][s18][s19][s20][s21][s22][s23] cache, batching, and generation 서빙 시스템 설계" data-progress-id="iterative-generation-serving" href="07-iterative-generation-serving/"><span class="chapter-module">Cache, Batching, and Generation</span><h3>반복 생성 모델의 서빙과 런타임</h3><p>2026년 8월 14일 현재 diffusion LLM과 looped language model은 더 이상 모델 코드 한 파일로만 실행되는 연구 대상은 아닙니다. DiffusionGemma는 vLLM의 Model Runner V2와 ModelState 를 통해 native batched serving 경로에 들어왔고, vLLM 본체에는 fixed length canvas와 denoising…</p><div class="chapter-card-meta"><span>55-75 min</span><span>2026-08-14</span><span class="chapter-progress-state">미완료</span></div></a>
+      </div>
+    </section>
+
+      </section>
+      <aside class="page-sidebar">
+    <div class="sidebar-panel surface">
+      <p class="eyebrow">Progress</p>
+      <h3>진행 방식</h3>
+      <p>챕터 페이지의 완료 버튼은 브라우저 로컬 저장소에 기록됩니다.</p>
+    </div>
+    </aside>
+    </div>
+  </main>
+  <script type="module" src="../../assets/app.js?v=20260814"></script>
+  <script type="module">
+    import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs';
+    mermaid.initialize({
+      startOnLoad: true,
+      theme: 'neutral',
+      securityLevel: 'loose',
+      flowchart: { useMaxWidth: false },
+      sequence: { useMaxWidth: false },
+      gantt: { useMaxWidth: false }
+    });
+  </script>
+  <script>
+    window.MathJax = {
+      tex: { inlineMath: [['$', '$'], ['\\(', '\\)']], displayMath: [['$$', '$$'], ['\\[', '\\]']] },
+      svg: { fontCache: 'global' }
+    };
+  </script>
+  <script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-svg.js" async></script>
+</body>
+</html>

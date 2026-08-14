@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Ryzen AI OGA: NPU-only와 Hybrid 실행 | 서빙 시스템 설계</title>
+  <meta name="description" content="Ryzen AI의 ONNX Runtime GenAI(OGA) 경로는 NPU only와 hybrid를 별도 실행 모드로 제공한다. 이 구분을 일반적인 &quot;GPU는 prefill, NPU는 decode&quot; 직관으로 채우면 안 된다. Ryzen AI 1.7.1의 공식 모델 준비 문서는 hybrid artifact를 NPU prefill phase + GPU token phase 로 명시한다. NPU only artifact는 prefill과 decode를 모두 NPU에서 수행한다. [S1]">
+  <meta name="theme-color" content="#10182a">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Noto+Sans+KR:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../../../assets/style.css?v=20260814">
+</head>
+<body class="page-chapter" data-page-kind="chapter" data-page-id="ryzen-ai-oga" data-root-prefix="../../../">
+  <div class="reading-progress" data-reading-progress></div>
+  <header class="site-header">
+    <a class="brand" href="../../../">
+      <span class="brand-kicker">GitHub Pages Study</span>
+      <strong>LLM Models + Serving Systems</strong>
+    </a>
+    <nav class="top-nav"><a class="top-nav-link" href="../../../01-llm-models/">LLM 모델 이론</a><a class="top-nav-link is-active" href="../../">서빙 시스템 설계</a><a class="top-nav-link" href="../../../03-system-design/">종합 시스템 설계</a></nav>
+    <div class="search-shell">
+      <input type="search" placeholder="챕터, 섹션, 트랙 검색" aria-label="검색" data-global-search>
+      <div class="search-results" data-search-results hidden></div>
+    </div>
+  </header>
+  <main class="page-frame">
+
+    <section class="hero">
+      <div class="hero-copy">
+        <p class="eyebrow">서빙 시스템 설계 / Runtime and Compiler</p>
+        <h1>Ryzen AI OGA: NPU-only와 Hybrid 실행</h1>
+        <p class="hero-summary">Ryzen AI의 ONNX Runtime GenAI(OGA) 경로는 NPU only와 hybrid를 별도 실행 모드로 제공한다. 이 구분을 일반적인 &quot;GPU는 prefill, NPU는 decode&quot; 직관으로 채우면 안 된다. Ryzen AI 1.7.1의 공식 모델 준비 문서는 hybrid artifact를 NPU prefill phase + GPU token phase 로 명시한다. NPU only artifact는 prefill과 decode를 모두 NPU에서 수행한다. <sup class="citation-ref"><a href="#source-s1" title="Preparing OGA Models (Ryzen AI 1.7.1) | AMD Ryzen AI docs | 핵심 근거 | hybrid artifact가 NPU prefill phase + GPU token phase임을 명시하는 공식 근거" aria-label="[S1] Preparing OGA Models (Ryzen AI 1.7.1) 출처로 이동" data-citation-role="핵심 근거">[S1]<span class="citation-popover" role="tooltip"><strong>[S1] Preparing OGA Models (Ryzen AI 1.7.1)</strong><span>핵심 근거</span><span>AMD Ryzen AI docs</span><em>hybrid artifact가 NPU prefill phase + GPU token phase임을 명시하는 공식 근거</em></span></a></sup></p>
+      </div>
+      <div class="hero-stats">
+        <div class="stat-card"><strong>35-50 min</strong><span>reading time</span></div>
+        <div class="stat-card"><strong>2026-08-14</strong><span>updated</span></div>
+        <div class="stat-card"><button class="progress-toggle" type="button" data-progress-toggle data-progress-id="ryzen-ai-oga">완료로 표시</button></div>
+      </div>
+    </section>
+
+    <div class="page-layout">
+      <section class="page-main content-shell">
+
+    <article class="content-panel surface prose" data-reading-target>
+      <h1 id="ryzen-ai-oga-npu-only와-hybrid-실행">Ryzen AI OGA: NPU-only와 Hybrid 실행</h1>
+<h2 id="수업-개요">수업 개요</h2>
+<p>Ryzen AI의 ONNX Runtime GenAI(OGA) 경로는 NPU-only와 hybrid를 별도 실행 모드로 제공한다. 이 구분을 일반적인 &quot;GPU는 prefill, NPU는 decode&quot; 직관으로 채우면 안 된다. Ryzen AI 1.7.1의 공식 모델 준비 문서는 hybrid artifact를 <strong>NPU prefill phase + GPU token phase</strong>로 명시한다. NPU-only artifact는 prefill과 decode를 모두 NPU에서 수행한다. <sup class="citation-ref"><a href="#source-s1" title="Preparing OGA Models (Ryzen AI 1.7.1) | AMD Ryzen AI docs | 핵심 근거 | hybrid artifact가 NPU prefill phase + GPU token phase임을 명시하는 공식 근거" aria-label="[S1] Preparing OGA Models (Ryzen AI 1.7.1) 출처로 이동" data-citation-role="핵심 근거">[S1]<span class="citation-popover" role="tooltip"><strong>[S1] Preparing OGA Models (Ryzen AI 1.7.1)</strong><span>핵심 근거</span><span>AMD Ryzen AI docs</span><em>hybrid artifact가 NPU prefill phase + GPU token phase임을 명시하는 공식 근거</em></span></a></sup></p>
+<p>현재 Ryzen AI 문서는 hybrid를 NPU와 iGPU의 동적 분할로, NPU-only를 NPU 전용 실행으로 설명한다. 또한 1.8은 OGA 버전과 모델 세트를 갱신했고 이전 릴리스 모델이 호환되지 않는다고 밝힌다. 따라서 장치 역할과 지원 범위는 추측이 아니라 선택한 Ryzen AI 버전, 실행 모드, 생성된 artifact를 기준으로 확인해야 한다. <sup class="citation-ref"><a href="#source-s2" title="LLM Deployment Overview | AMD Ryzen AI docs | 핵심 근거 | 현재 NPU only·hybrid·GPU 실행 모드의 공식 개요" aria-label="[S2] LLM Deployment Overview 출처로 이동" data-citation-role="핵심 근거">[S2]<span class="citation-popover" role="tooltip"><strong>[S2] LLM Deployment Overview</strong><span>핵심 근거</span><span>AMD Ryzen AI docs</span><em>현재 NPU only·hybrid·GPU 실행 모드의 공식 개요</em></span></a></sup> <sup class="citation-ref"><a href="#source-s3" title="OnnxRuntime GenAI (OGA) Flow | AMD Ryzen AI docs | 핵심 근거 | 현재 OGA 버전, NPU 모델 유형, 이전 artifact 비호환성" aria-label="[S3] OnnxRuntime GenAI (OGA) Flow 출처로 이동" data-citation-role="핵심 근거">[S3]<span class="citation-popover" role="tooltip"><strong>[S3] OnnxRuntime GenAI (OGA) Flow</strong><span>핵심 근거</span><span>AMD Ryzen AI docs</span><em>현재 OGA 버전, NPU 모델 유형, 이전 artifact 비호환성</em></span></a></sup></p>
+<h2 id="학습-목표">학습 목표</h2>
+<ul><li>Ryzen AI 1.7.1 hybrid의 <code>NPU prefill + iGPU token generation</code> 배치를 정확히 설명할 수 있다.</li><li>hybrid와 NPU-only가 서로 다른 artifact·실행 계약임을 설명할 수 있다.</li><li>TTFT, TPS, 에너지, handoff 비용을 같은 실험에서 비교할 수 있다.</li><li>Ryzen AI, OGA, 모델 artifact의 버전 조합을 배포 계약으로 관리할 수 있다.</li></ul>
+<h2 id="수업-전에-생각할-질문">수업 전에 생각할 질문</h2>
+<ul><li>hybrid 모델 폴더와 NPU-only 모델 폴더를 같은 옵션만 바꿔 실행할 수 있다고 생각하고 있지는 않은가?</li><li>NPU prefill 뒤 iGPU token phase로 넘어갈 때 어떤 state와 초기화 비용이 경계를 건너는가?</li><li>새 Ryzen AI 릴리스로 올릴 때 runtime만 바꾸고 이전 artifact를 그대로 써도 되는가?</li></ul>
+<h2 id="강의-스크립트">강의 스크립트</h2>
+<h3 id="part-1-실행-모드보다-먼저-artifact의-계약을-읽는다">Part 1. 실행 모드보다 먼저 artifact의 계약을 읽는다</h3>
+<p><strong>교수자:</strong> Ryzen AI OGA에서 가장 위험한 문장은 &quot;hybrid니까 적당히 GPU와 NPU가 나눠서 돈다&quot;입니다. 1.7.1의 모델 준비 절차는 <code>model_generate --hybrid</code>가 만드는 artifact를 NPU prefill phase와 GPU token phase의 조합으로 설명합니다. <sup class="citation-ref"><a href="#source-s1" title="Preparing OGA Models (Ryzen AI 1.7.1) | AMD Ryzen AI docs | 핵심 근거 | hybrid artifact가 NPU prefill phase + GPU token phase임을 명시하는 공식 근거" aria-label="[S1] Preparing OGA Models (Ryzen AI 1.7.1) 출처로 이동" data-citation-role="핵심 근거">[S1]<span class="citation-popover" role="tooltip"><strong>[S1] Preparing OGA Models (Ryzen AI 1.7.1)</strong><span>핵심 근거</span><span>AMD Ryzen AI docs</span><em>hybrid artifact가 NPU prefill phase + GPU token phase임을 명시하는 공식 근거</em></span></a></sup></p>
+<p><strong>학습자:</strong> 기존에 흔히 듣던 GPU prefill, NPU decode와 반대네요.</p>
+<p><strong>교수자:</strong> 그렇습니다. 그래서 하드웨어에 대한 일반 직관으로 vendor runtime의 실제 partition을 추정하면 안 됩니다. 이 경로에서는 긴 prompt를 처리하는 prefill이 NPU에 있고, 이후 반복 token generation이 iGPU에 있습니다. <sup class="citation-ref"><a href="#source-s1" title="Preparing OGA Models (Ryzen AI 1.7.1) | AMD Ryzen AI docs | 핵심 근거 | hybrid artifact가 NPU prefill phase + GPU token phase임을 명시하는 공식 근거" aria-label="[S1] Preparing OGA Models (Ryzen AI 1.7.1) 출처로 이동" data-citation-role="핵심 근거">[S1]<span class="citation-popover" role="tooltip"><strong>[S1] Preparing OGA Models (Ryzen AI 1.7.1)</strong><span>핵심 근거</span><span>AMD Ryzen AI docs</span><em>hybrid artifact가 NPU prefill phase + GPU token phase임을 명시하는 공식 근거</em></span></a></sup></p>
+<div class="mermaid-wrap"><pre class="mermaid">flowchart LR
+    A[&quot;CPU\n입력·세션 준비&quot;] --&gt; B[&quot;NPU\nprefill phase&quot;]
+    B --&gt; C[&quot;한 번의 phase handoff\nstate·동기화&quot;]
+    C --&gt; D[&quot;iGPU\ntoken generation phase&quot;]
+    D --&gt; E[&quot;CPU\n스트리밍·후처리&quot;]</pre></div>
+<p><strong>학습자:</strong> NPU-only는 같은 artifact에서 GPU만 끄는 방식인가요?</p>
+<p><strong>교수자:</strong> 그렇게 보면 안 됩니다. 1.7.1 준비 절차부터 <code>--hybrid</code>와 <code>--npu</code>가 갈리고, NPU-only에는 Full Fusion, Token Fusion 등 별도 최적화 형태가 있습니다. NPU-only는 prefill과 decode를 NPU에서 수행합니다. <sup class="citation-ref"><a href="#source-s1" title="Preparing OGA Models (Ryzen AI 1.7.1) | AMD Ryzen AI docs | 핵심 근거 | hybrid artifact가 NPU prefill phase + GPU token phase임을 명시하는 공식 근거" aria-label="[S1] Preparing OGA Models (Ryzen AI 1.7.1) 출처로 이동" data-citation-role="핵심 근거">[S1]<span class="citation-popover" role="tooltip"><strong>[S1] Preparing OGA Models (Ryzen AI 1.7.1)</strong><span>핵심 근거</span><span>AMD Ryzen AI docs</span><em>hybrid artifact가 NPU prefill phase + GPU token phase임을 명시하는 공식 근거</em></span></a></sup> <sup class="citation-ref"><a href="#source-s3" title="OnnxRuntime GenAI (OGA) Flow | AMD Ryzen AI docs | 핵심 근거 | 현재 OGA 버전, NPU 모델 유형, 이전 artifact 비호환성" aria-label="[S3] OnnxRuntime GenAI (OGA) Flow 출처로 이동" data-citation-role="핵심 근거">[S3]<span class="citation-popover" role="tooltip"><strong>[S3] OnnxRuntime GenAI (OGA) Flow</strong><span>핵심 근거</span><span>AMD Ryzen AI docs</span><em>현재 OGA 버전, NPU 모델 유형, 이전 artifact 비호환성</em></span></a></sup></p>
+<div class="table-wrap"><table><thead><tr><th>실행 모드</th><th>prefill</th><th>token generation/decode</th><th>먼저 확인할 것</th></tr></thead><tbody><tr><td>Ryzen AI 1.7.1 hybrid</td><td>NPU <sup class="citation-ref"><a href="#source-s1" title="Preparing OGA Models (Ryzen AI 1.7.1) | AMD Ryzen AI docs | 핵심 근거 | hybrid artifact가 NPU prefill phase + GPU token phase임을 명시하는 공식 근거" aria-label="[S1] Preparing OGA Models (Ryzen AI 1.7.1) 출처로 이동" data-citation-role="핵심 근거">[S1]<span class="citation-popover" role="tooltip"><strong>[S1] Preparing OGA Models (Ryzen AI 1.7.1)</strong><span>핵심 근거</span><span>AMD Ryzen AI docs</span><em>hybrid artifact가 NPU prefill phase + GPU token phase임을 명시하는 공식 근거</em></span></a></sup></td><td>iGPU <sup class="citation-ref"><a href="#source-s1" title="Preparing OGA Models (Ryzen AI 1.7.1) | AMD Ryzen AI docs | 핵심 근거 | hybrid artifact가 NPU prefill phase + GPU token phase임을 명시하는 공식 근거" aria-label="[S1] Preparing OGA Models (Ryzen AI 1.7.1) 출처로 이동" data-citation-role="핵심 근거">[S1]<span class="citation-popover" role="tooltip"><strong>[S1] Preparing OGA Models (Ryzen AI 1.7.1)</strong><span>핵심 근거</span><span>AMD Ryzen AI docs</span><em>hybrid artifact가 NPU prefill phase + GPU token phase임을 명시하는 공식 근거</em></span></a></sup></td><td><code>--hybrid</code>로 만든 artifact와 해당 runtime 버전</td></tr><tr><td>NPU-only</td><td>NPU <sup class="citation-ref"><a href="#source-s1" title="Preparing OGA Models (Ryzen AI 1.7.1) | AMD Ryzen AI docs | 핵심 근거 | hybrid artifact가 NPU prefill phase + GPU token phase임을 명시하는 공식 근거" aria-label="[S1] Preparing OGA Models (Ryzen AI 1.7.1) 출처로 이동" data-citation-role="핵심 근거">[S1]<span class="citation-popover" role="tooltip"><strong>[S1] Preparing OGA Models (Ryzen AI 1.7.1)</strong><span>핵심 근거</span><span>AMD Ryzen AI docs</span><em>hybrid artifact가 NPU prefill phase + GPU token phase임을 명시하는 공식 근거</em></span></a></sup></td><td>NPU <sup class="citation-ref"><a href="#source-s1" title="Preparing OGA Models (Ryzen AI 1.7.1) | AMD Ryzen AI docs | 핵심 근거 | hybrid artifact가 NPU prefill phase + GPU token phase임을 명시하는 공식 근거" aria-label="[S1] Preparing OGA Models (Ryzen AI 1.7.1) 출처로 이동" data-citation-role="핵심 근거">[S1]<span class="citation-popover" role="tooltip"><strong>[S1] Preparing OGA Models (Ryzen AI 1.7.1)</strong><span>핵심 근거</span><span>AMD Ryzen AI docs</span><em>hybrid artifact가 NPU prefill phase + GPU token phase임을 명시하는 공식 근거</em></span></a></sup></td><td>지원 모델, Token Fusion/Full Fusion, context 한도 <sup class="citation-ref"><a href="#source-s3" title="OnnxRuntime GenAI (OGA) Flow | AMD Ryzen AI docs | 핵심 근거 | 현재 OGA 버전, NPU 모델 유형, 이전 artifact 비호환성" aria-label="[S3] OnnxRuntime GenAI (OGA) Flow 출처로 이동" data-citation-role="핵심 근거">[S3]<span class="citation-popover" role="tooltip"><strong>[S3] OnnxRuntime GenAI (OGA) Flow</strong><span>핵심 근거</span><span>AMD Ryzen AI docs</span><em>현재 OGA 버전, NPU 모델 유형, 이전 artifact 비호환성</em></span></a></sup></td></tr><tr><td>GPU-only</td><td>해당 OGA hybrid artifact가 아니라 별도 GPU 경로 <sup class="citation-ref"><a href="#source-s2" title="LLM Deployment Overview | AMD Ryzen AI docs | 핵심 근거 | 현재 NPU only·hybrid·GPU 실행 모드의 공식 개요" aria-label="[S2] LLM Deployment Overview 출처로 이동" data-citation-role="핵심 근거">[S2]<span class="citation-popover" role="tooltip"><strong>[S2] LLM Deployment Overview</strong><span>핵심 근거</span><span>AMD Ryzen AI docs</span><em>현재 NPU only·hybrid·GPU 실행 모드의 공식 개요</em></span></a></sup></td><td>GPU <sup class="citation-ref"><a href="#source-s2" title="LLM Deployment Overview | AMD Ryzen AI docs | 핵심 근거 | 현재 NPU only·hybrid·GPU 실행 모드의 공식 개요" aria-label="[S2] LLM Deployment Overview 출처로 이동" data-citation-role="핵심 근거">[S2]<span class="citation-popover" role="tooltip"><strong>[S2] LLM Deployment Overview</strong><span>핵심 근거</span><span>AMD Ryzen AI docs</span><em>현재 NPU only·hybrid·GPU 실행 모드의 공식 개요</em></span></a></sup></td><td>runtime과 모델 형식을 혼동하지 않았는지</td></tr></tbody></table></div>
+<h3 id="part-2-hybrid의-성능은-두-phase와-경계로-나눠-잰다">Part 2. hybrid의 성능은 두 phase와 경계로 나눠 잰다</h3>
+<p><strong>학습자:</strong> hybrid가 항상 NPU-only보다 빠른가요?</p>
+<p><strong>교수자:</strong> 공식 문서는 hybrid가 NPU와 iGPU를 이용해 prefill과 decode의 TTFT·TPS를 최적화한다고 설명하지만, 제품 선택은 실제 workload로 검증해야 합니다. <sup class="citation-ref"><a href="#source-s2" title="LLM Deployment Overview | AMD Ryzen AI docs | 핵심 근거 | 현재 NPU only·hybrid·GPU 실행 모드의 공식 개요" aria-label="[S2] LLM Deployment Overview 출처로 이동" data-citation-role="핵심 근거">[S2]<span class="citation-popover" role="tooltip"><strong>[S2] LLM Deployment Overview</strong><span>핵심 근거</span><span>AMD Ryzen AI docs</span><em>현재 NPU only·hybrid·GPU 실행 모드의 공식 개요</em></span></a></sup> <sup class="citation-ref"><a href="#source-s3" title="OnnxRuntime GenAI (OGA) Flow | AMD Ryzen AI docs | 핵심 근거 | 현재 OGA 버전, NPU 모델 유형, 이전 artifact 비호환성" aria-label="[S3] OnnxRuntime GenAI (OGA) Flow 출처로 이동" data-citation-role="핵심 근거">[S3]<span class="citation-popover" role="tooltip"><strong>[S3] OnnxRuntime GenAI (OGA) Flow</strong><span>핵심 근거</span><span>AMD Ryzen AI docs</span><em>현재 OGA 버전, NPU 모델 유형, 이전 artifact 비호환성</em></span></a></sup> 짧은 prompt와 긴 출력, 긴 prompt와 짧은 출력은 두 장치에 주는 압력이 다릅니다.</p>
+<div class="math-block">$$
+T_{request} = T_{NPU\ prefill} + T_{handoff} + T_{iGPU\ token}(N) + T_{host}
+$$</div>
+<p><strong>교수자:</strong> hybrid에서는 최소한 네 시간을 분리해야 합니다. NPU prefill, phase handoff, iGPU token generation, host orchestration입니다. 전체 latency만 보면 NPU prefill이 느린지, iGPU token phase가 느린지, 경계가 비싼지 알 수 없습니다.</p>
+<p><strong>학습자:</strong> NPU-only 비교는 어떻게 해야 하나요?</p>
+<p><strong>교수자:</strong> 같은 모델 계열과 품질 조건, 같은 input/output token 길이에서 TTFT와 TPS를 따로 재고 에너지와 메모리도 함께 기록합니다. 서로 다른 artifact가 수치 정밀도나 context 한도를 달리할 수 있으므로 artifact 이름과 생성 버전을 벤치마크 결과에 반드시 붙여야 합니다. <sup class="citation-ref"><a href="#source-s1" title="Preparing OGA Models (Ryzen AI 1.7.1) | AMD Ryzen AI docs | 핵심 근거 | hybrid artifact가 NPU prefill phase + GPU token phase임을 명시하는 공식 근거" aria-label="[S1] Preparing OGA Models (Ryzen AI 1.7.1) 출처로 이동" data-citation-role="핵심 근거">[S1]<span class="citation-popover" role="tooltip"><strong>[S1] Preparing OGA Models (Ryzen AI 1.7.1)</strong><span>핵심 근거</span><span>AMD Ryzen AI docs</span><em>hybrid artifact가 NPU prefill phase + GPU token phase임을 명시하는 공식 근거</em></span></a></sup> <sup class="citation-ref"><a href="#source-s3" title="OnnxRuntime GenAI (OGA) Flow | AMD Ryzen AI docs | 핵심 근거 | 현재 OGA 버전, NPU 모델 유형, 이전 artifact 비호환성" aria-label="[S3] OnnxRuntime GenAI (OGA) Flow 출처로 이동" data-citation-role="핵심 근거">[S3]<span class="citation-popover" role="tooltip"><strong>[S3] OnnxRuntime GenAI (OGA) Flow</strong><span>핵심 근거</span><span>AMD Ryzen AI docs</span><em>현재 OGA 버전, NPU 모델 유형, 이전 artifact 비호환성</em></span></a></sup></p>
+<h3 id="part-3-전력-효율도-장치-이름으로-추정하지-않는다">Part 3. 전력 효율도 장치 이름으로 추정하지 않는다</h3>
+<p><strong>학습자:</strong> NPU가 prefill만 맡는다면 hybrid는 배터리 목표와 상관없나요?</p>
+<p><strong>교수자:</strong> 그렇지 않습니다. prefill이 길면 NPU 구간의 비중이 커질 수 있고, token generation이 길면 iGPU 구간이 지배적일 수 있습니다. &quot;NPU를 썼으니 전력 효율적&quot;이 아니라 phase별 실행 시간과 시스템 전력을 곱해 봐야 합니다.</p>
+<div class="math-block">$$
+E_{request} = P_{NPU}T_{prefill} + P_{iGPU}T_{token} + E_{handoff} + E_{host}
+$$</div>
+<p><strong>교수자:</strong> 이 식은 특정 AMD 수치를 주장하는 공식이 아니라 측정 틀입니다. 긴 출력에서 iGPU token phase가 전체 에너지를 지배한다면, NPU prefill만 보고 배터리 이득을 말할 수 없습니다. 반대로 긴 문서 입력과 짧은 출력에서는 NPU prefill의 효과가 더 크게 보일 수 있습니다.</p>
+<h3 id="part-4-버전은-설치-정보가-아니라-배포-계약이다">Part 4. 버전은 설치 정보가 아니라 배포 계약이다</h3>
+<p><strong>학습자:</strong> Ryzen AI를 업데이트하면 이전 모델 폴더를 그대로 쓸 수 있나요?</p>
+<p><strong>교수자:</strong> 확인 없이 쓰면 안 됩니다. 현재 1.8 문서는 OGA를 0.14.0으로 올렸고, 1.7.1은 0.11.2였으며, 새 hybrid/NPU 모델 세트가 이전 릴리스와 호환되지 않는다고 명시합니다. <sup class="citation-ref"><a href="#source-s3" title="OnnxRuntime GenAI (OGA) Flow | AMD Ryzen AI docs | 핵심 근거 | 현재 OGA 버전, NPU 모델 유형, 이전 artifact 비호환성" aria-label="[S3] OnnxRuntime GenAI (OGA) Flow 출처로 이동" data-citation-role="핵심 근거">[S3]<span class="citation-popover" role="tooltip"><strong>[S3] OnnxRuntime GenAI (OGA) Flow</strong><span>핵심 근거</span><span>AMD Ryzen AI docs</span><em>현재 OGA 버전, NPU 모델 유형, 이전 artifact 비호환성</em></span></a></sup></p>
+<div class="mermaid-wrap"><pre class="mermaid">flowchart TD
+    A[&quot;Ryzen AI 버전 선택&quot;] --&gt; B[&quot;호환 OGA 버전 확인&quot;]
+    B --&gt; C[&quot;실행 모드 선택\nhybrid / NPU-only&quot;]
+    C --&gt; D[&quot;해당 버전용 artifact 준비&quot;]
+    D --&gt; E[&quot;TTFT·TPS·에너지 검증&quot;]
+    E --&gt; F{&quot;runtime 또는 모델 갱신?&quot;}
+    F --&gt;|예| G[&quot;artifact 재준비·회귀 테스트&quot;]
+    F --&gt;|아니오| H[&quot;버전 행렬 고정&quot;]</pre></div>
+<p><strong>교수자:</strong> 배포 표에는 <code>Ryzen AI release</code>, <code>OGA version</code>, <code>model artifact</code>, <code>execution mode</code>, <code>driver</code>, <code>hardware family</code>가 함께 있어야 합니다. &quot;Ryzen AI에서 된다&quot;는 문장만으로는 재현할 수 없습니다. <sup class="citation-ref"><a href="#source-s2" title="LLM Deployment Overview | AMD Ryzen AI docs | 핵심 근거 | 현재 NPU only·hybrid·GPU 실행 모드의 공식 개요" aria-label="[S2] LLM Deployment Overview 출처로 이동" data-citation-role="핵심 근거">[S2]<span class="citation-popover" role="tooltip"><strong>[S2] LLM Deployment Overview</strong><span>핵심 근거</span><span>AMD Ryzen AI docs</span><em>현재 NPU only·hybrid·GPU 실행 모드의 공식 개요</em></span></a></sup> <sup class="citation-ref"><a href="#source-s3" title="OnnxRuntime GenAI (OGA) Flow | AMD Ryzen AI docs | 핵심 근거 | 현재 OGA 버전, NPU 모델 유형, 이전 artifact 비호환성" aria-label="[S3] OnnxRuntime GenAI (OGA) Flow 출처로 이동" data-citation-role="핵심 근거">[S3]<span class="citation-popover" role="tooltip"><strong>[S3] OnnxRuntime GenAI (OGA) Flow</strong><span>핵심 근거</span><span>AMD Ryzen AI docs</span><em>현재 OGA 버전, NPU 모델 유형, 이전 artifact 비호환성</em></span></a></sup></p>
+<h3 id="part-5-사례로-판단하기">Part 5. 사례로 판단하기</h3>
+<p><strong>교수자:</strong> 긴 문서 요약 앱을 보겠습니다. 입력 8K, 출력 200 token이라면 hybrid의 NPU prefill 구간이 중요합니다. 먼저 NPU prefill TTFT와 handoff를 측정하고, 같은 조건의 NPU-only artifact와 비교합니다. <sup class="citation-ref"><a href="#source-s1" title="Preparing OGA Models (Ryzen AI 1.7.1) | AMD Ryzen AI docs | 핵심 근거 | hybrid artifact가 NPU prefill phase + GPU token phase임을 명시하는 공식 근거" aria-label="[S1] Preparing OGA Models (Ryzen AI 1.7.1) 출처로 이동" data-citation-role="핵심 근거">[S1]<span class="citation-popover" role="tooltip"><strong>[S1] Preparing OGA Models (Ryzen AI 1.7.1)</strong><span>핵심 근거</span><span>AMD Ryzen AI docs</span><em>hybrid artifact가 NPU prefill phase + GPU token phase임을 명시하는 공식 근거</em></span></a></sup></p>
+<p><strong>학습자:</strong> 짧은 prompt로 긴 코드를 생성하는 앱은요?</p>
+<p><strong>교수자:</strong> iGPU token phase가 지배적일 가능성이 큽니다. 이때 &quot;NPU hybrid&quot;라는 이름만 보고 전력 이득을 기대하지 말고 TPS와 장시간 시스템 전력을 봐야 합니다. 이것은 workload에서 도출하는 판단이며, device label에서 자동으로 따라오는 결론이 아닙니다.</p>
+<p><strong>학습자:</strong> 현장에서 실행 결과가 예상과 다르면 어디부터 보나요?</p>
+<p><strong>교수자:</strong> 순서는 명확합니다.</p>
+<ol><li>artifact가 hybrid인지 NPU-only인지 확인한다.</li><li>artifact를 만든 Ryzen AI/OGA 버전과 설치 runtime이 맞는지 확인한다.</li><li>phase별 로그에서 NPU prefill과 iGPU token generation이 실제로 성립하는지 본다.</li><li>TTFT, TPS, handoff, 전력, memory를 같은 prompt/output 조건으로 비교한다.</li></ol>
+<h2 id="자주-헷갈리는-포인트">자주 헷갈리는 포인트</h2>
+<ul><li>Ryzen AI 1.7.1 hybrid는 <code>GPU prefill -&gt; NPU decode</code>가 아니다. 공식 모델 준비 경로는 <code>NPU prefill -&gt; GPU token phase</code>다. <sup class="citation-ref"><a href="#source-s1" title="Preparing OGA Models (Ryzen AI 1.7.1) | AMD Ryzen AI docs | 핵심 근거 | hybrid artifact가 NPU prefill phase + GPU token phase임을 명시하는 공식 근거" aria-label="[S1] Preparing OGA Models (Ryzen AI 1.7.1) 출처로 이동" data-citation-role="핵심 근거">[S1]<span class="citation-popover" role="tooltip"><strong>[S1] Preparing OGA Models (Ryzen AI 1.7.1)</strong><span>핵심 근거</span><span>AMD Ryzen AI docs</span><em>hybrid artifact가 NPU prefill phase + GPU token phase임을 명시하는 공식 근거</em></span></a></sup></li><li>NPU-only는 hybrid에서 iGPU만 비활성화한 동일 artifact가 아니다. 생성 옵션과 최적화 형태가 다르다. <sup class="citation-ref"><a href="#source-s1" title="Preparing OGA Models (Ryzen AI 1.7.1) | AMD Ryzen AI docs | 핵심 근거 | hybrid artifact가 NPU prefill phase + GPU token phase임을 명시하는 공식 근거" aria-label="[S1] Preparing OGA Models (Ryzen AI 1.7.1) 출처로 이동" data-citation-role="핵심 근거">[S1]<span class="citation-popover" role="tooltip"><strong>[S1] Preparing OGA Models (Ryzen AI 1.7.1)</strong><span>핵심 근거</span><span>AMD Ryzen AI docs</span><em>hybrid artifact가 NPU prefill phase + GPU token phase임을 명시하는 공식 근거</em></span></a></sup> <sup class="citation-ref"><a href="#source-s3" title="OnnxRuntime GenAI (OGA) Flow | AMD Ryzen AI docs | 핵심 근거 | 현재 OGA 버전, NPU 모델 유형, 이전 artifact 비호환성" aria-label="[S3] OnnxRuntime GenAI (OGA) Flow 출처로 이동" data-citation-role="핵심 근거">[S3]<span class="citation-popover" role="tooltip"><strong>[S3] OnnxRuntime GenAI (OGA) Flow</strong><span>핵심 근거</span><span>AMD Ryzen AI docs</span><em>현재 OGA 버전, NPU 모델 유형, 이전 artifact 비호환성</em></span></a></sup></li><li>hybrid라는 이름만으로 TTFT, TPS, 에너지 우위를 단정할 수 없다. input/output 길이와 phase별 시간을 같이 측정해야 한다.</li><li>최신 runtime이 이전 artifact를 자동으로 받아 줄 것이라 가정하면 안 된다. 1.8 문서는 이전 릴리스 모델과의 비호환을 명시한다. <sup class="citation-ref"><a href="#source-s3" title="OnnxRuntime GenAI (OGA) Flow | AMD Ryzen AI docs | 핵심 근거 | 현재 OGA 버전, NPU 모델 유형, 이전 artifact 비호환성" aria-label="[S3] OnnxRuntime GenAI (OGA) Flow 출처로 이동" data-citation-role="핵심 근거">[S3]<span class="citation-popover" role="tooltip"><strong>[S3] OnnxRuntime GenAI (OGA) Flow</strong><span>핵심 근거</span><span>AMD Ryzen AI docs</span><em>현재 OGA 버전, NPU 모델 유형, 이전 artifact 비호환성</em></span></a></sup></li><li>공식 문서가 말하는 partition과 일반적인 GPU/NPU 직관이 다를 때는 artifact의 공식 계약이 우선이다.</li></ul>
+<h2 id="핵심-정리">핵심 정리</h2>
+<ul><li>Ryzen AI 1.7.1 hybrid의 장치 역할은 NPU prefill과 iGPU token generation이다. <sup class="citation-ref"><a href="#source-s1" title="Preparing OGA Models (Ryzen AI 1.7.1) | AMD Ryzen AI docs | 핵심 근거 | hybrid artifact가 NPU prefill phase + GPU token phase임을 명시하는 공식 근거" aria-label="[S1] Preparing OGA Models (Ryzen AI 1.7.1) 출처로 이동" data-citation-role="핵심 근거">[S1]<span class="citation-popover" role="tooltip"><strong>[S1] Preparing OGA Models (Ryzen AI 1.7.1)</strong><span>핵심 근거</span><span>AMD Ryzen AI docs</span><em>hybrid artifact가 NPU prefill phase + GPU token phase임을 명시하는 공식 근거</em></span></a></sup></li><li>NPU-only는 prefill과 decode 모두 NPU에서 실행하는 별도 모드와 artifact다. <sup class="citation-ref"><a href="#source-s1" title="Preparing OGA Models (Ryzen AI 1.7.1) | AMD Ryzen AI docs | 핵심 근거 | hybrid artifact가 NPU prefill phase + GPU token phase임을 명시하는 공식 근거" aria-label="[S1] Preparing OGA Models (Ryzen AI 1.7.1) 출처로 이동" data-citation-role="핵심 근거">[S1]<span class="citation-popover" role="tooltip"><strong>[S1] Preparing OGA Models (Ryzen AI 1.7.1)</strong><span>핵심 근거</span><span>AMD Ryzen AI docs</span><em>hybrid artifact가 NPU prefill phase + GPU token phase임을 명시하는 공식 근거</em></span></a></sup></li><li>hybrid 평가는 TTFT, TPS, handoff, 에너지, host 비용을 phase별로 분리해야 한다.</li><li>Ryzen AI, OGA, artifact, driver, hardware 버전 행렬을 함께 고정해야 재현 가능한 배포가 된다. <sup class="citation-ref"><a href="#source-s2" title="LLM Deployment Overview | AMD Ryzen AI docs | 핵심 근거 | 현재 NPU only·hybrid·GPU 실행 모드의 공식 개요" aria-label="[S2] LLM Deployment Overview 출처로 이동" data-citation-role="핵심 근거">[S2]<span class="citation-popover" role="tooltip"><strong>[S2] LLM Deployment Overview</strong><span>핵심 근거</span><span>AMD Ryzen AI docs</span><em>현재 NPU only·hybrid·GPU 실행 모드의 공식 개요</em></span></a></sup> <sup class="citation-ref"><a href="#source-s3" title="OnnxRuntime GenAI (OGA) Flow | AMD Ryzen AI docs | 핵심 근거 | 현재 OGA 버전, NPU 모델 유형, 이전 artifact 비호환성" aria-label="[S3] OnnxRuntime GenAI (OGA) Flow 출처로 이동" data-citation-role="핵심 근거">[S3]<span class="citation-popover" role="tooltip"><strong>[S3] OnnxRuntime GenAI (OGA) Flow</strong><span>핵심 근거</span><span>AMD Ryzen AI docs</span><em>현재 OGA 버전, NPU 모델 유형, 이전 artifact 비호환성</em></span></a></sup></li></ul>
+<h2 id="복습-체크리스트">복습 체크리스트</h2>
+<ul><li>1.7.1 hybrid의 prefill과 token generation 장치를 정확히 말할 수 있는가?</li><li>hybrid와 NPU-only artifact의 생성 경로가 다르다는 점을 설명할 수 있는가?</li><li>긴 입력과 긴 출력 중 어느 쪽이 각 phase를 지배하는지 판단할 수 있는가?</li><li>runtime 업데이트 시 artifact 재준비와 회귀 테스트가 필요한 이유를 설명할 수 있는가?</li></ul>
+<h2 id="참고-이미지">참고 이미지</h2>
+<h3 id="참고-이미지-1-ryzen-ai-171-hybrid-phase-map">참고 이미지 1. Ryzen AI 1.7.1 hybrid phase map</h3>
+<p><img src="./assets/img-01.svg" alt="Ryzen AI 1.7.1 hybrid phase map"></p>
+<ul><li>캡션: 공식 모델 준비 문서의 NPU prefill과 iGPU token generation 배치를 그대로 반영한 로컬 도식이다. <sup class="citation-ref"><a href="#source-s1" title="Preparing OGA Models (Ryzen AI 1.7.1) | AMD Ryzen AI docs | 핵심 근거 | hybrid artifact가 NPU prefill phase + GPU token phase임을 명시하는 공식 근거" aria-label="[S1] Preparing OGA Models (Ryzen AI 1.7.1) 출처로 이동" data-citation-role="핵심 근거">[S1]<span class="citation-popover" role="tooltip"><strong>[S1] Preparing OGA Models (Ryzen AI 1.7.1)</strong><span>핵심 근거</span><span>AMD Ryzen AI docs</span><em>hybrid artifact가 NPU prefill phase + GPU token phase임을 명시하는 공식 근거</em></span></a></sup></li><li>왜 이 그림이 필요한가: 기존의 반대 방향 도식을 대체하고 phase 경계를 명확히 보여 준다.</li></ul>
+<h3 id="참고-이미지-2-실행-모드와-버전-검증-지도">참고 이미지 2. 실행 모드와 버전 검증 지도</h3>
+<p><img src="./assets/img-02.svg" alt="Ryzen AI execution mode and version contract"></p>
+<ul><li>캡션: hybrid와 NPU-only를 별도 artifact로 보고 Ryzen AI·OGA 버전까지 함께 검증하는 흐름이다. <sup class="citation-ref"><a href="#source-s1" title="Preparing OGA Models (Ryzen AI 1.7.1) | AMD Ryzen AI docs | 핵심 근거 | hybrid artifact가 NPU prefill phase + GPU token phase임을 명시하는 공식 근거" aria-label="[S1] Preparing OGA Models (Ryzen AI 1.7.1) 출처로 이동" data-citation-role="핵심 근거">[S1]<span class="citation-popover" role="tooltip"><strong>[S1] Preparing OGA Models (Ryzen AI 1.7.1)</strong><span>핵심 근거</span><span>AMD Ryzen AI docs</span><em>hybrid artifact가 NPU prefill phase + GPU token phase임을 명시하는 공식 근거</em></span></a></sup> <sup class="citation-ref"><a href="#source-s3" title="OnnxRuntime GenAI (OGA) Flow | AMD Ryzen AI docs | 핵심 근거 | 현재 OGA 버전, NPU 모델 유형, 이전 artifact 비호환성" aria-label="[S3] OnnxRuntime GenAI (OGA) Flow 출처로 이동" data-citation-role="핵심 근거">[S3]<span class="citation-popover" role="tooltip"><strong>[S3] OnnxRuntime GenAI (OGA) Flow</strong><span>핵심 근거</span><span>AMD Ryzen AI docs</span><em>현재 OGA 버전, NPU 모델 유형, 이전 artifact 비호환성</em></span></a></sup></li><li>왜 이 그림이 필요한가: 장치 선택보다 먼저 artifact와 버전 계약을 확인하게 만든다.</li></ul>
+<h2 id="출처">출처</h2>
+<div class="table-wrap"><table><thead><tr><th>번호</th><th>제목</th><th>발행 주체</th><th>접근 날짜</th><th>URL</th><th>사용 이유</th></tr></thead><tbody><tr id="source-s1"><td><sup class="citation-ref"><a href="#source-s1" title="Preparing OGA Models (Ryzen AI 1.7.1) | AMD Ryzen AI docs | 핵심 근거 | hybrid artifact가 NPU prefill phase + GPU token phase임을 명시하는 공식 근거" aria-label="[S1] Preparing OGA Models (Ryzen AI 1.7.1) 출처로 이동" data-citation-role="핵심 근거">[S1]<span class="citation-popover" role="tooltip"><strong>[S1] Preparing OGA Models (Ryzen AI 1.7.1)</strong><span>핵심 근거</span><span>AMD Ryzen AI docs</span><em>hybrid artifact가 NPU prefill phase + GPU token phase임을 명시하는 공식 근거</em></span></a></sup><span class="source-role-badge">핵심 근거</span></td><td>Preparing OGA Models (Ryzen AI 1.7.1)</td><td>AMD Ryzen AI docs</td><td>2026-08-14</td><td><a href="https://ryzenai.docs.amd.com/en/1.7.1/oga_model_prepare.html" target="_blank" rel="noreferrer">https://ryzenai.docs.amd.com/en/1.7.1/oga_model_prepare.html</a></td><td>hybrid artifact가 NPU prefill phase + GPU token phase임을 명시하는 공식 근거</td></tr><tr id="source-s2"><td><sup class="citation-ref"><a href="#source-s2" title="LLM Deployment Overview | AMD Ryzen AI docs | 핵심 근거 | 현재 NPU only·hybrid·GPU 실행 모드의 공식 개요" aria-label="[S2] LLM Deployment Overview 출처로 이동" data-citation-role="핵심 근거">[S2]<span class="citation-popover" role="tooltip"><strong>[S2] LLM Deployment Overview</strong><span>핵심 근거</span><span>AMD Ryzen AI docs</span><em>현재 NPU only·hybrid·GPU 실행 모드의 공식 개요</em></span></a></sup><span class="source-role-badge">핵심 근거</span></td><td>LLM Deployment Overview</td><td>AMD Ryzen AI docs</td><td>2026-08-14</td><td><a href="https://ryzenai.docs.amd.com/en/latest/llm/overview.html" target="_blank" rel="noreferrer">https://ryzenai.docs.amd.com/en/latest/llm/overview.html</a></td><td>현재 NPU-only·hybrid·GPU 실행 모드의 공식 개요</td></tr><tr id="source-s3"><td><sup class="citation-ref"><a href="#source-s3" title="OnnxRuntime GenAI (OGA) Flow | AMD Ryzen AI docs | 핵심 근거 | 현재 OGA 버전, NPU 모델 유형, 이전 artifact 비호환성" aria-label="[S3] OnnxRuntime GenAI (OGA) Flow 출처로 이동" data-citation-role="핵심 근거">[S3]<span class="citation-popover" role="tooltip"><strong>[S3] OnnxRuntime GenAI (OGA) Flow</strong><span>핵심 근거</span><span>AMD Ryzen AI docs</span><em>현재 OGA 버전, NPU 모델 유형, 이전 artifact 비호환성</em></span></a></sup><span class="source-role-badge">핵심 근거</span></td><td>OnnxRuntime GenAI (OGA) Flow</td><td>AMD Ryzen AI docs</td><td>2026-08-14</td><td><a href="https://ryzenai.docs.amd.com/en/latest/hybrid_oga.html" target="_blank" rel="noreferrer">https://ryzenai.docs.amd.com/en/latest/hybrid_oga.html</a></td><td>현재 OGA 버전, NPU 모델 유형, 이전 artifact 비호환성</td></tr></tbody></table></div>
+    </article>
+    <section class="content-panel surface quiz-panel">
+      <div class="section-heading">
+        <div>
+          <p class="eyebrow">Quiz</p>
+          <h2>복습 문제</h2>
+        </div>
+      </div>
+      <div class="prose">
+        <h1 id="ryzen-ai-oga-퀴즈">Ryzen AI OGA 퀴즈</h1>
+<h2 id="객관식-1">객관식 1</h2>
+<p>Ryzen AI 1.7.1 hybrid artifact의 공식 phase 배치는 무엇인가?</p>
+<ol><li>iGPU prefill + NPU token generation</li><li>NPU prefill + iGPU token generation</li><li>CPU prefill + NPU token generation</li><li>NPU prefill + NPU token generation</li></ol>
+<h2 id="객관식-2">객관식 2</h2>
+<p>NPU-only 모드를 가장 정확히 설명한 것은 무엇인가?</p>
+<ol><li>hybrid artifact에서 iGPU 옵션만 끈다.</li><li>prefill은 iGPU, decode는 CPU에서 수행한다.</li><li>별도 artifact를 사용해 prefill과 decode를 NPU에서 수행한다.</li><li>모든 Ryzen AI 릴리스에서 같은 artifact를 사용한다.</li></ol>
+<h2 id="객관식-3">객관식 3</h2>
+<p>Ryzen AI 릴리스를 갱신할 때 가장 적절한 절차는 무엇인가?</p>
+<ol><li>runtime만 갱신하고 이전 artifact를 무조건 재사용한다.</li><li>OGA와 artifact 호환성을 확인하고 모델을 다시 준비해 회귀 테스트한다.</li><li>장치 이름이 같으므로 버전 기록을 생략한다.</li><li>TTFT만 재고 TPS와 에너지는 이전 값을 쓴다.</li></ol>
+<h2 id="짧은-서술형-1">짧은 서술형 1</h2>
+<p>왜 <code>GPU prefill -&gt; NPU decode</code>라는 일반 직관을 Ryzen AI 1.7.1 hybrid에 적용하면 안 되는지 설명하라.</p>
+<h2 id="짧은-서술형-2">짧은 서술형 2</h2>
+<p>긴 입력·짧은 출력과 짧은 입력·긴 출력에서 hybrid의 지배 phase가 어떻게 달라질 수 있는지 설명하라.</p>
+<h2 id="심화-설명형">심화 설명형</h2>
+<p>hybrid와 NPU-only를 비교하는 실험을 설계하라. 답변에 다음 항목을 포함하라.</p>
+<ul><li>artifact와 runtime 버전</li><li>input/output token 길이</li><li>TTFT와 TPS</li><li>phase handoff</li><li>시스템 전력과 메모리</li></ul><details class="answer-key"><summary>정답 및 해설 보기</summary><h2 id="정답-및-해설">정답 및 해설</h2>
+<ul><li>객관식 1 정답: 2. AMD의 1.7.1 모델 준비 문서는 hybrid를 <code>NPU prefill phase + GPU token phase</code>로 명시한다. <sup class="citation-ref">[S1]</sup></li><li>객관식 2 정답: 3. NPU-only는 별도 생성 경로를 사용하며 prefill과 decode를 NPU에서 수행한다. <sup class="citation-ref">[S1]</sup></li><li>객관식 3 정답: 2. 현재 문서는 1.8과 이전 릴리스 모델의 비호환을 명시하므로 OGA·artifact 조합을 확인하고 재검증해야 한다. <sup class="citation-ref">[S3]</sup></li><li>짧은 서술형 1 예시: vendor runtime의 실제 partition은 일반적인 하드웨어 직관과 다를 수 있다. 1.7.1에서는 공식 artifact 계약이 NPU prefill과 iGPU token phase이므로 그 계약과 phase 로그를 기준으로 판단해야 한다. <sup class="citation-ref">[S1]</sup></li><li>짧은 서술형 2 예시: 긴 입력·짧은 출력에서는 NPU prefill 시간이 상대적으로 커지고, 짧은 입력·긴 출력에서는 iGPU token generation 시간이 지배적일 수 있다. 따라서 hybrid의 성능과 에너지는 phase별로 측정해야 한다.</li><li>심화 설명형 해설 포인트: 같은 모델 계열과 품질 조건에서 각 실행 모드에 맞는 artifact를 준비하고 Ryzen AI·OGA·driver 버전을 기록한다. input/output 길이를 여러 조합으로 고정해 TTFT와 TPS를 따로 재며, hybrid handoff 시간과 전체 시스템 전력·메모리를 함께 기록한다. <sup class="citation-ref">[S1]</sup> <sup class="citation-ref">[S3]</sup></li></ul></details>
+      </div>
+    </section>
+    <nav class="pager">
+      <a class="pager-link" href="../04-windows-ml/"><span>이전</span><strong>Windows ML 2.x와 Execution Provider 배포</strong></a>
+      <a class="pager-link" href="../06-openvino-npu/"><span>다음</span><strong>OpenVINO NPU</strong></a>
+    </nav>
+
+      </section>
+      <aside class="page-sidebar">
+    <div class="sidebar-panel surface">
+      <p class="eyebrow">On This Page</p>
+      <div class="toc" data-toc>
+        <a class="toc-link" href="#수업-개요">수업 개요</a><a class="toc-link" href="#학습-목표">학습 목표</a><a class="toc-link" href="#수업-전에-생각할-질문">수업 전에 생각할 질문</a><a class="toc-link" href="#강의-스크립트">강의 스크립트</a><a class="toc-link sub" href="#part-1-실행-모드보다-먼저-artifact의-계약을-읽는다">Part 1. 실행 모드보다 먼저 artifact의 계약을 읽는다</a><a class="toc-link sub" href="#part-2-hybrid의-성능은-두-phase와-경계로-나눠-잰다">Part 2. hybrid의 성능은 두 phase와 경계로 나눠 잰다</a><a class="toc-link sub" href="#part-3-전력-효율도-장치-이름으로-추정하지-않는다">Part 3. 전력 효율도 장치 이름으로 추정하지 않는다</a><a class="toc-link sub" href="#part-4-버전은-설치-정보가-아니라-배포-계약이다">Part 4. 버전은 설치 정보가 아니라 배포 계약이다</a><a class="toc-link sub" href="#part-5-사례로-판단하기">Part 5. 사례로 판단하기</a><a class="toc-link" href="#자주-헷갈리는-포인트">자주 헷갈리는 포인트</a><a class="toc-link" href="#핵심-정리">핵심 정리</a><a class="toc-link" href="#복습-체크리스트">복습 체크리스트</a><a class="toc-link" href="#참고-이미지">참고 이미지</a><a class="toc-link sub" href="#참고-이미지-1-ryzen-ai-171-hybrid-phase-map">참고 이미지 1. Ryzen AI 1.7.1 hybrid phase map</a><a class="toc-link sub" href="#참고-이미지-2-실행-모드와-버전-검증-지도">참고 이미지 2. 실행 모드와 버전 검증 지도</a><a class="toc-link" href="#출처">출처</a>
+      </div>
+    </div>
+    </aside>
+    </div>
+  </main>
+  <script type="module" src="../../../assets/app.js?v=20260814"></script>
+  <script type="module">
+    import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs';
+    mermaid.initialize({
+      startOnLoad: true,
+      theme: 'neutral',
+      securityLevel: 'loose',
+      flowchart: { useMaxWidth: false },
+      sequence: { useMaxWidth: false },
+      gantt: { useMaxWidth: false }
+    });
+  </script>
+  <script>
+    window.MathJax = {
+      tex: { inlineMath: [['$', '$'], ['\\(', '\\)']], displayMath: [['$$', '$$'], ['\\[', '\\]']] },
+      svg: { fontCache: 'global' }
+    };
+  </script>
+  <script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-svg.js" async></script>
+</body>
+</html>

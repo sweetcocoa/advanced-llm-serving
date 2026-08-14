@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>서빙 시스템 설계 | LLM Models + Serving Systems</title>
+  <meta name="description" content="이 트랙은 학습이 끝난 모델을 실제 요청 경로에서 빠르고 안정적으로 실행하는 방법을 다룬다. cache, batching, scheduling, parallelism, GPU/NPU, runtime, compiler와 운영 관측을 하나의 serving system으로 연결한다.">
+  <meta name="theme-color" content="#10182a">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Noto+Sans+KR:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../assets/style.css?v=20260814">
+</head>
+<body class="page-module" data-page-kind="module" data-page-id="02-serving-systems" data-root-prefix="../">
+  <div class="reading-progress" data-reading-progress></div>
+  <header class="site-header">
+    <a class="brand" href="../">
+      <span class="brand-kicker">GitHub Pages Study</span>
+      <strong>LLM Models + Serving Systems</strong>
+    </a>
+    <nav class="top-nav"><a class="top-nav-link" href="../01-llm-models/">LLM 모델 이론</a><a class="top-nav-link is-active" href="./">서빙 시스템 설계</a><a class="top-nav-link" href="../03-system-design/">종합 시스템 설계</a></nav>
+    <div class="search-shell">
+      <input type="search" placeholder="챕터, 섹션, 트랙 검색" aria-label="검색" data-global-search>
+      <div class="search-results" data-search-results hidden></div>
+    </div>
+  </header>
+  <main class="page-frame">
+
+    <section class="hero">
+      <div class="hero-copy">
+      <p class="eyebrow">Track</p>
+        <h1>서빙 시스템 설계</h1>
+        <p class="hero-summary">이 트랙은 학습이 끝난 모델을 실제 요청 경로에서 빠르고 안정적으로 실행하는 방법을 다룬다. cache, batching, scheduling, parallelism, GPU/NPU, runtime, compiler와 운영 관측을 하나의 serving system으로 연결한다.</p>
+      </div>
+      <div class="hero-stats">
+        <div class="stat-card"><strong>6</strong><span>sections</span></div>
+        <div class="stat-card"><strong>33</strong><span>chapters</span></div>
+      </div>
+    </section>
+
+    <div class="page-layout">
+      <section class="page-main content-shell">
+
+    <article class="content-panel surface prose">
+      <h1 id="서빙-시스템-설계">서빙 시스템 설계</h1>
+<p>이 트랙은 학습이 끝난 모델을 실제 요청 경로에서 빠르고 안정적으로 실행하는 방법을 다룬다. cache, batching, scheduling, parallelism, GPU/NPU, runtime, compiler와 운영 관측을 하나의 serving system으로 연결한다.</p>
+<h2 id="이-트랙을-마치면-설명할-수-있어야-하는-것">이 트랙을 마치면 설명할 수 있어야 하는 것</h2>
+<ul><li>모델별 inference workload를 compute, memory, mutable state 관점으로 분해할 수 있다.</li><li>cache와 scheduler가 latency, throughput, goodput을 어떻게 바꾸는지 설명할 수 있다.</li><li>GPU와 NPU를 operator support, memory hierarchy, lowering contract로 비교할 수 있다.</li><li>runtime과 compiler, observability를 포함한 production serving 경로를 설계할 수 있다.</li></ul>
+<h2 id="섹션-순서">섹션 순서</h2>
+<ul><li><a href="./01-inference-foundations/">Inference Foundations</a></li><li><a href="./02-cache-batching-and-generation/">Cache, Batching, and Generation</a></li><li><a href="./03-distributed-serving/">Distributed Serving</a></li><li><a href="./04-optimization-and-accelerators/">Optimization and Accelerators</a></li><li><a href="./05-runtime-and-compiler/">Runtime and Compiler</a></li><li><a href="./06-production-operations/">Production Operations</a></li></ul>
+<h2 id="npu의-위치">NPU의 위치</h2>
+<p>NPU는 별도 모델 계보가 아니다. 모델 graph를 어떤 정밀도와 operator 경계로 lowering하고 어느 runtime에 배치할지 결정하는 serving accelerator이므로 이 트랙 안에 둔다.</p>
+    </article>
+    <section class="content-panel surface">
+      <div class="section-heading">
+        <div>
+          <p class="eyebrow">Sections</p>
+          <h2>서빙 시스템 설계 안의 세부 영역</h2>
+        </div>
+        <input type="search" placeholder="섹션 필터" aria-label="섹션 필터" data-card-filter>
+      </div>
+      <div class="module-grid section-grid" data-card-container>
+        <a class="module-card section-card" data-search-card data-search-text="inference foundations 모델이 정의한 계산을 serving workload로 번역한다. transformer inference를 prefill/decode, compute/memory, ttft/tpot으로 분해하고 전체 serving stack의 책임 경계를 세운다. 서빙 시스템 설계" href="01-inference-foundations/"><span class="module-index">01</span><h3>Inference Foundations</h3><p>모델이 정의한 계산을 serving workload로 번역한다. Transformer inference를 prefill/decode, compute/memory, TTFT/TPOT으로 분해하고 전체 serving stack의 책임 경계를 세운다.</p><div class="module-card-meta"><span>5 chapters</span></div></a><a class="module-card section-card" data-search-card data-search-text="cache, batching, and generation 단일 요청의 생성 loop와 여러 요청의 동시 실행을 연결한다. ar의 kv cache뿐 아니라 diffusion의 mutable sequence state와 recurrent depth의 variable loop depth까지 같은 runtime 질문으로 비교한다. 서빙 시스템 설계" href="02-cache-batching-and-generation/"><span class="module-index">02</span><h3>Cache, Batching, and Generation</h3><p>단일 요청의 생성 loop와 여러 요청의 동시 실행을 연결한다. AR의 KV cache뿐 아니라 diffusion의 mutable sequence state와 recurrent depth의 variable loop depth까지 같은 runtime 질문으로 비교한다.</p><div class="module-card-meta"><span>7 chapters</span></div></a><a class="module-card section-card" data-search-card data-search-text="distributed serving 한 장치의 kernel 최적화를 넘어 request phase, model shard, expert와 kv state를 여러 장치와 노드에 배치하는 방법을 다룬다. 서빙 시스템 설계" href="03-distributed-serving/"><span class="module-index">03</span><h3>Distributed Serving</h3><p>한 장치의 kernel 최적화를 넘어 request phase, model shard, expert와 KV state를 여러 장치와 노드에 배치하는 방법을 다룬다.</p><div class="module-card-meta"><span>5 chapters</span></div></a><a class="module-card section-card" data-search-card data-search-text="optimization and accelerators 정밀도, memory movement, operator fusion과 accelerator 실행 모델을 연결한다. gpu와 npu를 성능표가 아니라 어떤 graph를 어떤 제약 아래 실행하는지로 비교한다. 서빙 시스템 설계" href="04-optimization-and-accelerators/"><span class="module-index">04</span><h3>Optimization and Accelerators</h3><p>정밀도, memory movement, operator fusion과 accelerator 실행 모델을 연결한다. GPU와 NPU를 성능표가 아니라 어떤 graph를 어떤 제약 아래 실행하는지로 비교한다.</p><div class="module-card-meta"><span>4 chapters</span></div></a><a class="module-card section-card" data-search-card data-search-text="runtime and compiler 모델 graph가 onnx와 중간 표현을 거쳐 backend artifact로 내려가고 execution provider와 제품 runtime에서 실행되는 경로를 다룬다. 서빙 시스템 설계" href="05-runtime-and-compiler/"><span class="module-index">05</span><h3>Runtime and Compiler</h3><p>모델 graph가 ONNX와 중간 표현을 거쳐 backend artifact로 내려가고 execution provider와 제품 runtime에서 실행되는 경로를 다룬다.</p><div class="module-card-meta"><span>9 chapters</span></div></a><a class="module-card section-card" data-search-card data-search-text="production operations benchmark 결과를 실제 운영 판단으로 바꾸는 방법을 다룬다. trace, profiler, slo와 vendor specific 도구를 이용해 병목을 재현하고 배포 선택을 검증한다. 서빙 시스템 설계" href="06-production-operations/"><span class="module-index">06</span><h3>Production Operations</h3><p>benchmark 결과를 실제 운영 판단으로 바꾸는 방법을 다룬다. trace, profiler, SLO와 vendor specific 도구를 이용해 병목을 재현하고 배포 선택을 검증한다.</p><div class="module-card-meta"><span>3 chapters</span></div></a>
+      </div>
+    </section>
+
+      </section>
+      <aside class="page-sidebar">
+    <div class="sidebar-panel surface">
+      <p class="eyebrow">Progress</p>
+      <h3>진행 방식</h3>
+      <p>챕터 페이지의 완료 버튼은 브라우저 로컬 저장소에 기록됩니다.</p>
+    </div>
+    </aside>
+    </div>
+  </main>
+  <script type="module" src="../assets/app.js?v=20260814"></script>
+  <script type="module">
+    import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs';
+    mermaid.initialize({
+      startOnLoad: true,
+      theme: 'neutral',
+      securityLevel: 'loose',
+      flowchart: { useMaxWidth: false },
+      sequence: { useMaxWidth: false },
+      gantt: { useMaxWidth: false }
+    });
+  </script>
+  <script>
+    window.MathJax = {
+      tex: { inlineMath: [['$', '$'], ['\\(', '\\)']], displayMath: [['$$', '$$'], ['\\[', '\\]']] },
+      svg: { fontCache: 'global' }
+    };
+  </script>
+  <script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-svg.js" async></script>
+</body>
+</html>

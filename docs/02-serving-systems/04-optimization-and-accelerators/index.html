@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Optimization and Accelerators | 서빙 시스템 설계</title>
+  <meta name="description" content="정밀도, memory movement, operator fusion과 accelerator 실행 모델을 연결한다. GPU와 NPU를 성능표가 아니라 어떤 graph를 어떤 제약 아래 실행하는지로 비교한다.">
+  <meta name="theme-color" content="#10182a">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Noto+Sans+KR:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../../assets/style.css?v=20260814">
+</head>
+<body class="page-section" data-page-kind="section" data-page-id="02-serving-systems/04-optimization-and-accelerators" data-root-prefix="../../">
+  <div class="reading-progress" data-reading-progress></div>
+  <header class="site-header">
+    <a class="brand" href="../../">
+      <span class="brand-kicker">GitHub Pages Study</span>
+      <strong>LLM Models + Serving Systems</strong>
+    </a>
+    <nav class="top-nav"><a class="top-nav-link" href="../../01-llm-models/">LLM 모델 이론</a><a class="top-nav-link is-active" href="../">서빙 시스템 설계</a><a class="top-nav-link" href="../../03-system-design/">종합 시스템 설계</a></nav>
+    <div class="search-shell">
+      <input type="search" placeholder="챕터, 섹션, 트랙 검색" aria-label="검색" data-global-search>
+      <div class="search-results" data-search-results hidden></div>
+    </div>
+  </header>
+  <main class="page-frame">
+
+    <section class="hero">
+      <div class="hero-copy">
+        <p class="eyebrow">서빙 시스템 설계</p>
+        <h1>Optimization and Accelerators</h1>
+        <p class="hero-summary">정밀도, memory movement, operator fusion과 accelerator 실행 모델을 연결한다. GPU와 NPU를 성능표가 아니라 어떤 graph를 어떤 제약 아래 실행하는지로 비교한다.</p>
+      </div>
+      <div class="hero-stats">
+        <div class="stat-card"><strong>4</strong><span>chapters</span></div>
+      </div>
+    </section>
+
+    <div class="page-layout">
+      <section class="page-main content-shell">
+
+    <article class="content-panel surface prose">
+      <h1 id="optimization-and-accelerators">Optimization and Accelerators</h1>
+<p>정밀도, memory movement, operator fusion과 accelerator 실행 모델을 연결한다. GPU와 NPU를 성능표가 아니라 어떤 graph를 어떤 제약 아래 실행하는지로 비교한다.</p>
+<h2 id="챕터-순서">챕터 순서</h2>
+<ul><li><a href="./01-quantization-basics/">Quantization Basics</a></li><li><a href="./02-gpu-vs-npu-mental-model/">GPU vs NPU Mental Model</a></li><li><a href="./03-npu-architecture-basics/">NPU Architecture Basics</a></li><li><a href="./04-npu-friendly-quantization/">NPU-Friendly Quantization</a></li></ul>
+    </article>
+    <section class="content-panel surface">
+      <div class="section-heading">
+        <div>
+          <p class="eyebrow">Chapters</p>
+          <h2>Optimization and Accelerators 안의 학습 단위</h2>
+        </div>
+        <input type="search" placeholder="챕터 필터" aria-label="챕터 필터" data-card-filter>
+      </div>
+      <div class="chapter-grid" data-card-container>
+        <a class="chapter-card" data-search-card data-search-text="quantization basics 이번 챕터는 &quot;몇 비트가 더 작으냐&quot;보다 &quot;어떤 형식이 실제 서빙 경로를 끝까지 통과하느냐&quot;를 먼저 묻는다. 근거도 둘로 나눠서 본다. 메모리 예산과 품질 위험은 [식 1], [식 2], 그리고 양자화 오차를 시각화한 [i1]로 설명하고, backend 호환성은 서버 엔진 문맥의 [s1], offload의 [s2], compile 산출물의 [s3], device target의 [s4]로 설명한다. 이 분리를 지키면 &quot;int4가 더 작으니 무조건 더 좋다&quot; 같은 단정이 왜 위험한지 보인다. optimization and accelerators 서빙 시스템 설계" data-progress-id="quantization-basics" href="01-quantization-basics/"><span class="chapter-module">Optimization and Accelerators</span><h3>Quantization Basics</h3><p>이번 챕터는 &quot;몇 비트가 더 작으냐&quot;보다 &quot;어떤 형식이 실제 서빙 경로를 끝까지 통과하느냐&quot;를 먼저 묻는다. 근거도 둘로 나눠서 본다. 메모리 예산과 품질 위험은 [식 1], [식 2], 그리고 양자화 오차를 시각화한 <sup class="citation-ref">[I1]</sup>로 설명하고, backend 호환성은 서버 엔진 문맥의 <sup class="citation-ref">[S1]</sup>, offload의 <sup class="citation-ref">[S2]</sup>, compile 산출물의 <sup class="citation-ref">[S3]</sup>, device target의 <sup class="citation-ref">[S4]</sup>로 설…</p><div class="chapter-card-meta"><span>35-50 min</span><span>2026-03-08</span><span class="chapter-progress-state">미완료</span></div></a><a class="chapter-card" data-search-card data-search-text="gpu vs npu mental model 이 챕터는 gpu와 npu를 성능표 두 칸으로 비교하지 않고, 어떤 블록을 어느 runtime에 맡길 것인가 라는 실행 모델 문제로 다룬다. transformer가 attention과 feed forward 블록을 반복한다는 사실은 [s1]이 준다. roofline은 그 블록이 계산보다 데이터 이동에 더 묶여 있을 수 있음을 보여 준다 [s2]. vllm 문서는 serving이 커널 하나가 아니라 scheduler, batching, kv cache를 포함한 runtime 문제라는 맥락을 준다 [s3]. aws neuron release note는 특정 npu runtime의 지원 범위가 버전과 기능 단위로 관리된다는 사례를 준다 [s4]. 이 네 가지를 합치면, 장치 선택의 핵심 질문은 누가 더 센가 보다 어디서 끊으면 handoff와 escape path가 폭발하는가 , 그리고 언제 전력 효율이 실제 배터리·발열 이득으로 남는가 가 된다. optimization and accelerators 서빙 시스템 설계" data-progress-id="gpu-vs-npu-mental-model" href="02-gpu-vs-npu-mental-model/"><span class="chapter-module">Optimization and Accelerators</span><h3>GPU vs NPU Mental Model</h3><p>이 챕터는 GPU와 NPU를 성능표 두 칸으로 비교하지 않고, 어떤 블록을 어느 runtime에 맡길 것인가 라는 실행 모델 문제로 다룬다. Transformer가 attention과 feed forward 블록을 반복한다는 사실은 <sup class="citation-ref">[S1]</sup>이 준다. Roofline은 그 블록이 계산보다 데이터 이동에 더 묶여 있을 수 있음을 보여 준다 <sup class="citation-ref">[S2]</sup>. vLLM 문서는 serving이 커널 하나가…</p><div class="chapter-card-meta"><span>35-50 min</span><span>2026-03-08</span><span class="chapter-progress-state">미완료</span></div></a><a class="chapter-card" data-search-card data-search-text="npu architecture basics 이번 장은 npu를 스펙표로 외우기보다, runtime 문서가 직접 말하는 offload/target/cache 사실과 그 위에 얹는 수업용 해석을 분리해서 읽는 연습에 가깝다. [s2]와 [s4]는 npu offload, device target, compile/cache 경로를 설명하는 runtime 문서이고, [s3]는 같은 모델도 target runtime과 device에 맞춰 별도 artifact로 굳어질 수 있음을 보여 준다. 그 사실 위에서 이 장은 온칩에 얼마나 오래 머무는가 , 데이터를 다시 채우는 리듬이 얼마나 일정한가 , 여러 연산을 한 세그먼트로 오래 붙들 수 있는가 를 수업용 해석 프레임으로 쓴다 [합성] [s2] [s3] [s4]. optimization and accelerators 서빙 시스템 설계" data-progress-id="npu-architecture-basics" href="03-npu-architecture-basics/"><span class="chapter-module">Optimization and Accelerators</span><h3>NPU Architecture Basics</h3><p>이번 장은 NPU를 스펙표로 외우기보다, runtime 문서가 직접 말하는 offload/target/cache 사실과 그 위에 얹는 수업용 해석을 분리해서 읽는 연습에 가깝다. <sup class="citation-ref">[S2]</sup>와 <sup class="citation-ref">[S4]</sup>는 NPU offload, device target, compile/cache 경로를 설명하는 runtime 문서이고, <sup class="citation-ref">[S3]</sup>는 같은 모델도 target runtime과 device에 맞춰 별도…</p><div class="chapter-card-meta"><span>35-50 min</span><span>2026-03-08</span><span class="chapter-progress-state">미완료</span></div></a><a class="chapter-card" data-search-card data-search-text="npu-friendly quantization 이 챕터는 양자화를 몇 비트까지 줄였는가 보다 runtime이 그대로 읽을 수 있는 quantized artifact를 만들었는가 라는 질문으로 다시 본다. onnx runtime 문서는 양자화된 onnx 표현을 qoperator 와 qdq 로 나눠 설명하고 정적/동적 양자화를 구분한다 [s1]. openvino nncf 문서는 ptq, qat, calibration dataset, target device 를 함께 다룬다 [s2]. 여기에 qnn execution provider와 openvino npu 문서를 겹쳐 보면, 정확도가 괜찮은 양자화와 실제 npu 경로에 얹히는 양자화가 다를 수 있다는 점이 더 선명해진다 [s3][s4]. optimization and accelerators 서빙 시스템 설계" data-progress-id="npu-friendly-quantization" href="04-npu-friendly-quantization/"><span class="chapter-module">Optimization and Accelerators</span><h3>NPU-Friendly Quantization</h3><p>이 챕터는 양자화를 몇 비트까지 줄였는가 보다 runtime이 그대로 읽을 수 있는 quantized artifact를 만들었는가 라는 질문으로 다시 본다. ONNX Runtime 문서는 양자화된 ONNX 표현을 QOperator 와 QDQ 로 나눠 설명하고 정적/동적 양자화를 구분한다 <sup class="citation-ref">[S1]</sup>. OpenVINO NNCF 문서는 PTQ, QAT, calibration dataset, tar…</p><div class="chapter-card-meta"><span>35-50 min</span><span>2026-03-08</span><span class="chapter-progress-state">미완료</span></div></a>
+      </div>
+    </section>
+
+      </section>
+      <aside class="page-sidebar">
+    <div class="sidebar-panel surface">
+      <p class="eyebrow">Progress</p>
+      <h3>진행 방식</h3>
+      <p>챕터 페이지의 완료 버튼은 브라우저 로컬 저장소에 기록됩니다.</p>
+    </div>
+    </aside>
+    </div>
+  </main>
+  <script type="module" src="../../assets/app.js?v=20260814"></script>
+  <script type="module">
+    import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs';
+    mermaid.initialize({
+      startOnLoad: true,
+      theme: 'neutral',
+      securityLevel: 'loose',
+      flowchart: { useMaxWidth: false },
+      sequence: { useMaxWidth: false },
+      gantt: { useMaxWidth: false }
+    });
+  </script>
+  <script>
+    window.MathJax = {
+      tex: { inlineMath: [['$', '$'], ['\\(', '\\)']], displayMath: [['$$', '$$'], ['\\[', '\\]']] },
+      svg: { fontCache: 'global' }
+    };
+  </script>
+  <script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-svg.js" async></script>
+</body>
+</html>

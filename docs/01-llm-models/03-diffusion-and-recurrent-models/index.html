@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Diffusion and Recurrent Models | LLM 모델 이론</title>
+  <meta name="description" content="Autoregressive next token generation과 다른 두 계보를 다룬다. Diffusion LLM은 token sequence를 반복 복원하고, recurrent depth Transformer는 hidden state를 반복 계산한다. 공통 반복 구조와 서로 다른 objective를 함께 본다.">
+  <meta name="theme-color" content="#10182a">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Noto+Sans+KR:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../../assets/style.css?v=20260814">
+</head>
+<body class="page-section" data-page-kind="section" data-page-id="01-llm-models/03-diffusion-and-recurrent-models" data-root-prefix="../../">
+  <div class="reading-progress" data-reading-progress></div>
+  <header class="site-header">
+    <a class="brand" href="../../">
+      <span class="brand-kicker">GitHub Pages Study</span>
+      <strong>LLM Models + Serving Systems</strong>
+    </a>
+    <nav class="top-nav"><a class="top-nav-link is-active" href="../">LLM 모델 이론</a><a class="top-nav-link" href="../../02-serving-systems/">서빙 시스템 설계</a><a class="top-nav-link" href="../../03-system-design/">종합 시스템 설계</a></nav>
+    <div class="search-shell">
+      <input type="search" placeholder="챕터, 섹션, 트랙 검색" aria-label="검색" data-global-search>
+      <div class="search-results" data-search-results hidden></div>
+    </div>
+  </header>
+  <main class="page-frame">
+
+    <section class="hero">
+      <div class="hero-copy">
+        <p class="eyebrow">LLM 모델 이론</p>
+        <h1>Diffusion and Recurrent Models</h1>
+        <p class="hero-summary">Autoregressive next token generation과 다른 두 계보를 다룬다. Diffusion LLM은 token sequence를 반복 복원하고, recurrent depth Transformer는 hidden state를 반복 계산한다. 공통 반복 구조와 서로 다른 objective를 함께 본다.</p>
+      </div>
+      <div class="hero-stats">
+        <div class="stat-card"><strong>4</strong><span>chapters</span></div>
+      </div>
+    </section>
+
+    <div class="page-layout">
+      <section class="page-main content-shell">
+
+    <article class="content-panel surface prose">
+      <h1 id="diffusion-and-recurrent-models">Diffusion and Recurrent Models</h1>
+<p>Autoregressive next-token generation과 다른 두 계보를 다룬다. Diffusion LLM은 token sequence를 반복 복원하고, recurrent-depth Transformer는 hidden state를 반복 계산한다. 공통 반복 구조와 서로 다른 objective를 함께 본다.</p>
+<h2 id="챕터-순서">챕터 순서</h2>
+<ul><li><a href="./01-diffusion-llm-lineage-and-principles/">Diffusion LLM의 계보와 생성 원리</a></li><li><a href="./02-looped-transformers-and-recurrent-depth/">Looped Transformer와 Recurrent Depth</a></li><li><a href="./03-convergence-as-iterative-refinement/">수렴으로 보는 반복 정제</a></li><li><a href="./04-iterative-model-frontier/">Iterative Model Frontier</a></li></ul>
+<h2 id="경계">경계</h2>
+<p>Diffusion cache, rollback, scheduler와 continuous-depth batching은 서빙 트랙에서, 모델과 runtime의 공정한 비교는 종합 설계 트랙에서 다룬다.</p>
+    </article>
+    <section class="content-panel surface">
+      <div class="section-heading">
+        <div>
+          <p class="eyebrow">Chapters</p>
+          <h2>Diffusion and Recurrent Models 안의 학습 단위</h2>
+        </div>
+        <input type="search" placeholder="챕터 필터" aria-label="챕터 필터" data-card-filter>
+      </div>
+      <div class="chapter-grid" data-card-container>
+        <a class="chapter-card" data-search-card data-search-text="diffusion llm의 계보와 생성 원리 diffusion llm은 gpt의 decode loop를 조금 빠르게 만든 기법이 아니라, sequence의 확률 분해와 생성 순서를 다시 설계한 llm 계보다. autoregressive lm이 왼쪽 prefix에서 다음 token 하나를 샘플링하는 반면, diffusion lm은 오염되거나 masking된 sequence를 여러 단계에 걸쳐 복원한다. 한 단계에서 여러 위치를 함께 예측할 수 있고, infilling이나 arbitrary order generation이 자연스럽지만, 여러 번의 full/block pass와 token dependency 문제가 새로운 비용으로 생긴다 [s3][s6][s9]. diffusion and recurrent models llm 모델 이론" data-progress-id="diffusion-llm-lineage-and-principles" href="01-diffusion-llm-lineage-and-principles/"><span class="chapter-module">Diffusion and Recurrent Models</span><h3>Diffusion LLM의 계보와 생성 원리</h3><p>Diffusion LLM은 GPT의 decode loop를 조금 빠르게 만든 기법이 아니라, sequence의 확률 분해와 생성 순서를 다시 설계한 LLM 계보다. autoregressive LM이 왼쪽 prefix에서 다음 token 하나를 샘플링하는 반면, diffusion LM은 오염되거나 masking된 sequence를 여러 단계에 걸쳐 복원한다. 한 단계에서 여러 위치를 함께 예…</p><div class="chapter-card-meta"><span>60-80 min</span><span>2026-08-14</span><span class="chapter-progress-state">미완료</span></div></a><a class="chapter-card" data-search-card data-search-text="looped transformer와 recurrent depth 표준 transformer는 층을 하나 더 쌓을 때마다 새 파라미터를 추가한다. looped transformer 또는 recurrent depth transformer는 이 결합을 끊는다. 같은 transformer block이나 작은 layer stack을 깊이 방향으로 여러 번 적용하여, 저장한 파라미터 깊이보다 더 긴 계산 궤적을 만든다. 추론 때 반복 횟수를 늘리면 출력 token을 더 생성하지 않고도 test time compute를 늘릴 수 있다는 점에서, 이는 단순한 모델 압축을 넘어 새로운 llm 설계 축이다 [s2][s7]. diffusion and recurrent models llm 모델 이론" data-progress-id="looped-transformers-and-recurrent-depth" href="02-looped-transformers-and-recurrent-depth/"><span class="chapter-module">Diffusion and Recurrent Models</span><h3>Looped Transformer와 Recurrent Depth</h3><p>표준 Transformer는 층을 하나 더 쌓을 때마다 새 파라미터를 추가한다. Looped Transformer 또는 recurrent depth Transformer는 이 결합을 끊는다. 같은 Transformer block이나 작은 layer stack을 깊이 방향으로 여러 번 적용하여, 저장한 파라미터 깊이보다 더 긴 계산 궤적을 만든다. 추론 때 반복 횟수를 늘리면 출력 token…</p><div class="chapter-card-meta"><span>60-80 min</span><span>2026-08-14</span><span class="chapter-progress-state">미완료</span></div></a><a class="chapter-card" data-search-card data-search-text="수렴으로 보는 반복 정제: diffusion llm과 recurrent-depth transformer diffusion llm과 looped/recurrent depth transformer는 서로 다른 계보에서 출발했다. 전자는 오염된 token sequence를 여러 denoising step에 걸쳐 복원하는 생성 모델이고, 후자는 같은 transformer block을 깊이 방향으로 반복해 hidden state를 정제하는 architecture다. 학습 objective, 상태 공간, attention mask, 출력 확정 방식이 다르므로 둘을 같은 모델이라고 부르면 틀린다 [s1][s2][s3]. diffusion and recurrent models llm 모델 이론" data-progress-id="convergence-as-iterative-refinement" href="03-convergence-as-iterative-refinement/"><span class="chapter-module">Diffusion and Recurrent Models</span><h3>수렴으로 보는 반복 정제: Diffusion LLM과 Recurrent-Depth Transformer</h3><p>Diffusion LLM과 looped/recurrent depth Transformer는 서로 다른 계보에서 출발했다. 전자는 오염된 token sequence를 여러 denoising step에 걸쳐 복원하는 생성 모델이고, 후자는 같은 Transformer block을 깊이 방향으로 반복해 hidden state를 정제하는 architecture다. 학습 objective, 상태 공간…</p><div class="chapter-card-meta"><span>45-60 min</span><span>2026-08-14</span><span class="chapter-progress-state">미완료</span></div></a><a class="chapter-card" data-search-card data-search-text="반복 생성 모델의 2026 frontier 이 챕터는 2026년의 논문을 발표 순서대로 나열하지 않는다. diffusion llm과 recurrent depth transformer가 각각 어떤 모델 문제를 분리해 냈는지, 그리고 두 계보가 어디에서 실제로 합쳐지기 시작했는지를 살핀다. 여기서 다루는 범위는 학습 objective, 상태 표현, 반복 block, commitment와 halting처럼 모델이 어떤 계산을 학습하는가 까지다. cache, batching, online slo는 서빙 시스템 과정에서 다룬다. diffusion and recurrent models llm 모델 이론" data-progress-id="iterative-model-frontier" href="04-iterative-model-frontier/"><span class="chapter-module">Diffusion and Recurrent Models</span><h3>반복 생성 모델의 2026 Frontier</h3><p>이 챕터는 2026년의 논문을 발표 순서대로 나열하지 않는다. Diffusion LLM과 recurrent depth Transformer가 각각 어떤 모델 문제를 분리해 냈는지, 그리고 두 계보가 어디에서 실제로 합쳐지기 시작했는지를 살핀다. 여기서 다루는 범위는 학습 objective, 상태 표현, 반복 block, commitment와 halting처럼 모델이 어떤 계산을 학습하는가…</p><div class="chapter-card-meta"><span>45-60 min</span><span>2026-08-14</span><span class="chapter-progress-state">미완료</span></div></a>
+      </div>
+    </section>
+
+      </section>
+      <aside class="page-sidebar">
+    <div class="sidebar-panel surface">
+      <p class="eyebrow">Progress</p>
+      <h3>진행 방식</h3>
+      <p>챕터 페이지의 완료 버튼은 브라우저 로컬 저장소에 기록됩니다.</p>
+    </div>
+    </aside>
+    </div>
+  </main>
+  <script type="module" src="../../assets/app.js?v=20260814"></script>
+  <script type="module">
+    import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs';
+    mermaid.initialize({
+      startOnLoad: true,
+      theme: 'neutral',
+      securityLevel: 'loose',
+      flowchart: { useMaxWidth: false },
+      sequence: { useMaxWidth: false },
+      gantt: { useMaxWidth: false }
+    });
+  </script>
+  <script>
+    window.MathJax = {
+      tex: { inlineMath: [['$', '$'], ['\\(', '\\)']], displayMath: [['$$', '$$'], ['\\[', '\\]']] },
+      svg: { fontCache: 'global' }
+    };
+  </script>
+  <script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-svg.js" async></script>
+</body>
+</html>

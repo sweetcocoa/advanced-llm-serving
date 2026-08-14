@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>LLM 모델 이론 | LLM Models + Serving Systems</title>
+  <meta name="description" content="이 트랙은 모델이 어떤 확률 분해와 상태 전이를 학습하고, 어떤 순서로 출력을 생성하는지 다룬다. 하드웨어 배치나 scheduler보다 architecture, objective, causality, routing, iterative refinement를 먼저 설명한다.">
+  <meta name="theme-color" content="#10182a">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Noto+Sans+KR:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../assets/style.css?v=20260814">
+</head>
+<body class="page-module" data-page-kind="module" data-page-id="01-llm-models" data-root-prefix="../">
+  <div class="reading-progress" data-reading-progress></div>
+  <header class="site-header">
+    <a class="brand" href="../">
+      <span class="brand-kicker">GitHub Pages Study</span>
+      <strong>LLM Models + Serving Systems</strong>
+    </a>
+    <nav class="top-nav"><a class="top-nav-link is-active" href="./">LLM 모델 이론</a><a class="top-nav-link" href="../02-serving-systems/">서빙 시스템 설계</a><a class="top-nav-link" href="../03-system-design/">종합 시스템 설계</a></nav>
+    <div class="search-shell">
+      <input type="search" placeholder="챕터, 섹션, 트랙 검색" aria-label="검색" data-global-search>
+      <div class="search-results" data-search-results hidden></div>
+    </div>
+  </header>
+  <main class="page-frame">
+
+    <section class="hero">
+      <div class="hero-copy">
+      <p class="eyebrow">Track</p>
+        <h1>LLM 모델 이론</h1>
+        <p class="hero-summary">이 트랙은 모델이 어떤 확률 분해와 상태 전이를 학습하고, 어떤 순서로 출력을 생성하는지 다룬다. 하드웨어 배치나 scheduler보다 architecture, objective, causality, routing, iterative refinement를 먼저 설명한다.</p>
+      </div>
+      <div class="hero-stats">
+        <div class="stat-card"><strong>3</strong><span>sections</span></div>
+        <div class="stat-card"><strong>6</strong><span>chapters</span></div>
+      </div>
+    </section>
+
+    <div class="page-layout">
+      <section class="page-main content-shell">
+
+    <article class="content-panel surface prose">
+      <h1 id="llm-모델-이론">LLM 모델 이론</h1>
+<p>이 트랙은 모델이 어떤 확률 분해와 상태 전이를 학습하고, 어떤 순서로 출력을 생성하는지 다룬다. 하드웨어 배치나 scheduler보다 architecture, objective, causality, routing, iterative refinement를 먼저 설명한다.</p>
+<h2 id="이-트랙을-마치면-설명할-수-있어야-하는-것">이 트랙을 마치면 설명할 수 있어야 하는 것</h2>
+<ul><li>autoregressive LM의 causal factorization과 Transformer block의 역할을 설명할 수 있다.</li><li>MoE의 conditional computation을 expert-parallel runtime과 구분할 수 있다.</li><li>Diffusion LLM과 recurrent-depth Transformer의 계보와 차이를 설명할 수 있다.</li><li>모델이 serving system에 넘기는 상태, 순서, 종료 조건의 contract를 적을 수 있다.</li></ul>
+<h2 id="섹션-순서">섹션 순서</h2>
+<ul><li><a href="./01-autoregressive-transformers/">Autoregressive Transformer</a></li><li><a href="./02-mixture-of-experts/">Mixture of Experts</a></li><li><a href="./03-diffusion-and-recurrent-models/">Diffusion and Recurrent Models</a></li></ul>
+<h2 id="다음-트랙과의-경계">다음 트랙과의 경계</h2>
+<p>모델 구조가 정의한 contract를 실제 cache, batching, parallelism, runtime으로 구현하는 문제는 <code>02-serving-systems</code>에서 다룬다.</p>
+    </article>
+    <section class="content-panel surface">
+      <div class="section-heading">
+        <div>
+          <p class="eyebrow">Sections</p>
+          <h2>LLM 모델 이론 안의 세부 영역</h2>
+        </div>
+        <input type="search" placeholder="섹션 필터" aria-label="섹션 필터" data-card-filter>
+      </div>
+      <div class="module-grid section-grid" data-card-container>
+        <a class="module-card section-card" data-search-card data-search-text="autoregressive transformer transformer block, causal mask, next token objective와 autoregressive generation을 모델 관점에서 정리한다. prefill/decode의 성능 차이는 여기서 결론 내리지 않고 서빙 트랙으로 넘긴다. llm 모델 이론" href="01-autoregressive-transformers/"><span class="module-index">01</span><h3>Autoregressive Transformer</h3><p>Transformer block, causal mask, next token objective와 autoregressive generation을 모델 관점에서 정리한다. prefill/decode의 성능 차이는 여기서 결론 내리지 않고 서빙 트랙으로 넘긴다.</p><div class="module-card-meta"><span>1 chapters</span></div></a><a class="module-card section-card" data-search-card data-search-text="mixture of experts moe를 분산 배치 기법이 아니라 conditional computation 모델로 먼저 읽는다. router, top k, capacity, load balancing objective가 정의하는 모델 동작과 expert parallel serving을 분리한다. llm 모델 이론" href="02-mixture-of-experts/"><span class="module-index">02</span><h3>Mixture of Experts</h3><p>MoE를 분산 배치 기법이 아니라 conditional computation 모델로 먼저 읽는다. router, top k, capacity, load balancing objective가 정의하는 모델 동작과 expert parallel serving을 분리한다.</p><div class="module-card-meta"><span>1 chapters</span></div></a><a class="module-card section-card" data-search-card data-search-text="diffusion and recurrent models autoregressive next token generation과 다른 두 계보를 다룬다. diffusion llm은 token sequence를 반복 복원하고, recurrent depth transformer는 hidden state를 반복 계산한다. 공통 반복 구조와 서로 다른 objective를 함께 본다. llm 모델 이론" href="03-diffusion-and-recurrent-models/"><span class="module-index">03</span><h3>Diffusion and Recurrent Models</h3><p>Autoregressive next token generation과 다른 두 계보를 다룬다. Diffusion LLM은 token sequence를 반복 복원하고, recurrent depth Transformer는 hidden state를 반복 계산한다. 공통 반복 구조와 서로 다른 objective를 함께 본다.</p><div class="module-card-meta"><span>4 chapters</span></div></a>
+      </div>
+    </section>
+
+      </section>
+      <aside class="page-sidebar">
+    <div class="sidebar-panel surface">
+      <p class="eyebrow">Progress</p>
+      <h3>진행 방식</h3>
+      <p>챕터 페이지의 완료 버튼은 브라우저 로컬 저장소에 기록됩니다.</p>
+    </div>
+    </aside>
+    </div>
+  </main>
+  <script type="module" src="../assets/app.js?v=20260814"></script>
+  <script type="module">
+    import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs';
+    mermaid.initialize({
+      startOnLoad: true,
+      theme: 'neutral',
+      securityLevel: 'loose',
+      flowchart: { useMaxWidth: false },
+      sequence: { useMaxWidth: false },
+      gantt: { useMaxWidth: false }
+    });
+  </script>
+  <script>
+    window.MathJax = {
+      tex: { inlineMath: [['$', '$'], ['\\(', '\\)']], displayMath: [['$$', '$$'], ['\\[', '\\]']] },
+      svg: { fontCache: 'global' }
+    };
+  </script>
+  <script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-svg.js" async></script>
+</body>
+</html>

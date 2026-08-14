@@ -121,6 +121,7 @@ header.site-header,
 :where(.site-header) .search-shell {
   grid-column: 2;
   grid-row: 1;
+  position: relative;
   padding: 0;
   border: 0;
   background: transparent;
@@ -486,6 +487,44 @@ p {
 
 :where(.search-results) {
   display: none;
+}
+
+:where(.search-results.is-visible) {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  z-index: 30;
+  display: grid;
+  width: min(420px, calc(100vw - 32px));
+  max-height: min(520px, 65vh);
+  overflow-y: auto;
+  padding: 8px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  background: #ffffff;
+  box-shadow: var(--shadow);
+}
+
+:where(.search-result-link) {
+  display: grid;
+  gap: 2px;
+  padding: 10px 12px;
+  border-radius: var(--radius-sm);
+  color: var(--ink);
+  text-decoration: none;
+}
+
+:where(.search-result-link:hover, .search-result-link:focus-visible) {
+  background: var(--bg-strong);
+}
+
+:where(.search-result-link span) {
+  color: var(--ink-faint);
+  font-size: 0.78rem;
+}
+
+:where(.search-result-link strong) {
+  font-size: 0.92rem;
 }
 
 :where(input[type="search"], [data-search-input]) {
@@ -1105,11 +1144,15 @@ footer,
   }
 
   :where(.top-nav) {
-    flex-wrap: nowrap;
-    overflow-x: auto;
+    flex-wrap: wrap;
+    overflow-x: visible;
     width: 100%;
-    padding-bottom: 4px;
-    scrollbar-width: thin;
+    padding-bottom: 0;
+  }
+
+  :where(.site-header .top-nav a) {
+    padding-inline: 9px;
+    font-size: 0.86rem;
   }
 
   .site-header .search-shell {

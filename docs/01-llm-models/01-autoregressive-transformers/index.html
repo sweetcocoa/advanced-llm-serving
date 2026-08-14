@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Autoregressive Transformer | LLM 모델 이론</title>
+  <meta name="description" content="Transformer block, causal mask, next token objective와 autoregressive generation을 모델 관점에서 정리한다. prefill/decode의 성능 차이는 여기서 결론 내리지 않고 서빙 트랙으로 넘긴다.">
+  <meta name="theme-color" content="#10182a">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Noto+Sans+KR:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../../assets/style.css?v=20260814">
+</head>
+<body class="page-section" data-page-kind="section" data-page-id="01-llm-models/01-autoregressive-transformers" data-root-prefix="../../">
+  <div class="reading-progress" data-reading-progress></div>
+  <header class="site-header">
+    <a class="brand" href="../../">
+      <span class="brand-kicker">GitHub Pages Study</span>
+      <strong>LLM Models + Serving Systems</strong>
+    </a>
+    <nav class="top-nav"><a class="top-nav-link is-active" href="../">LLM 모델 이론</a><a class="top-nav-link" href="../../02-serving-systems/">서빙 시스템 설계</a><a class="top-nav-link" href="../../03-system-design/">종합 시스템 설계</a></nav>
+    <div class="search-shell">
+      <input type="search" placeholder="챕터, 섹션, 트랙 검색" aria-label="검색" data-global-search>
+      <div class="search-results" data-search-results hidden></div>
+    </div>
+  </header>
+  <main class="page-frame">
+
+    <section class="hero">
+      <div class="hero-copy">
+        <p class="eyebrow">LLM 모델 이론</p>
+        <h1>Autoregressive Transformer</h1>
+        <p class="hero-summary">Transformer block, causal mask, next token objective와 autoregressive generation을 모델 관점에서 정리한다. prefill/decode의 성능 차이는 여기서 결론 내리지 않고 서빙 트랙으로 넘긴다.</p>
+      </div>
+      <div class="hero-stats">
+        <div class="stat-card"><strong>1</strong><span>chapters</span></div>
+      </div>
+    </section>
+
+    <div class="page-layout">
+      <section class="page-main content-shell">
+
+    <article class="content-panel surface prose">
+      <h1 id="autoregressive-transformer">Autoregressive Transformer</h1>
+<p>Transformer block, causal mask, next-token objective와 autoregressive generation을 모델 관점에서 정리한다. prefill/decode의 성능 차이는 여기서 결론 내리지 않고 서빙 트랙으로 넘긴다.</p>
+<h2 id="챕터-순서">챕터 순서</h2>
+<ul><li><a href="./01-transformer-and-autoregressive-lm/">Transformer and Autoregressive LM</a>: causal factorization과 Transformer가 serving에 넘기는 모델 contract를 배운다.</li></ul>
+<h2 id="경계">경계</h2>
+<p>KV cache, TTFT, TPOT과 batching은 <code>02-serving-systems/01-inference-foundations</code>에서 다룬다.</p>
+    </article>
+    <section class="content-panel surface">
+      <div class="section-heading">
+        <div>
+          <p class="eyebrow">Chapters</p>
+          <h2>Autoregressive Transformer 안의 학습 단위</h2>
+        </div>
+        <input type="search" placeholder="챕터 필터" aria-label="챕터 필터" data-card-filter>
+      </div>
+      <div class="chapter-grid" data-card-container>
+        <a class="chapter-card" data-search-card data-search-text="transformer와 autoregressive language model gpt 계열 모델을 이해하려면 transformer라는 신경망 구조와 autoregressive라는 확률 모델링 방식을 분리해서 본 뒤 다시 결합해야 한다. transformer는 token 표현이 attention과 feed forward network를 통과하며 갱신되는 방법을 정한다. autoregressive language model은 문장 확률을 왼쪽에서 오른쪽 조건부 확률의 곱으로 분해한다. decoder only llm은 두 선택을 결합해, 주어진 prefix 다음에 올 token의 분포를 반복해서 예측한다 [s1][s2][s3]. autoregressive transformer llm 모델 이론" data-progress-id="transformer-and-autoregressive-lm" href="01-transformer-and-autoregressive-lm/"><span class="chapter-module">Autoregressive Transformer</span><h3>Transformer와 Autoregressive Language Model</h3><p>GPT 계열 모델을 이해하려면 Transformer라는 신경망 구조와 autoregressive라는 확률 모델링 방식을 분리해서 본 뒤 다시 결합해야 한다. Transformer는 token 표현이 attention과 feed forward network를 통과하며 갱신되는 방법을 정한다. Autoregressive language model은 문장 확률을 왼쪽에서 오른쪽 조건부 확률의 곱…</p><div class="chapter-card-meta"><span>35-50 min</span><span>2026-08-14</span><span class="chapter-progress-state">미완료</span></div></a>
+      </div>
+    </section>
+
+      </section>
+      <aside class="page-sidebar">
+    <div class="sidebar-panel surface">
+      <p class="eyebrow">Progress</p>
+      <h3>진행 방식</h3>
+      <p>챕터 페이지의 완료 버튼은 브라우저 로컬 저장소에 기록됩니다.</p>
+    </div>
+    </aside>
+    </div>
+  </main>
+  <script type="module" src="../../assets/app.js?v=20260814"></script>
+  <script type="module">
+    import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs';
+    mermaid.initialize({
+      startOnLoad: true,
+      theme: 'neutral',
+      securityLevel: 'loose',
+      flowchart: { useMaxWidth: false },
+      sequence: { useMaxWidth: false },
+      gantt: { useMaxWidth: false }
+    });
+  </script>
+  <script>
+    window.MathJax = {
+      tex: { inlineMath: [['$', '$'], ['\\(', '\\)']], displayMath: [['$$', '$$'], ['\\[', '\\]']] },
+      svg: { fontCache: 'global' }
+    };
+  </script>
+  <script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-svg.js" async></script>
+</body>
+</html>
