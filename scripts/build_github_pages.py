@@ -4,6 +4,7 @@ from __future__ import annotations
 import argparse
 import ast
 import html
+import json
 import os
 import re
 import shutil
@@ -15,6 +16,8 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 COURSE_ROOT = REPO_ROOT / "study" / "llm-serving-npu-roadmap"
 DOCS_ROOT = REPO_ROOT / "docs"
 STATIC_ROOT = REPO_ROOT / "site" / "static"
+LEGACY_ROUTES_PATH = COURSE_ROOT / "legacy-routes.json"
+ASSET_VERSION = "20260814"
 NUMBERED_DIR = re.compile(r"^\d{2}-")
 PUBLIC_MODULE_DIR = re.compile(r"^(0[1-9]|[1-9]\d)-")
 CITATION_REF = re.compile(r"\[(S|I)(\d+)\]")
@@ -40,7 +43,10 @@ class Citation:
 class Chapter:
     module_slug: str
     module_title: str
+    section_slug: str
+    section_title: str
     slug: str
+    progress_id: str
     title: str
     summary: str
     reading_time: str
@@ -59,7 +65,9 @@ class Chapter:
 
 
 @dataclass
-class Module:
+class Section:
+    module_slug: str
+    module_title: str
     slug: str
     title: str
     summary: str
@@ -67,6 +75,21 @@ class Module:
     source_dir: Path
     output_dir: Path
     chapters: list[Chapter] = field(default_factory=list)
+
+
+@dataclass
+class Module:
+    slug: str
+    title: str
+    summary: str
+    readme_body: str
+    source_dir: Path
+    output_dir: Path
+    sections: list[Section] = field(default_factory=list)
+
+    @property
+    def chapters(self) -> list[Chapter]:
+        return [chapter for section in self.sections for chapter in section.chapters]
 
 
 def slugify(text: str) -> str:
@@ -490,7 +513,7 @@ class MarkdownRenderer:
         def image_replace(match: re.Match[str]) -> str:
             alt = html.escape(match.group(1))
             src = html.escape(rewrite_link(match.group(2)))
-            return f'<img src="{src}" alt="{alt}">'
+            return reserve(f'<img src="{src}" alt="{alt}">')
 
         escaped = re.sub(r"!\[([^\]]*)\]\(([^)]+)\)", image_replace, escaped)
 
@@ -498,9 +521,22 @@ class MarkdownRenderer:
             label = match.group(1)
             href = html.escape(rewrite_link(match.group(2)))
             external = " target=\"_blank\" rel=\"noreferrer\"" if href.startswith(("http://", "https://")) else ""
-            return f'<a href="{href}"{external}>{label}</a>'
+            return reserve(f'<a href="{href}"{external}>{label}</a>')
 
         escaped = re.sub(r"\[([^\]]+)\]\(([^)]+)\)", link_replace, escaped)
+
+        def bare_url_replace(match: re.Match[str]) -> str:
+            value = match.group(0)
+            trailing = ""
+            while value and value[-1] in ".,;":
+                trailing = value[-1] + trailing
+                value = value[:-1]
+            href = html.escape(html.unescape(value), quote=True)
+            return reserve(
+                f'<a href="{href}" target="_blank" rel="noreferrer">{value}</a>'
+            ) + trailing
+
+        escaped = re.sub(r"https?://[^\s<]+", bare_url_replace, escaped)
         escaped = re.sub(r"\*\*([^*]+)\*\*", r"<strong>\1</strong>", escaped)
         escaped = re.sub(r"(?<!\*)\*([^*]+)\*(?!\*)", r"<em>\1</em>", escaped)
 
@@ -593,10 +629,10 @@ def chapter_cards_markup(chapters: list[Chapter], page_dir: Path) -> str:
         href = rel_href(page_dir, chapter.output_dir)
         display_summary = truncate_text(chapter.summary, limit=220)
         cards.append(
-            "<a class=\"chapter-card\" "
-            f'data-card-search="{html.escape((chapter.title + " " + chapter.summary + " " + chapter.module_title).lower())}" '
-            f'data-progress-id="{html.escape(chapter.source_path)}" href="{href}">'
-            f"<span class=\"chapter-module\">{html.escape(chapter.module_title)}</span>"
+            "<a class=\"chapter-card\" data-search-card "
+            f'data-search-text="{html.escape((chapter.title + " " + chapter.summary + " " + chapter.section_title + " " + chapter.module_title).lower())}" '
+            f'data-progress-id="{html.escape(chapter.progress_id)}" href="{href}">'
+            f"<span class=\"chapter-module\">{html.escape(chapter.section_title)}</span>"
             f"<h3>{html.escape(chapter.title)}</h3>"
             f"<p>{render_plain_inline(display_summary)}</p>"
             "<div class=\"chapter-card-meta\">"
@@ -608,18 +644,37 @@ def chapter_cards_markup(chapters: list[Chapter], page_dir: Path) -> str:
     return "".join(cards)
 
 
+def section_cards_markup(sections: list[Section], page_dir: Path) -> str:
+    cards = []
+    for section in sections:
+        href = rel_href(page_dir, section.output_dir)
+        cards.append(
+            "<a class=\"module-card section-card\" data-search-card "
+            f'data-search-text="{html.escape((section.title + " " + section.summary + " " + section.module_title).lower())}" '
+            f'href="{href}">'
+            f"<span class=\"module-index\">{html.escape(section.slug.split('-', 1)[0])}</span>"
+            f"<h3>{html.escape(section.title)}</h3>"
+            f"<p>{render_plain_inline(section.summary)}</p>"
+            "<div class=\"module-card-meta\">"
+            f"<span>{len(section.chapters)} chapters</span>"
+            "</div></a>"
+        )
+    return "".join(cards)
+
+
 def module_cards_markup(modules: list[Module], page_dir: Path) -> str:
     cards = []
     for module in modules:
         href = rel_href(page_dir, module.output_dir)
         cards.append(
-            "<a class=\"module-card\" "
-            f'data-card-search="{html.escape((module.title + " " + module.summary).lower())}" '
+            "<a class=\"module-card\" data-search-card "
+            f'data-search-text="{html.escape((module.title + " " + module.summary).lower())}" '
             f'href="{href}">'
             f"<span class=\"module-index\">{html.escape(module.slug.split('-', 1)[0])}</span>"
             f"<h3>{html.escape(module.title)}</h3>"
             f"<p>{render_plain_inline(module.summary)}</p>"
             "<div class=\"module-card-meta\">"
+            f"<span>{len(module.sections)} sections</span>"
             f"<span>{len(module.chapters)} chapters</span>"
             "</div></a>"
         )
@@ -655,18 +710,18 @@ def page_shell(
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Noto+Sans+KR:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="{assets}/style.css">
+  <link rel="stylesheet" href="{assets}/style.css?v={ASSET_VERSION}">
 </head>
 <body class="{body_class}" data-page-kind="{page_kind}" data-page-id="{html.escape(page_id)}" data-root-prefix="{root}">
   <div class="reading-progress" data-reading-progress></div>
   <header class="site-header">
     <a class="brand" href="{root}">
       <span class="brand-kicker">GitHub Pages Study</span>
-      <strong>LLM Serving + NPU</strong>
+      <strong>LLM Models + Serving Systems</strong>
     </a>
     <nav class="top-nav">{navigation}</nav>
     <div class="search-shell">
-      <input type="search" placeholder="챕터, 모듈, 키워드 검색" aria-label="검색" data-global-search>
+      <input type="search" placeholder="챕터, 섹션, 트랙 검색" aria-label="검색" data-global-search>
       <div class="search-results" data-search-results hidden></div>
     </div>
   </header>
@@ -679,7 +734,7 @@ def page_shell(
       {sidebar_markup}
     </div>
   </main>
-  <script type="module" src="{assets}/app.js"></script>
+  <script type="module" src="{assets}/app.js?v={ASSET_VERSION}"></script>
   <script type="module">
     import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs';
     mermaid.initialize({{
@@ -746,34 +801,71 @@ def load_modules() -> tuple[str, str, list[Module]]:
             output_dir=DOCS_ROOT / module_dir.name,
         )
 
-        chapter_dirs = sorted(
+        section_dirs = sorted(
             path
             for path in module_dir.iterdir()
             if path.is_dir() and (path / "README.md").exists() and NUMBERED_DIR.match(path.name)
         )
-        for chapter_dir in chapter_dirs:
-            readme_text = (chapter_dir / "README.md").read_text(encoding="utf-8")
-            metadata, body = parse_frontmatter(readme_text)
-            chapter_title = str(metadata.get("title") or chapter_dir.name.replace("-", " "))
-            chapter_summary = section_summary(body, "수업 개요") or first_paragraph(
-                re.sub(r"^#\s+.+$", "", body, count=1, flags=re.M)
+        for section_dir in section_dirs:
+            section_readme = (section_dir / "README.md").read_text(encoding="utf-8")
+            _, section_body = parse_frontmatter(section_readme)
+            section_title_match = re.search(r"^#\s+(.+)$", section_body, flags=re.M)
+            section_title = (
+                section_title_match.group(1).strip()
+                if section_title_match
+                else section_dir.name.replace("-", " ")
             )
-            quiz_path = chapter_dir / "quiz.md"
-            chapter = Chapter(
+            section_description = first_paragraph(
+                re.sub(r"^#\s+.+$", "", section_body, count=1, flags=re.M)
+            )
+            section = Section(
                 module_slug=module.slug,
                 module_title=module.title,
-                slug=chapter_dir.name,
-                title=chapter_title,
-                summary=chapter_summary,
-                reading_time=str(metadata.get("estimated_reading_time", "")),
-                updated_at=str(metadata.get("updated_at", "")),
-                source_dir=chapter_dir,
-                output_dir=module.output_dir / chapter_dir.name,
-                source_path=str(chapter_dir.relative_to(REPO_ROOT)).replace(os.sep, "/"),
-                quiz_path=str(quiz_path.relative_to(REPO_ROOT)).replace(os.sep, "/") if quiz_path.exists() else None,
+                slug=section_dir.name,
+                title=section_title,
+                summary=section_description,
+                readme_body=section_body,
+                source_dir=section_dir,
+                output_dir=module.output_dir / section_dir.name,
             )
-            module.chapters.append(chapter)
+
+            chapter_dirs = sorted(
+                path
+                for path in section_dir.iterdir()
+                if path.is_dir() and (path / "README.md").exists() and NUMBERED_DIR.match(path.name)
+            )
+            for chapter_dir in chapter_dirs:
+                readme_text = (chapter_dir / "README.md").read_text(encoding="utf-8")
+                metadata, body = parse_frontmatter(readme_text)
+                chapter_title = str(metadata.get("title") or chapter_dir.name.replace("-", " "))
+                chapter_summary = section_summary(body, "수업 개요") or first_paragraph(
+                    re.sub(r"^#\s+.+$", "", body, count=1, flags=re.M)
+                )
+                quiz_path = chapter_dir / "quiz.md"
+                chapter = Chapter(
+                    module_slug=module.slug,
+                    module_title=module.title,
+                    section_slug=section.slug,
+                    section_title=section.title,
+                    slug=chapter_dir.name,
+                    progress_id=str(metadata.get("id") or re.sub(r"^\d{2}-", "", chapter_dir.name)),
+                    title=chapter_title,
+                    summary=chapter_summary,
+                    reading_time=str(metadata.get("estimated_reading_time", "")),
+                    updated_at=str(metadata.get("updated_at", "")),
+                    source_dir=chapter_dir,
+                    output_dir=section.output_dir / chapter_dir.name,
+                    source_path=str(chapter_dir.relative_to(REPO_ROOT)).replace(os.sep, "/"),
+                    quiz_path=str(quiz_path.relative_to(REPO_ROOT)).replace(os.sep, "/") if quiz_path.exists() else None,
+                )
+                section.chapters.append(chapter)
+            module.sections.append(section)
         modules.append(module)
+
+    progress_ids = [chapter.progress_id for module in modules for chapter in module.chapters]
+    duplicate_ids = sorted({value for value in progress_ids if progress_ids.count(value) > 1})
+    if duplicate_ids:
+        raise ValueError(f"Duplicate chapter ids: {', '.join(duplicate_ids)}")
     return course_title, course_summary, modules
 
 
@@ -788,7 +880,7 @@ def render_home_page(course_title: str, course_summary: str, modules: list[Modul
         <p class="hero-summary">{render_plain_inline(course_summary)}</p>
       </div>
       <div class="hero-stats">
-        <div class="stat-card"><strong>{len(modules)}</strong><span>modules</span></div>
+        <div class="stat-card"><strong>{len(modules)}</strong><span>tracks</span></div>
         <div class="stat-card"><strong>{len(all_chapters)}</strong><span>chapters</span></div>
         <div class="stat-card"><strong>{html.escape(latest_update)}</strong><span>latest update</span></div>
       </div>
@@ -799,7 +891,7 @@ def render_home_page(course_title: str, course_summary: str, modules: list[Modul
       <div class="section-heading">
         <div>
           <p class="eyebrow">Roadmap</p>
-          <h2>모듈별 학습 흐름</h2>
+          <h2>트랙별 학습 흐름</h2>
         </div>
         <input type="search" placeholder="이 페이지에서 카드 필터" aria-label="카드 필터" data-card-filter>
       </div>
@@ -845,17 +937,94 @@ def render_home_page(course_title: str, course_summary: str, modules: list[Modul
     )
 
 
+def search_index(modules: list[Module]) -> list[dict[str, str]]:
+    items: list[dict[str, str]] = []
+    for module in modules:
+        module_href = str(module.output_dir.relative_to(DOCS_ROOT)).replace(os.sep, "/") + "/"
+        items.append(
+            {
+                "id": f"track:{module.slug}",
+                "kind": "track",
+                "track": module.title,
+                "section": "",
+                "title": module.title,
+                "summary": module.summary,
+                "href": module_href,
+                "searchText": f"{module.title} {module.summary}".lower(),
+            }
+        )
+        for section in module.sections:
+            section_href = str(section.output_dir.relative_to(DOCS_ROOT)).replace(os.sep, "/") + "/"
+            items.append(
+                {
+                    "id": f"section:{module.slug}/{section.slug}",
+                    "kind": "section",
+                    "track": module.title,
+                    "section": section.title,
+                    "title": section.title,
+                    "summary": section.summary,
+                    "href": section_href,
+                    "searchText": f"{module.title} {section.title} {section.summary}".lower(),
+                }
+            )
+            for chapter in section.chapters:
+                chapter_href = str(chapter.output_dir.relative_to(DOCS_ROOT)).replace(os.sep, "/") + "/"
+                items.append(
+                    {
+                        "id": f"chapter:{chapter.progress_id}",
+                        "kind": "chapter",
+                        "track": module.title,
+                        "section": section.title,
+                        "title": chapter.title,
+                        "summary": chapter.summary,
+                        "href": chapter_href,
+                        "searchText": (
+                            f"{module.title} {section.title} {chapter.title} {chapter.summary}".lower()
+                        ),
+                    }
+                )
+    return items
+
+
+def write_legacy_redirects() -> None:
+    if not LEGACY_ROUTES_PATH.exists():
+        return
+    routes = json.loads(LEGACY_ROUTES_PATH.read_text(encoding="utf-8"))
+    for old_path, new_path in routes.items():
+        old_dir = DOCS_ROOT / str(old_path).strip("/")
+        new_dir = DOCS_ROOT / str(new_path).strip("/")
+        target = rel_href(old_dir, new_dir)
+        target_js = json.dumps(target)
+        redirect = f"""<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta http-equiv="refresh" content="0; url={html.escape(target)}">
+  <link rel="canonical" href="{html.escape(target)}">
+  <title>페이지 이동</title>
+</head>
+<body>
+  <p><a href="{html.escape(target)}">새 학습 경로로 이동</a></p>
+  <script>window.location.replace({target_js} + window.location.search + window.location.hash);</script>
+</body>
+</html>
+"""
+        write_text(old_dir / "index.html", redirect)
+
+
 def render_module_page(module: Module, modules: list[Module]) -> str:
     renderer = MarkdownRenderer()
     body_html, _ = renderer.render(module.readme_body)
     hero = f"""
     <section class="hero">
       <div class="hero-copy">
-        <p class="eyebrow">Module</p>
+      <p class="eyebrow">Track</p>
         <h1>{html.escape(module.title)}</h1>
         <p class="hero-summary">{render_plain_inline(module.summary)}</p>
       </div>
       <div class="hero-stats">
+        <div class="stat-card"><strong>{len(module.sections)}</strong><span>sections</span></div>
         <div class="stat-card"><strong>{len(module.chapters)}</strong><span>chapters</span></div>
       </div>
     </section>
@@ -867,13 +1036,13 @@ def render_module_page(module: Module, modules: list[Module]) -> str:
     <section class="content-panel surface">
       <div class="section-heading">
         <div>
-          <p class="eyebrow">Chapters</p>
-          <h2>{html.escape(module.title)} 안의 학습 단위</h2>
+          <p class="eyebrow">Sections</p>
+          <h2>{html.escape(module.title)} 안의 세부 영역</h2>
         </div>
-        <input type="search" placeholder="챕터 필터" aria-label="챕터 필터" data-card-filter>
+        <input type="search" placeholder="섹션 필터" aria-label="섹션 필터" data-card-filter>
       </div>
-      <div class="chapter-grid" data-card-container>
-        {chapter_cards_markup(module.chapters, module.output_dir)}
+      <div class="module-grid section-grid" data-card-container>
+        {section_cards_markup(module.sections, module.output_dir)}
       </div>
     </section>
     """
@@ -885,7 +1054,7 @@ def render_module_page(module: Module, modules: list[Module]) -> str:
     </div>
     """
     return page_shell(
-        page_title=f"{module.title} | LLM Serving + NPU",
+        page_title=f"{module.title} | LLM Models + Serving Systems",
         description=module.summary,
         body_class="page-module",
         modules=modules,
@@ -893,6 +1062,60 @@ def render_module_page(module: Module, modules: list[Module]) -> str:
         current_module_slug=module.slug,
         page_kind="module",
         page_id=module.slug,
+        hero=hero,
+        main_content=main,
+        sidebar=sidebar,
+    )
+
+
+def render_section_page(section: Section, modules: list[Module]) -> str:
+    renderer = MarkdownRenderer()
+    body_html, _ = renderer.render(section.readme_body)
+    hero = f"""
+    <section class="hero">
+      <div class="hero-copy">
+        <p class="eyebrow">{html.escape(section.module_title)}</p>
+        <h1>{html.escape(section.title)}</h1>
+        <p class="hero-summary">{render_plain_inline(section.summary)}</p>
+      </div>
+      <div class="hero-stats">
+        <div class="stat-card"><strong>{len(section.chapters)}</strong><span>chapters</span></div>
+      </div>
+    </section>
+    """
+    main = f"""
+    <article class="content-panel surface prose">
+      {body_html}
+    </article>
+    <section class="content-panel surface">
+      <div class="section-heading">
+        <div>
+          <p class="eyebrow">Chapters</p>
+          <h2>{html.escape(section.title)} 안의 학습 단위</h2>
+        </div>
+        <input type="search" placeholder="챕터 필터" aria-label="챕터 필터" data-card-filter>
+      </div>
+      <div class="chapter-grid" data-card-container>
+        {chapter_cards_markup(section.chapters, section.output_dir)}
+      </div>
+    </section>
+    """
+    sidebar = """
+    <div class="sidebar-panel surface">
+      <p class="eyebrow">Progress</p>
+      <h3>진행 방식</h3>
+      <p>챕터 페이지의 완료 버튼은 브라우저 로컬 저장소에 기록됩니다.</p>
+    </div>
+    """
+    return page_shell(
+        page_title=f"{section.title} | {section.module_title}",
+        description=section.summary,
+        body_class="page-section",
+        modules=modules,
+        page_dir=section.output_dir,
+        current_module_slug=section.module_slug,
+        page_kind="section",
+        page_id=f"{section.module_slug}/{section.slug}",
         hero=hero,
         main_content=main,
         sidebar=sidebar,
@@ -928,14 +1151,14 @@ def render_chapter_page(chapter: Chapter, modules: list[Module]) -> str:
     hero = f"""
     <section class="hero">
       <div class="hero-copy">
-        <p class="eyebrow">{html.escape(chapter.module_title)}</p>
+        <p class="eyebrow">{html.escape(chapter.module_title)} / {html.escape(chapter.section_title)}</p>
         <h1>{html.escape(chapter.title)}</h1>
         <p class="hero-summary">{summary_html}</p>
       </div>
       <div class="hero-stats">
         <div class="stat-card"><strong>{html.escape(chapter.reading_time or '시간 미정')}</strong><span>reading time</span></div>
         <div class="stat-card"><strong>{html.escape(chapter.updated_at or '-')}</strong><span>updated</span></div>
-        <div class="stat-card"><button class="progress-toggle" type="button" data-progress-toggle data-progress-id="{html.escape(chapter.source_path)}">완료로 표시</button></div>
+        <div class="stat-card"><button class="progress-toggle" type="button" data-progress-toggle data-progress-id="{html.escape(chapter.progress_id)}">완료로 표시</button></div>
       </div>
     </section>
     """
@@ -975,7 +1198,7 @@ def render_chapter_page(chapter: Chapter, modules: list[Module]) -> str:
         page_dir=chapter.output_dir,
         current_module_slug=chapter.module_slug,
         page_kind="chapter",
-        page_id=chapter.source_path,
+        page_id=chapter.progress_id,
         hero=hero,
         main_content=main,
         sidebar=sidebar,
@@ -984,7 +1207,10 @@ def render_chapter_page(chapter: Chapter, modules: list[Module]) -> str:
 
 def write_text(path: Path, content: str) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(content, encoding="utf-8")
+    normalized = "\n".join(line.rstrip() for line in content.splitlines())
+    if content.endswith("\n"):
+        normalized += "\n"
+    path.write_text(normalized, encoding="utf-8")
 
 
 def build_site() -> None:
@@ -1004,12 +1230,19 @@ def build_site() -> None:
             chapter.next_output_dir = flat_chapters[index + 1].output_dir
 
     write_text(DOCS_ROOT / "index.html", render_home_page(course_title, course_summary, modules))
+    write_text(
+        DOCS_ROOT / "search-index.json",
+        json.dumps(search_index(modules), ensure_ascii=False, indent=2) + "\n",
+    )
 
     for module in modules:
         write_text(module.output_dir / "index.html", render_module_page(module, modules))
-        for chapter in module.chapters:
-            copy_chapter_assets(chapter)
-            write_text(chapter.output_dir / "index.html", render_chapter_page(chapter, modules))
+        for section in module.sections:
+            write_text(section.output_dir / "index.html", render_section_page(section, modules))
+            for chapter in section.chapters:
+                copy_chapter_assets(chapter)
+                write_text(chapter.output_dir / "index.html", render_chapter_page(chapter, modules))
+    write_legacy_redirects()
 
 
 def main() -> None:

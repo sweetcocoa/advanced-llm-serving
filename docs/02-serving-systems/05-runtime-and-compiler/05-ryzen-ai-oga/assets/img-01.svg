@@ -1,0 +1,39 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="620" viewBox="0 0 1200 620" role="img" aria-labelledby="title desc">
+  <title id="title">Ryzen AI 1.7.1 hybrid phase map</title>
+  <desc id="desc">The official Ryzen AI 1.7.1 hybrid artifact uses NPU prefill followed by iGPU token generation.</desc>
+  <rect width="1200" height="620" fill="#f7f8fa"/>
+  <text x="60" y="66" font-family="Arial, sans-serif" font-size="34" font-weight="700" fill="#20252a">Ryzen AI 1.7.1 hybrid execution</text>
+  <text x="60" y="104" font-family="Arial, sans-serif" font-size="21" fill="#4b545c">Follow the generated artifact's documented partition, not a generic GPU/NPU intuition.</text>
+
+  <rect x="70" y="180" width="230" height="190" rx="8" fill="#e9edf1" stroke="#65727d" stroke-width="3"/>
+  <text x="185" y="235" text-anchor="middle" font-family="Arial, sans-serif" font-size="30" font-weight="700" fill="#303941">CPU</text>
+  <text x="185" y="282" text-anchor="middle" font-family="Arial, sans-serif" font-size="22" fill="#3e4952">input preparation</text>
+  <text x="185" y="320" text-anchor="middle" font-family="Arial, sans-serif" font-size="22" fill="#3e4952">session orchestration</text>
+
+  <rect x="365" y="180" width="260" height="190" rx="8" fill="#e5f3ea" stroke="#258052" stroke-width="4"/>
+  <text x="495" y="235" text-anchor="middle" font-family="Arial, sans-serif" font-size="30" font-weight="700" fill="#145333">NPU</text>
+  <text x="495" y="285" text-anchor="middle" font-family="Arial, sans-serif" font-size="25" font-weight="700" fill="#1d6842">PREFILL PHASE</text>
+  <text x="495" y="325" text-anchor="middle" font-family="Arial, sans-serif" font-size="20" fill="#286b49">prompt processing / TTFT path</text>
+
+  <rect x="690" y="180" width="260" height="190" rx="8" fill="#e8f1fb" stroke="#2f71b2" stroke-width="4"/>
+  <text x="820" y="235" text-anchor="middle" font-family="Arial, sans-serif" font-size="30" font-weight="700" fill="#174a76">iGPU</text>
+  <text x="820" y="285" text-anchor="middle" font-family="Arial, sans-serif" font-size="25" font-weight="700" fill="#1f5d91">TOKEN PHASE</text>
+  <text x="820" y="325" text-anchor="middle" font-family="Arial, sans-serif" font-size="20" fill="#30658e">iterative token generation / TPS</text>
+
+  <rect x="1015" y="180" width="120" height="190" rx="8" fill="#fff0e0" stroke="#b96718" stroke-width="3"/>
+  <text x="1075" y="252" text-anchor="middle" font-family="Arial, sans-serif" font-size="25" font-weight="700" fill="#743c0b">CPU</text>
+  <text x="1075" y="292" text-anchor="middle" font-family="Arial, sans-serif" font-size="18" fill="#74491f">stream</text>
+  <text x="1075" y="322" text-anchor="middle" font-family="Arial, sans-serif" font-size="18" fill="#74491f">output</text>
+
+  <path d="M300 275 H350" stroke="#59656f" stroke-width="7"/>
+  <polygon points="350,275 328,261 328,289" fill="#59656f"/>
+  <path d="M625 275 H675" stroke="#258052" stroke-width="7"/>
+  <polygon points="675,275 653,261 653,289" fill="#258052"/>
+  <path d="M950 275 H1000" stroke="#2f71b2" stroke-width="7"/>
+  <polygon points="1000,275 978,261 978,289" fill="#2f71b2"/>
+
+  <rect x="345" y="430" width="610" height="110" rx="8" fill="#fff8e6" stroke="#d29a24" stroke-width="3"/>
+  <text x="650" y="475" text-anchor="middle" font-family="Arial, sans-serif" font-size="24" font-weight="700" fill="#77510b">Phase boundary to measure</text>
+  <text x="650" y="512" text-anchor="middle" font-family="Arial, sans-serif" font-size="20" fill="#6a541f">handoff latency + state transfer + initialization</text>
+  <text x="600" y="588" text-anchor="middle" font-family="Arial, sans-serif" font-size="20" font-weight="700" fill="#8a2932">Incorrect for this artifact: iGPU prefill to NPU decode</text>
+</svg>

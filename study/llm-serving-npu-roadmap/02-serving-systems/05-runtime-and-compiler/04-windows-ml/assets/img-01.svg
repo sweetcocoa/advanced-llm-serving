@@ -1,0 +1,35 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="680" viewBox="0 0 1200 680" role="img" aria-labelledby="title desc">
+  <title id="title">Windows ML EP acquisition and version contract</title>
+  <desc id="desc">Windows ML catalog and bring-your-own EP paths converge on ONNX Runtime while assigning different update and compatibility responsibilities.</desc>
+  <rect width="1200" height="680" fill="#f7f8fa"/>
+  <text x="60" y="62" font-family="Arial, sans-serif" font-size="34" font-weight="700" fill="#17202a">Windows ML 2.x: two EP acquisition paths</text>
+  <text x="60" y="96" font-family="Arial, sans-serif" font-size="20" fill="#46515c">Choose by network, policy, package size, and version-control requirements.</text>
+
+  <rect x="60" y="140" width="470" height="270" rx="8" fill="#e8f1fb" stroke="#3275b8" stroke-width="3"/>
+  <text x="92" y="188" font-family="Arial, sans-serif" font-size="28" font-weight="700" fill="#17466f">ExecutionProviderCatalog</text>
+  <text x="92" y="232" font-family="Arial, sans-serif" font-size="21" fill="#21384c">1. Find compatible certified EPs</text>
+  <text x="92" y="270" font-family="Arial, sans-serif" font-size="21" fill="#21384c">2. Download and install system-wide</text>
+  <text x="92" y="308" font-family="Arial, sans-serif" font-size="21" fill="#21384c">3. Register with Windows ML ONNX Runtime</text>
+  <text x="92" y="356" font-family="Arial, sans-serif" font-size="19" fill="#315b80">Updates: Windows Update</text>
+  <text x="92" y="386" font-family="Arial, sans-serif" font-size="19" fill="#315b80">Compatibility validation: Microsoft</text>
+
+  <rect x="670" y="140" width="470" height="270" rx="8" fill="#fff3df" stroke="#c87519" stroke-width="3"/>
+  <text x="702" y="188" font-family="Arial, sans-serif" font-size="28" font-weight="700" fill="#70420e">Bring Your Own EP</text>
+  <text x="702" y="232" font-family="Arial, sans-serif" font-size="21" fill="#4d351b">1. Bundle EP package or binaries</text>
+  <text x="702" y="270" font-family="Arial, sans-serif" font-size="21" fill="#4d351b">2. Register the shipped EP library</text>
+  <text x="702" y="308" font-family="Arial, sans-serif" font-size="21" fill="#4d351b">3. Pin and test the selected version</text>
+  <text x="702" y="356" font-family="Arial, sans-serif" font-size="19" fill="#80531f">Updates: application team</text>
+  <text x="702" y="386" font-family="Arial, sans-serif" font-size="19" fill="#80531f">Compatibility validation: application team</text>
+
+  <path d="M295 410 V470 H540" fill="none" stroke="#3275b8" stroke-width="5"/>
+  <path d="M905 410 V470 H660" fill="none" stroke="#c87519" stroke-width="5"/>
+  <polygon points="540,470 520,458 520,482" fill="#3275b8"/>
+  <polygon points="660,470 680,458 680,482" fill="#c87519"/>
+
+  <rect x="380" y="450" width="440" height="160" rx="8" fill="#e8f6ed" stroke="#298455" stroke-width="3"/>
+  <text x="600" y="500" text-anchor="middle" font-family="Arial, sans-serif" font-size="28" font-weight="700" fill="#165735">Windows ML ONNX Runtime</text>
+  <text x="600" y="540" text-anchor="middle" font-family="Arial, sans-serif" font-size="21" fill="#244c39">Create session with the registered EP</text>
+  <text x="600" y="575" text-anchor="middle" font-family="Arial, sans-serif" font-size="19" fill="#37624d">Then verify graph partition, fallback, and latency separately.</text>
+
+  <text x="600" y="650" text-anchor="middle" font-family="Arial, sans-serif" font-size="19" font-weight="700" fill="#7a2730">Catalog first + bundled fallback is a supported mixed strategy.</text>
+</svg>

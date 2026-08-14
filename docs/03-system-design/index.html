@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>종합 시스템 설계 | LLM Models + Serving Systems</title>
+  <meta name="description" content="모델 이론과 서빙 이론을 실제 제품 선택으로 다시 결합한다. 특정 모델이나 accelerator를 홍보하지 않고 품질, latency, cost, privacy, 운영 성숙도를 같은 의사결정표에 놓는다.">
+  <meta name="theme-color" content="#10182a">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Noto+Sans+KR:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../assets/style.css?v=20260814">
+</head>
+<body class="page-module" data-page-kind="module" data-page-id="03-system-design" data-root-prefix="../">
+  <div class="reading-progress" data-reading-progress></div>
+  <header class="site-header">
+    <a class="brand" href="../">
+      <span class="brand-kicker">GitHub Pages Study</span>
+      <strong>LLM Models + Serving Systems</strong>
+    </a>
+    <nav class="top-nav"><a class="top-nav-link" href="../01-llm-models/">LLM 모델 이론</a><a class="top-nav-link" href="../02-serving-systems/">서빙 시스템 설계</a><a class="top-nav-link is-active" href="./">종합 시스템 설계</a></nav>
+    <div class="search-shell">
+      <input type="search" placeholder="챕터, 섹션, 트랙 검색" aria-label="검색" data-global-search>
+      <div class="search-results" data-search-results hidden></div>
+    </div>
+  </header>
+  <main class="page-frame">
+
+    <section class="hero">
+      <div class="hero-copy">
+      <p class="eyebrow">Track</p>
+        <h1>종합 시스템 설계</h1>
+        <p class="hero-summary">모델 이론과 서빙 이론을 실제 제품 선택으로 다시 결합한다. 특정 모델이나 accelerator를 홍보하지 않고 품질, latency, cost, privacy, 운영 성숙도를 같은 의사결정표에 놓는다.</p>
+      </div>
+      <div class="hero-stats">
+        <div class="stat-card"><strong>2</strong><span>sections</span></div>
+        <div class="stat-card"><strong>4</strong><span>chapters</span></div>
+      </div>
+    </section>
+
+    <div class="page-layout">
+      <section class="page-main content-shell">
+
+    <article class="content-panel surface prose">
+      <h1 id="종합-시스템-설계">종합 시스템 설계</h1>
+<p>모델 이론과 서빙 이론을 실제 제품 선택으로 다시 결합한다. 특정 모델이나 accelerator를 홍보하지 않고 품질, latency, cost, privacy, 운영 성숙도를 같은 의사결정표에 놓는다.</p>
+<h2 id="이-트랙을-마치면-설명할-수-있어야-하는-것">이 트랙을 마치면 설명할 수 있어야 하는 것</h2>
+<ul><li>cloud와 edge 배치의 품질·비용·privacy tradeoff를 설명할 수 있다.</li><li>workload에 맞는 model, cache, scheduler, accelerator와 runtime을 선택할 수 있다.</li><li>최신 논문의 저자 보고 성능과 production readiness를 구분할 수 있다.</li><li>서로 다른 생성 계보를 같은 quality-constrained goodput 기준으로 평가할 수 있다.</li></ul>
+<h2 id="섹션-순서">섹션 순서</h2>
+<ul><li><a href="./01-deployment-scenarios/">Deployment Scenarios</a></li><li><a href="./02-frontier-and-evaluation/">Frontier and Evaluation</a></li></ul>
+    </article>
+    <section class="content-panel surface">
+      <div class="section-heading">
+        <div>
+          <p class="eyebrow">Sections</p>
+          <h2>종합 시스템 설계 안의 세부 영역</h2>
+        </div>
+        <input type="search" placeholder="섹션 필터" aria-label="섹션 필터" data-card-filter>
+      </div>
+      <div class="module-grid section-grid" data-card-container>
+        <a class="module-card section-card" data-search-card data-search-text="deployment scenarios cloud, edge, hybrid 배치와 실제 제품 시나리오를 통해 모델 선택과 serving stack 선택을 함께 연습한다. 종합 시스템 설계" href="01-deployment-scenarios/"><span class="module-index">01</span><h3>Deployment Scenarios</h3><p>cloud, edge, hybrid 배치와 실제 제품 시나리오를 통해 모델 선택과 serving stack 선택을 함께 연습한다.</p><div class="module-card-meta"><span>2 chapters</span></div></a><a class="module-card section-card" data-search-card data-search-text="frontier and evaluation 2026년의 변화가 모델 objective, serving runtime, accelerator support 중 어디에서 일어나는지 구분하고, 같은 조건의 benchmark와 도입 기준으로 판정한다. 종합 시스템 설계" href="02-frontier-and-evaluation/"><span class="module-index">02</span><h3>Frontier and Evaluation</h3><p>2026년의 변화가 모델 objective, serving runtime, accelerator support 중 어디에서 일어나는지 구분하고, 같은 조건의 benchmark와 도입 기준으로 판정한다.</p><div class="module-card-meta"><span>2 chapters</span></div></a>
+      </div>
+    </section>
+
+      </section>
+      <aside class="page-sidebar">
+    <div class="sidebar-panel surface">
+      <p class="eyebrow">Progress</p>
+      <h3>진행 방식</h3>
+      <p>챕터 페이지의 완료 버튼은 브라우저 로컬 저장소에 기록됩니다.</p>
+    </div>
+    </aside>
+    </div>
+  </main>
+  <script type="module" src="../assets/app.js?v=20260814"></script>
+  <script type="module">
+    import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs';
+    mermaid.initialize({
+      startOnLoad: true,
+      theme: 'neutral',
+      securityLevel: 'loose',
+      flowchart: { useMaxWidth: false },
+      sequence: { useMaxWidth: false },
+      gantt: { useMaxWidth: false }
+    });
+  </script>
+  <script>
+    window.MathJax = {
+      tex: { inlineMath: [['$', '$'], ['\\(', '\\)']], displayMath: [['$$', '$$'], ['\\[', '\\]']] },
+      svg: { fontCache: 'global' }
+    };
+  </script>
+  <script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-svg.js" async></script>
+</body>
+</html>

@@ -1,3 +1,0 @@
-| 파일명 | 원본 제목 | 원본 URL | 출처 유형 | 접근 날짜 | 사용 이유 | 저작권/이용 메모 |
-| --- | --- | --- | --- | --- | --- | --- |
-| img-02.png | OpenVINO AI visual | [https://openvino.ai/](https://openvino.ai/) | Official Site | 2026-03-08 | 챕터 설명을 보조하는 참고 이미지 | OpenVINO 관련 시각 자료 참고용 |

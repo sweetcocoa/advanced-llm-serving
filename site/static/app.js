@@ -13,6 +13,16 @@ function normalizePath(input) {
   }
 }
 
+function progressKey(input) {
+  if (!input) {
+    return normalizePath(window.location.pathname);
+  }
+  if (input.startsWith("/") || input.startsWith("http://") || input.startsWith("https://")) {
+    return normalizePath(input);
+  }
+  return input;
+}
+
 function readProgress() {
   try {
     const raw = window.localStorage.getItem(PROGRESS_STORAGE_KEY);
@@ -99,7 +109,7 @@ function findProgressAnchor() {
 }
 
 function ensureProgressToggle() {
-  const pagePath = normalizePath(window.location.pathname);
+  const pagePath = progressKey(document.body.dataset.pageId);
   const state = readProgress();
   const pageComplete = Boolean(state[pagePath]);
 
@@ -139,9 +149,9 @@ function ensureProgressToggle() {
   };
 
   for (const button of buttons) {
-    const targetPath = normalizePath(
-      button.getAttribute("data-progress-path") ||
-        button.getAttribute("data-progress-toggle") ||
+    const targetPath = progressKey(
+      button.getAttribute("data-progress-id") ||
+        button.getAttribute("data-progress-path") ||
         window.location.pathname
     );
     syncButton(button, Boolean(state[targetPath]));
@@ -162,9 +172,9 @@ function ensureProgressToggle() {
       const complete = Boolean(nextState[targetPath]);
       buttons
         .filter((candidate) => {
-          const candidatePath = normalizePath(
-            candidate.getAttribute("data-progress-path") ||
-              candidate.getAttribute("data-progress-toggle") ||
+          const candidatePath = progressKey(
+            candidate.getAttribute("data-progress-id") ||
+              candidate.getAttribute("data-progress-path") ||
               window.location.pathname
           );
           return candidatePath === targetPath;
@@ -190,7 +200,7 @@ function decorateCompletedCards() {
       continue;
     }
 
-    const targetPath = normalizePath(link.href);
+    const targetPath = progressKey(card.getAttribute("data-progress-id") || link.href);
     const complete = Boolean(state[targetPath]);
     card.classList.toggle("is-complete", complete);
     if (complete) {
@@ -218,86 +228,79 @@ function decorateCompletedCards() {
   }
 }
 
-function searchScopes() {
-  const scopes = Array.from(
-    document.querySelectorAll(
-      "[data-search-scope], .card-grid, .chapter-grid, .module-grid, .lesson-grid, .overview-grid"
-    )
-  );
-
-  if (scopes.length) {
-    return scopes;
-  }
-
-  const fallbackCards = document.querySelectorAll("[data-search-card], .chapter-card, .module-card, .lesson-card");
-  return fallbackCards.length ? [fallbackCards[0].parentElement] : [];
-}
-
-function initSearchFilters() {
-  const inputs = Array.from(document.querySelectorAll("[data-search-input], input[type='search']"));
-  if (!inputs.length) {
-    return;
-  }
-
-  const scopes = searchScopes().filter(Boolean);
-  if (!scopes.length) {
-    return;
-  }
-
-  const filterScope = (scope, query) => {
-    const cards = Array.from(
-      scope.querySelectorAll("[data-search-card], .chapter-card, .module-card, .lesson-card, .card, article")
-    ).filter((card) => !card.closest(".toc, [data-toc], nav"));
-
-    if (!cards.length) {
-      return { visible: 0, total: 0 };
+function initCardFilters() {
+  for (const input of document.querySelectorAll("[data-card-filter]")) {
+    const panel = input.closest("section, article, main") || document;
+    const scope = panel.querySelector("[data-card-container]");
+    if (!scope) {
+      continue;
     }
 
-    let visible = 0;
-    for (const card of cards) {
-      const text = (card.dataset.searchText || card.textContent || "").replace(/\s+/g, " ").toLowerCase();
-      const matched = !query || text.includes(query);
-      card.hidden = !matched;
-      if (matched) {
-        visible += 1;
+    input.addEventListener("input", () => {
+      const query = input.value.trim().toLowerCase();
+      for (const card of scope.querySelectorAll("[data-search-card]")) {
+        const text = (card.dataset.searchText || card.textContent || "").toLowerCase();
+        card.hidden = Boolean(query) && !text.includes(query);
       }
-    }
-
-    const empty =
-      scope.querySelector("[data-search-empty]") ||
-      scope.parentElement?.querySelector("[data-search-empty]");
-    if (empty) {
-      empty.classList.toggle("is-visible", query.length > 0 && visible === 0);
-    }
-
-    return { visible, total: cards.length };
-  };
-
-  const update = (value) => {
-    const query = value.trim().toLowerCase();
-    const summary = scopes.reduce(
-      (acc, scope) => {
-        const result = filterScope(scope, query);
-        return {
-          visible: acc.visible + result.visible,
-          total: acc.total + result.total,
-        };
-      },
-      { visible: 0, total: 0 }
-    );
-
-    document
-      .querySelectorAll("[data-search-count]")
-      .forEach((node) => (node.textContent = `${summary.visible}/${summary.total}`));
-  };
-
-  for (const input of inputs) {
-    input.addEventListener("input", (event) => {
-      update(event.currentTarget.value);
     });
   }
+}
 
-  update(inputs[0].value || "");
+function initGlobalSearch() {
+  const input = document.querySelector("[data-global-search]");
+  const results = document.querySelector("[data-search-results]");
+  if (!input || !results) {
+    return;
+  }
+
+  const root = document.body.dataset.rootPrefix || "./";
+  let indexPromise;
+  const loadIndex = () => {
+    indexPromise ||= fetch(new URL(`${root}search-index.json`, window.location.href))
+      .then((response) => (response.ok ? response.json() : []))
+      .catch(() => []);
+    return indexPromise;
+  };
+
+  const close = () => {
+    results.replaceChildren();
+    results.hidden = true;
+    results.classList.remove("is-visible");
+  };
+
+  const render = (items) => {
+    results.replaceChildren();
+    for (const item of items.slice(0, 8)) {
+      const link = document.createElement("a");
+      link.className = "search-result-link";
+      link.href = new URL(`${root}${item.href}`, window.location.href);
+
+      const context = document.createElement("span");
+      context.textContent = [item.track, item.section].filter(Boolean).join(" / ");
+      const title = document.createElement("strong");
+      title.textContent = item.title;
+      link.append(context, title);
+      results.append(link);
+    }
+    results.hidden = items.length === 0;
+    results.classList.toggle("is-visible", items.length > 0);
+  };
+
+  input.addEventListener("input", async () => {
+    const query = input.value.trim().toLowerCase();
+    if (query.length < 2) {
+      close();
+      return;
+    }
+    const index = await loadIndex();
+    render(index.filter((item) => item.searchText.includes(query)));
+  });
+
+  input.addEventListener("keydown", (event) => {
+    if (event.key === "Escape") {
+      close();
+    }
+  });
 }
 
 function initTocSpy() {
@@ -389,7 +392,8 @@ document.addEventListener("DOMContentLoaded", () => {
   ensureReadingProgressBar();
   ensureProgressToggle();
   decorateCompletedCards();
-  initSearchFilters();
+  initCardFilters();
+  initGlobalSearch();
   initTocSpy();
   enhanceAnswerKeyDetails();
   highlightCurrentNavLink();

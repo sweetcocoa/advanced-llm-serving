@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Frontier and Evaluation | 종합 시스템 설계</title>
+  <meta name="description" content="2026년의 변화가 모델 objective, serving runtime, accelerator support 중 어디에서 일어나는지 구분하고, 같은 조건의 benchmark와 도입 기준으로 판정한다.">
+  <meta name="theme-color" content="#10182a">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Noto+Sans+KR:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../../assets/style.css?v=20260814">
+</head>
+<body class="page-section" data-page-kind="section" data-page-id="03-system-design/02-frontier-and-evaluation" data-root-prefix="../../">
+  <div class="reading-progress" data-reading-progress></div>
+  <header class="site-header">
+    <a class="brand" href="../../">
+      <span class="brand-kicker">GitHub Pages Study</span>
+      <strong>LLM Models + Serving Systems</strong>
+    </a>
+    <nav class="top-nav"><a class="top-nav-link" href="../../01-llm-models/">LLM 모델 이론</a><a class="top-nav-link" href="../../02-serving-systems/">서빙 시스템 설계</a><a class="top-nav-link is-active" href="../">종합 시스템 설계</a></nav>
+    <div class="search-shell">
+      <input type="search" placeholder="챕터, 섹션, 트랙 검색" aria-label="검색" data-global-search>
+      <div class="search-results" data-search-results hidden></div>
+    </div>
+  </header>
+  <main class="page-frame">
+
+    <section class="hero">
+      <div class="hero-copy">
+        <p class="eyebrow">종합 시스템 설계</p>
+        <h1>Frontier and Evaluation</h1>
+        <p class="hero-summary">2026년의 변화가 모델 objective, serving runtime, accelerator support 중 어디에서 일어나는지 구분하고, 같은 조건의 benchmark와 도입 기준으로 판정한다.</p>
+      </div>
+      <div class="hero-stats">
+        <div class="stat-card"><strong>2</strong><span>chapters</span></div>
+      </div>
+    </section>
+
+    <div class="page-layout">
+      <section class="page-main content-shell">
+
+    <article class="content-panel surface prose">
+      <h1 id="frontier-and-evaluation">Frontier and Evaluation</h1>
+<p>2026년의 변화가 모델 objective, serving runtime, accelerator support 중 어디에서 일어나는지 구분하고, 같은 조건의 benchmark와 도입 기준으로 판정한다.</p>
+<h2 id="챕터-순서">챕터 순서</h2>
+<ul><li><a href="./01-2026-trend-watch/">2026 Trend Watch</a></li><li><a href="./02-iterative-model-evaluation-and-adoption/">Iterative Model Evaluation and Adoption</a></li></ul>
+    </article>
+    <section class="content-panel surface">
+      <div class="section-heading">
+        <div>
+          <p class="eyebrow">Chapters</p>
+          <h2>Frontier and Evaluation 안의 학습 단위</h2>
+        </div>
+        <input type="search" placeholder="챕터 필터" aria-label="챕터 필터" data-card-filter>
+      </div>
+      <div class="chapter-grid" data-card-container>
+        <a class="chapter-card" data-search-card data-search-text="2026 trend watch 이 챕터는 2026년 7월 14일 기준 공식 문서, 벤더 기술 블로그, 공개 프로젝트 자료를 바탕으로, 무엇이 반복 가능한 운영 패턴이 되었고 무엇이 아직 실험 신호에 머무는지 가르는 수업이다. 3월 버전의 중심축은 cloud 쪽의 prefill/decode 분리 [s1], decode 가속 카드인 speculative decoding [s2], 그리고 on device 쪽의 provider 기반 npu offload 와 hybrid execution [s3][s4][s5][s6]이었다. 2026년 상반기 보강 이후에는 여기에 kv transfer/nixl , rack scale topology , wide expert parallel , topology aware scheduling , facility aware throughput 을 추가한다 [s7][s8][s9][s10][s11][s12]. structured outputs 는 여전히 별도 하드웨어 기술로 분류하지 않는다. 다만 vllm은 json schema·grammar 기반 structured outputs와 schema constrained tool calling을 serving 기능으로 제공한다 [s13][s14]. 따라서 이것은 제품 계약이면서도 decode 제약, 스키마 컴파일, 업무 규칙 검증의 비용을 수반하는 serving 요구다. frontier and evaluation 종합 시스템 설계" data-progress-id="2026-trend-watch" href="01-2026-trend-watch/"><span class="chapter-module">Frontier and Evaluation</span><h3>2026 Trend Watch</h3><p>이 챕터는 2026년 7월 14일 기준 공식 문서, 벤더 기술 블로그, 공개 프로젝트 자료를 바탕으로, 무엇이 반복 가능한 운영 패턴이 되었고 무엇이 아직 실험 신호에 머무는지 가르는 수업이다. 3월 버전의 중심축은 cloud 쪽의 prefill/decode 분리 <sup class="citation-ref">[S1]</sup>, decode 가속 카드인 speculative decoding <sup class="citation-ref">[S2]</sup>, 그리고 on device 쪽의 provide…</p><div class="chapter-card-meta"><span>35-50 min</span><span>2026-06-16</span><span class="chapter-progress-state">미완료</span></div></a><a class="chapter-card" data-search-card data-search-text="반복 생성 모델의 평가와 도입 판단 이 챕터는 diffusion llm과 recurrent depth transformer의 원리를 다시 설명하지 않는다. 모델 논문과 runtime 논문이 내놓은 서로 다른 주장을 같은 의사결정표에 올리는 방법을 다룬다. 핵심은 headline speedup이 아니라 같은 품질 조건에서 실제 workload의 slo를 얼마나 많이 만족시키는가 다. frontier and evaluation 종합 시스템 설계" data-progress-id="iterative-model-evaluation-and-adoption" href="02-iterative-model-evaluation-and-adoption/"><span class="chapter-module">Frontier and Evaluation</span><h3>반복 생성 모델의 평가와 도입 판단</h3><p>이 챕터는 Diffusion LLM과 recurrent depth Transformer의 원리를 다시 설명하지 않는다. 모델 논문과 runtime 논문이 내놓은 서로 다른 주장을 같은 의사결정표에 올리는 방법을 다룬다. 핵심은 headline speedup이 아니라 같은 품질 조건에서 실제 workload의 SLO를 얼마나 많이 만족시키는가 다.</p><div class="chapter-card-meta"><span>45-60 min</span><span>2026-08-14</span><span class="chapter-progress-state">미완료</span></div></a>
+      </div>
+    </section>
+
+      </section>
+      <aside class="page-sidebar">
+    <div class="sidebar-panel surface">
+      <p class="eyebrow">Progress</p>
+      <h3>진행 방식</h3>
+      <p>챕터 페이지의 완료 버튼은 브라우저 로컬 저장소에 기록됩니다.</p>
+    </div>
+    </aside>
+    </div>
+  </main>
+  <script type="module" src="../../assets/app.js?v=20260814"></script>
+  <script type="module">
+    import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs';
+    mermaid.initialize({
+      startOnLoad: true,
+      theme: 'neutral',
+      securityLevel: 'loose',
+      flowchart: { useMaxWidth: false },
+      sequence: { useMaxWidth: false },
+      gantt: { useMaxWidth: false }
+    });
+  </script>
+  <script>
+    window.MathJax = {
+      tex: { inlineMath: [['$', '$'], ['\\(', '\\)']], displayMath: [['$$', '$$'], ['\\[', '\\]']] },
+      svg: { fontCache: 'global' }
+    };
+  </script>
+  <script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-svg.js" async></script>
+</body>
+</html>
