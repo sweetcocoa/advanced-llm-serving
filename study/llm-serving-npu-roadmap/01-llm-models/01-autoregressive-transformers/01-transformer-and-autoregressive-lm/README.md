@@ -198,6 +198,8 @@ SentencePiece는 raw sentence에서 직접 subword model을 학습하고 languag
 
 **교수자:** 계산 순서는 바꾸거나 합칠 수 있습니다. 중요한 것은 허용 오차 안에서 같은 tokenization, visibility, position, block function, logits semantics를 보존하는 것입니다. 빠른 구현은 계약의 의미를 보존하면서 실행 계획을 바꾸는 작업입니다.
 
+이어 읽기: [긴 문맥을 읽는 방식: DSA, Lightning Indexer, KPool](../02-long-context-sparse-attention/README.md)에서 causal 범위 안의 토큰을 어떻게 골라 읽는지 살펴본다.
+
 ## 자주 헷갈리는 포인트
 - Transformer는 신경망 구조이고 autoregressive factorization은 확률분해다. 둘은 자주 결합되지만 같은 개념이 아니다.
 - Causal mask는 학습을 token-by-token loop로 만드는 장치가 아니다. 정답 sequence가 주어진 학습에서는 여러 위치를 동시에 계산할 수 있다.

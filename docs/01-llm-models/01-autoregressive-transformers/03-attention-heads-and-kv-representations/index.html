@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>어텐션 헤드와 KV 표현: MHA, MQA, GQA, MLA | LLM 모델 이론</title>
+  <meta name="description" content="체크포인트에 query head가 32개라고 쓰여 있다. 이 숫자만으로는 토큰 하나를 추가할 때 KV cache가 얼마나 커지는지 계산할 수 없다. MHA, MQA, GQA는 몇 개의 query head가 K와 V를 공유할지 를 정한다. MLA는 이후 계산에 쓸 K와 V 정보를 어떤 표현으로 저장할지 바꾼다. [S1][S2][S3][S4]">
+  <meta name="theme-color" content="#10182a">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Noto+Sans+KR:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../../../assets/style.css?v=20260814">
+</head>
+<body class="page-chapter" data-page-kind="chapter" data-page-id="attention-heads-and-kv-representations" data-root-prefix="../../../">
+  <div class="reading-progress" data-reading-progress></div>
+  <header class="site-header">
+    <a class="brand" href="../../../">
+      <span class="brand-kicker">GitHub Pages Study</span>
+      <strong>LLM Models + Serving Systems</strong>
+    </a>
+    <nav class="top-nav"><a class="top-nav-link is-active" href="../../">LLM 모델 이론</a><a class="top-nav-link" href="../../../02-serving-systems/">서빙 시스템 설계</a><a class="top-nav-link" href="../../../03-system-design/">종합 시스템 설계</a></nav>
+    <div class="search-shell">
+      <input type="search" placeholder="챕터, 섹션, 트랙 검색" aria-label="검색" data-global-search>
+      <div class="search-results" data-search-results hidden></div>
+    </div>
+  </header>
+  <main class="page-frame">
+
+    <section class="hero">
+      <div class="hero-copy">
+        <p class="eyebrow">LLM 모델 이론 / Autoregressive Transformer</p>
+        <h1>어텐션 헤드와 KV 표현: MHA, MQA, GQA, MLA</h1>
+        <p class="hero-summary">체크포인트에 query head가 32개라고 쓰여 있다. 이 숫자만으로는 토큰 하나를 추가할 때 KV cache가 얼마나 커지는지 계산할 수 없다. MHA, MQA, GQA는 몇 개의 query head가 K와 V를 공유할지 를 정한다. MLA는 이후 계산에 쓸 K와 V 정보를 어떤 표현으로 저장할지 바꾼다. <sup class="citation-ref"><a href="#source-s1" title="Attention Is All You Need §3.2.2 | Vaswani et al. | 핵심 근거 | MHA의 독립적인 projection과 head 출력" aria-label="[S1] Attention Is All You Need §3.2.2 출처로 이동" data-citation-role="핵심 근거">[S1]<span class="citation-popover" role="tooltip"><strong>[S1] Attention Is All You Need §3.2.2</strong><span>핵심 근거</span><span>Vaswani et al.</span><em>MHA의 독립적인 projection과 head 출력</em></span></a></sup><sup class="citation-ref"><a href="#source-s2" title="Fast Transformer Decoding | Shazeer | 핵심 근거 | MQA의 K/V 공유와 decode 메모리 대역폭" aria-label="[S2] Fast Transformer Decoding 출처로 이동" data-citation-role="핵심 근거">[S2]<span class="citation-popover" role="tooltip"><strong>[S2] Fast Transformer Decoding</strong><span>핵심 근거</span><span>Shazeer</span><em>MQA의 K/V 공유와 decode 메모리 대역폭</em></span></a></sup><sup class="citation-ref"><a href="#source-s3" title="GQA | Ainslie et al. | 보조 근거 | 그룹별 K/V 공유와 MHA·MQA 비교" aria-label="[S3] GQA 출처로 이동" data-citation-role="보조 근거">[S3]<span class="citation-popover" role="tooltip"><strong>[S3] GQA</strong><span>보조 근거</span><span>Ainslie et al.</span><em>그룹별 K/V 공유와 MHA·MQA 비교</em></span></a></sup><sup class="citation-ref"><a href="#source-s4" title="DeepSeek V2 §2.1 | DeepSeek AI | 핵심 근거 | MLA 공동 KV 압축, decoupled RoPE, projection 흡수" aria-label="[S4] DeepSeek V2 §2.1 출처로 이동" data-citation-role="핵심 근거">[S4]<span class="citation-popover" role="tooltip"><strong>[S4] DeepSeek V2 §2.1</strong><span>핵심 근거</span><span>DeepSeek AI</span><em>MLA 공동 KV 압축, decoupled RoPE, projection 흡수</em></span></a></sup></p>
+      </div>
+      <div class="hero-stats">
+        <div class="stat-card"><strong>20-30 min</strong><span>reading time</span></div>
+        <div class="stat-card"><strong>2026-11-20</strong><span>updated</span></div>
+        <div class="stat-card"><button class="progress-toggle" type="button" data-progress-toggle data-progress-id="attention-heads-and-kv-representations">완료로 표시</button></div>
+      </div>
+    </section>
+
+    <div class="page-layout">
+      <section class="page-main content-shell">
+
+    <article class="content-panel surface prose" data-reading-target>
+      <h1 id="어텐션-헤드와-kv-표현-mha-mqa-gqa-mla">어텐션 헤드와 KV 표현: MHA, MQA, GQA, MLA</h1>
+<h2 id="수업-개요">수업 개요</h2>
+<p>체크포인트에 query head가 32개라고 쓰여 있다. 이 숫자만으로는 토큰 하나를 추가할 때 KV cache가 얼마나 커지는지 계산할 수 없다. MHA, MQA, GQA는 <strong>몇 개의 query head가 K와 V를 공유할지</strong>를 정한다. MLA는 이후 계산에 쓸 K와 V 정보를 <strong>어떤 표현으로 저장할지</strong> 바꾼다. <sup class="citation-ref"><a href="#source-s1" title="Attention Is All You Need §3.2.2 | Vaswani et al. | 핵심 근거 | MHA의 독립적인 projection과 head 출력" aria-label="[S1] Attention Is All You Need §3.2.2 출처로 이동" data-citation-role="핵심 근거">[S1]<span class="citation-popover" role="tooltip"><strong>[S1] Attention Is All You Need §3.2.2</strong><span>핵심 근거</span><span>Vaswani et al.</span><em>MHA의 독립적인 projection과 head 출력</em></span></a></sup><sup class="citation-ref"><a href="#source-s2" title="Fast Transformer Decoding | Shazeer | 핵심 근거 | MQA의 K/V 공유와 decode 메모리 대역폭" aria-label="[S2] Fast Transformer Decoding 출처로 이동" data-citation-role="핵심 근거">[S2]<span class="citation-popover" role="tooltip"><strong>[S2] Fast Transformer Decoding</strong><span>핵심 근거</span><span>Shazeer</span><em>MQA의 K/V 공유와 decode 메모리 대역폭</em></span></a></sup><sup class="citation-ref"><a href="#source-s3" title="GQA | Ainslie et al. | 보조 근거 | 그룹별 K/V 공유와 MHA·MQA 비교" aria-label="[S3] GQA 출처로 이동" data-citation-role="보조 근거">[S3]<span class="citation-popover" role="tooltip"><strong>[S3] GQA</strong><span>보조 근거</span><span>Ainslie et al.</span><em>그룹별 K/V 공유와 MHA·MQA 비교</em></span></a></sup><sup class="citation-ref"><a href="#source-s4" title="DeepSeek V2 §2.1 | DeepSeek AI | 핵심 근거 | MLA 공동 KV 압축, decoupled RoPE, projection 흡수" aria-label="[S4] DeepSeek V2 §2.1 출처로 이동" data-citation-role="핵심 근거">[S4]<span class="citation-popover" role="tooltip"><strong>[S4] DeepSeek V2 §2.1</strong><span>핵심 근거</span><span>DeepSeek AI</span><em>MLA 공동 KV 압축, decoupled RoPE, projection 흡수</em></span></a></sup></p>
+<h2 id="query-head와-kv-head를-따로-세기">Query head와 KV head를 따로 세기</h2>
+<p><strong>교수자:</strong> query head가 32개이고 KV head가 8개면, 연속된 query head 네 개씩 같은 K/V head를 읽는 구성을 생각할 수 있습니다. 예를 들어 첫 네 head는 KV head 0을 읽습니다. 각 query head의 Q는 여전히 다르므로 어텐션 점수와 출력도 달라질 수 있습니다. <sup class="citation-ref"><a href="#source-s3" title="GQA | Ainslie et al. | 보조 근거 | 그룹별 K/V 공유와 MHA·MQA 비교" aria-label="[S3] GQA 출처로 이동" data-citation-role="보조 근거">[S3]<span class="citation-popover" role="tooltip"><strong>[S3] GQA</strong><span>보조 근거</span><span>Ainslie et al.</span><em>그룹별 K/V 공유와 MHA·MQA 비교</em></span></a></sup></p>
+<div class="table-wrap"><table><thead><tr><th>방식</th><th>KV head 수</th><th>층당 토큰당 KV, BF16·head dim 128</th></tr></thead><tbody><tr><td>MHA</td><td>32</td><td>16 KiB</td></tr><tr><td>GQA</td><td>8</td><td>4 KiB</td></tr><tr><td>MQA</td><td>1</td><td>512 B</td></tr></tbody></table></div>
+<p>BF16 요소가 2바이트이고 K와 V의 head dimension이 같다는 예다. 패딩, 페이지 여유분, 런타임의 head 복제는 빼고 논리적 크기만 센다. <sup class="citation-ref"><a href="#source-s1" title="Attention Is All You Need §3.2.2 | Vaswani et al. | 핵심 근거 | MHA의 독립적인 projection과 head 출력" aria-label="[S1] Attention Is All You Need §3.2.2 출처로 이동" data-citation-role="핵심 근거">[S1]<span class="citation-popover" role="tooltip"><strong>[S1] Attention Is All You Need §3.2.2</strong><span>핵심 근거</span><span>Vaswani et al.</span><em>MHA의 독립적인 projection과 head 출력</em></span></a></sup><sup class="citation-ref"><a href="#source-s2" title="Fast Transformer Decoding | Shazeer | 핵심 근거 | MQA의 K/V 공유와 decode 메모리 대역폭" aria-label="[S2] Fast Transformer Decoding 출처로 이동" data-citation-role="핵심 근거">[S2]<span class="citation-popover" role="tooltip"><strong>[S2] Fast Transformer Decoding</strong><span>핵심 근거</span><span>Shazeer</span><em>MQA의 K/V 공유와 decode 메모리 대역폭</em></span></a></sup><sup class="citation-ref"><a href="#source-s3" title="GQA | Ainslie et al. | 보조 근거 | 그룹별 K/V 공유와 MHA·MQA 비교" aria-label="[S3] GQA 출처로 이동" data-citation-role="보조 근거">[S3]<span class="citation-popover" role="tooltip"><strong>[S3] GQA</strong><span>보조 근거</span><span>Ainslie et al.</span><em>그룹별 K/V 공유와 MHA·MQA 비교</em></span></a></sup></p>
+<div class="math-block">$$
+B_{\mathrm{KV/token/layer}} = 2 H_{\mathrm{KV}} d_{\mathrm{head}} b
+$$</div>
+<p><strong>학습자:</strong> 16 KiB가 4 KiB면 decode도 네 배 빨라지나요?</p>
+<p><strong>교수자:</strong> 줄어든 것은 논리적 KV 용량입니다. 커널이 공유 KV를 실제로 재사용하는지, KV 읽기가 전체 지연에서 얼마나 큰지까지 봐야 합니다. query head 수를 그대로 뒀다면 독립적으로 계산할 query 쪽 출력도 그대로 남습니다. <sup class="citation-ref"><a href="#source-s2" title="Fast Transformer Decoding | Shazeer | 핵심 근거 | MQA의 K/V 공유와 decode 메모리 대역폭" aria-label="[S2] Fast Transformer Decoding 출처로 이동" data-citation-role="핵심 근거">[S2]<span class="citation-popover" role="tooltip"><strong>[S2] Fast Transformer Decoding</strong><span>핵심 근거</span><span>Shazeer</span><em>MQA의 K/V 공유와 decode 메모리 대역폭</em></span></a></sup><sup class="citation-ref"><a href="#source-s3" title="GQA | Ainslie et al. | 보조 근거 | 그룹별 K/V 공유와 MHA·MQA 비교" aria-label="[S3] GQA 출처로 이동" data-citation-role="보조 근거">[S3]<span class="citation-popover" role="tooltip"><strong>[S3] GQA</strong><span>보조 근거</span><span>Ainslie et al.</span><em>그룹별 K/V 공유와 MHA·MQA 비교</em></span></a></sup></p>
+<h2 id="mla는-무엇을-캐시하는가">MLA는 무엇을 캐시하는가</h2>
+<p>DeepSeek-V2의 MLA는 각 토큰에서 <strong>공동 KV 잠재 벡터</strong>와 <strong>위치 정보를 담는 decoupled RoPE key</strong>를 계산한다. 이후 쿼리가 읽을 K/V 정보를 이 표현으로 보존한다. 구현은 업프로젝션을 인접한 연산에 흡수해 토큰마다 모든 head의 K/V를 물리적으로 재구성하는 비용을 피할 수 있다. KV cache를 비교할 때는 KV head 개수 대신 잠재 벡터와 위치 key의 차원을 각각 확인한다. <sup class="citation-ref"><a href="#source-s4" title="DeepSeek V2 §2.1 | DeepSeek AI | 핵심 근거 | MLA 공동 KV 압축, decoupled RoPE, projection 흡수" aria-label="[S4] DeepSeek V2 §2.1 출처로 이동" data-citation-role="핵심 근거">[S4]<span class="citation-popover" role="tooltip"><strong>[S4] DeepSeek V2 §2.1</strong><span>핵심 근거</span><span>DeepSeek AI</span><em>MLA 공동 KV 압축, decoupled RoPE, projection 흡수</em></span></a></sup></p>
+<div class="table-wrap"><table><thead><tr><th>체크포인트에서 확인할 항목</th><th>답할 수 있는 질문</th></tr></thead><tbody><tr><td>Query head와 KV head 수</td><td>MHA·MQA·GQA에서 몇 head가 캐시를 공유하나?</td></tr><tr><td>KV latent 차원과 RoPE key 차원</td><td>MLA의 토큰당 캐시 항목은 얼마나 큰가?</td></tr><tr><td>Attention mask와 선택 규칙</td><td>저장된 항목 중 쿼리가 어떤 위치를 읽나?</td></tr></tbody></table></div>
+<p>세 번째 질문은 <a href="../02-long-context-sparse-attention/">DSA와 KPool</a>에서, 물리적 캐시와 실행 비용은 <a href="../../../02-serving-systems/02-cache-batching-and-generation/01-kv-cache-and-paged-attention/">KV Cache and PagedAttention</a>에서 이어서 다룬다.</p>
+<h2 id="출처">출처</h2>
+<div class="table-wrap"><table><thead><tr><th>ID</th><th>출처</th><th>발행처</th><th>날짜</th><th>URL</th><th>사용 이유</th></tr></thead><tbody><tr id="source-s1"><td><sup class="citation-ref"><a href="#source-s1" title="Attention Is All You Need §3.2.2 | Vaswani et al. | 핵심 근거 | MHA의 독립적인 projection과 head 출력" aria-label="[S1] Attention Is All You Need §3.2.2 출처로 이동" data-citation-role="핵심 근거">[S1]<span class="citation-popover" role="tooltip"><strong>[S1] Attention Is All You Need §3.2.2</strong><span>핵심 근거</span><span>Vaswani et al.</span><em>MHA의 독립적인 projection과 head 출력</em></span></a></sup><span class="source-role-badge">핵심 근거</span></td><td>Attention Is All You Need §3.2.2</td><td>Vaswani et al.</td><td>2017</td><td><a href="https://arxiv.org/abs/1706.03762" target="_blank" rel="noreferrer">https://arxiv.org/abs/1706.03762</a></td><td>MHA의 독립적인 projection과 head 출력</td></tr><tr id="source-s2"><td><sup class="citation-ref"><a href="#source-s2" title="Fast Transformer Decoding | Shazeer | 핵심 근거 | MQA의 K/V 공유와 decode 메모리 대역폭" aria-label="[S2] Fast Transformer Decoding 출처로 이동" data-citation-role="핵심 근거">[S2]<span class="citation-popover" role="tooltip"><strong>[S2] Fast Transformer Decoding</strong><span>핵심 근거</span><span>Shazeer</span><em>MQA의 K/V 공유와 decode 메모리 대역폭</em></span></a></sup><span class="source-role-badge">핵심 근거</span></td><td>Fast Transformer Decoding</td><td>Shazeer</td><td>2019</td><td><a href="https://arxiv.org/abs/1911.02150" target="_blank" rel="noreferrer">https://arxiv.org/abs/1911.02150</a></td><td>MQA의 K/V 공유와 decode 메모리 대역폭</td></tr><tr id="source-s3"><td><sup class="citation-ref"><a href="#source-s3" title="GQA | Ainslie et al. | 보조 근거 | 그룹별 K/V 공유와 MHA·MQA 비교" aria-label="[S3] GQA 출처로 이동" data-citation-role="보조 근거">[S3]<span class="citation-popover" role="tooltip"><strong>[S3] GQA</strong><span>보조 근거</span><span>Ainslie et al.</span><em>그룹별 K/V 공유와 MHA·MQA 비교</em></span></a></sup><span class="source-role-badge">보조 근거</span></td><td>GQA</td><td>Ainslie et al.</td><td>2023</td><td><a href="https://arxiv.org/abs/2305.13245" target="_blank" rel="noreferrer">https://arxiv.org/abs/2305.13245</a></td><td>그룹별 K/V 공유와 MHA·MQA 비교</td></tr><tr id="source-s4"><td><sup class="citation-ref"><a href="#source-s4" title="DeepSeek V2 §2.1 | DeepSeek AI | 핵심 근거 | MLA 공동 KV 압축, decoupled RoPE, projection 흡수" aria-label="[S4] DeepSeek V2 §2.1 출처로 이동" data-citation-role="핵심 근거">[S4]<span class="citation-popover" role="tooltip"><strong>[S4] DeepSeek V2 §2.1</strong><span>핵심 근거</span><span>DeepSeek AI</span><em>MLA 공동 KV 압축, decoupled RoPE, projection 흡수</em></span></a></sup><span class="source-role-badge">핵심 근거</span></td><td>DeepSeek-V2 §2.1</td><td>DeepSeek-AI</td><td>2024</td><td><a href="https://arxiv.org/abs/2405.04434" target="_blank" rel="noreferrer">https://arxiv.org/abs/2405.04434</a></td><td>MLA 공동 KV 압축, decoupled RoPE, projection 흡수</td></tr></tbody></table></div>
+    </article>
+    <section class="content-panel surface quiz-panel">
+      <div class="section-heading">
+        <div>
+          <p class="eyebrow">Quiz</p>
+          <h2>복습 문제</h2>
+        </div>
+      </div>
+      <div class="prose">
+        <h1 id="복습-퀴즈">복습 퀴즈</h1>
+<p>BF16, query head 32개, KV head 8개, head dimension 128이면 층당 토큰 하나의 논리적 KV는 몇 바이트인가? MLA에는 어떤 크기 항목을 확인해야 하는가?</p><details class="answer-key"><summary>정답 및 해설 보기</summary><h2 id="정답-및-해설">정답 및 해설</h2>
+<p>GQA는 K/V 두 텐서에 8 × 128 × 2바이트씩 저장하므로 4096바이트다. MLA는 공동 KV latent와 decoupled RoPE key 차원을 합해 계산한다. <sup class="citation-ref">[S3]</sup><sup class="citation-ref">[S4]</sup></p></details>
+      </div>
+    </section>
+    <nav class="pager">
+      <a class="pager-link" href="../02-long-context-sparse-attention/"><span>이전</span><strong>긴 문맥을 읽는 방식: DSA, Lightning Indexer, KPool</strong></a>
+      <a class="pager-link" href="../04-linear-and-hybrid-attention/"><span>다음</span><strong>Linear Attention과 Hybrid 모델: DeltaNet에서 Kimi Linear까지</strong></a>
+    </nav>
+
+      </section>
+      <aside class="page-sidebar">
+    <div class="sidebar-panel surface">
+      <p class="eyebrow">On This Page</p>
+      <div class="toc" data-toc>
+        <a class="toc-link" href="#수업-개요">수업 개요</a><a class="toc-link" href="#query-head와-kv-head를-따로-세기">Query head와 KV head를 따로 세기</a><a class="toc-link" href="#mla는-무엇을-캐시하는가">MLA는 무엇을 캐시하는가</a><a class="toc-link" href="#출처">출처</a>
+      </div>
+    </div>
+    </aside>
+    </div>
+  </main>
+  <script type="module" src="../../../assets/app.js?v=20260814"></script>
+  <script type="module">
+    import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs';
+    mermaid.initialize({
+      startOnLoad: true,
+      theme: 'neutral',
+      securityLevel: 'loose',
+      flowchart: { useMaxWidth: false },
+      sequence: { useMaxWidth: false },
+      gantt: { useMaxWidth: false }
+    });
+  </script>
+  <script>
+    window.MathJax = {
+      tex: { inlineMath: [['$', '$'], ['\\(', '\\)']], displayMath: [['$$', '$$'], ['\\[', '\\]']] },
+      svg: { fontCache: 'global' }
+    };
+  </script>
+  <script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-svg.js" async></script>
+</body>
+</html>

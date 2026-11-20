@@ -10,8 +10,8 @@ visuals:
   formulas: 2
   mermaid: 2
   local_images: 2
-updated_at: "2026-03-08"
-source_count: 6
+updated_at: "2026-11-20"
+source_count: 9
 ---
 
 # Long-Context Serving and KV Memory
@@ -153,6 +153,23 @@ sequenceDiagram
 
 **학습자:** 같은 64K 서비스라도 질문 순서가 달라지는 이유가 이제 보입니다.
 
+## 실습 설계: sparse attention에서 무엇이 느린가
+
+모델의 선택 규칙은 [DSA, Lightning Indexer, KPool](../../../01-llm-models/01-autoregressive-transformers/02-long-context-sparse-attention/README.md)에서 다룬다. 여기서는 긴 문맥에서 본 어텐션 커널 시간이 거의 일정한데도 TPOT이 늘어나는 상황을 추적한다. DeepSeek-V3.2는 본 어텐션이 최대 $k$개 KV를 읽는 동안 indexer가 더 긴 후보 범위를 점수화한다. 후보 수와 선택된 KV 수를 따로 계측해야 이 차이가 보인다. [S7]
+
+**교수자:** trace에서 `indexer → top-k → KV 조회 → sparse attention` 순서로 찾아보세요. 실제 백엔드는 여러 단계를 한 커널에 합칠 수 있습니다. vLLM의 DSA indexer 코드에는 점수 계산과 top-k를 합치는 경로가 있습니다. 이 경우 합쳐진 구간의 시간과 처리한 후보 수를 기록하세요. [S8]
+
+| 구간 | 기록할 값 | 결과를 읽는 방법 |
+| --- | --- | --- |
+| Indexer 점수 | 쿼리 수, 쿼리당 후보 수, 점수 커널 시간 | KV 선택 수가 일정해도 후보가 늘면 점수화 시간이 늘 수 있다 |
+| Top-k | 후보 수, 선택 예산, 단독 또는 결합 커널 시간 | 토큰 수와 그룹 수를 구분한다. 결합 커널은 전체 시간을 한 번만 센다 |
+| KV 조회 및 본 어텐션 | 선택된 항목 수, 가능한 경우 읽은 캐시 바이트, gather·attention 시간 | 토큰 KV와 압축 KV의 항목 수를 별도로 기록한다. 커널이 페이지에서 직접 읽으면 별도 gather 시간을 만들지 않는다 |
+| 요청 전체 | TTFT, decode TPOT, 피크 메모리 | prefill과 decode에서 어느 구간의 증가가 사용자 지연과 함께 나타나는지 비교한다 |
+
+**학습자:** KPool을 켰을 때와 껐을 때의 성능을 비교해도 되나요?
+
+**교수자:** 우선 같은 체크포인트와 지원 백엔드에서 입력 길이만 바꾸세요. 예를 들어 같은 장비, dtype, 동시 요청 수와 출력 길이에서 8K·32K·128K를 비교하고, 워밍업과 prefix cache 조건도 맞춥니다. GLM-5.3-Flash에서 KPool은 모델의 선택 규칙이므로 값을 바꾸면 참조 위치도 달라질 수 있습니다. 서로 다른 모델을 비교할 때는 후보 수와 본 어텐션의 KV 읽기량을 각각 보고, 문서 앞쪽 근거를 찾는 등 동일한 품질 과제도 함께 평가합니다. 실행 옵션은 설치한 엔진 버전과 장치에 맞는 레시피에서 확인합니다. [S8][S9]
+
 ## 자주 헷갈리는 포인트
 - long context 문제를 무조건 "GPU 메모리가 부족하다"로 요약하면 prefill 병목과 KV 전달 병목이 섞여 버린다. [S1][S2][S4][S5]
 - shared prefix hit가 높을 때 핵심은 전체 문자열 동일성보다 block 단위 공통 prefix를 얼마나 잡아내는가이다. [S3][S4][S6]
@@ -215,3 +232,6 @@ sequenceDiagram
 | [S4] | KV Cache System | NVIDIA TensorRT-LLM | 2026-03-08 (accessed) | https://nvidia.github.io/TensorRT-LLM/features/kvcache.html | block 기반 KV 관리, host offload, memory 경계 설명 |
 | [S5] | Context Parallel Deployment | vLLM project | 2026-03-08 (accessed) | https://docs.vllm.ai/en/latest/serving/context_parallel_deployment.html | prefill context parallel과 decode context parallel 비교 |
 | [S6] | KV Cache Manager | vLLM project | 2026-03-08 (accessed) | https://docs.vllm.ai/en/latest/api/vllm/v1/core/kv_cache_manager.html | computed/common prefix blocks와 allocation semantics 설명 |
+| [S7] | DeepSeek-V3.2 §2.3 Inference Costs | DeepSeek-AI | 2025 | https://arxiv.org/html/2512.02556#S2.SS3 | 전 범위 indexer 비용과 sparse core attention 비용이 다른 근거 |
+| [S8] | DSA Indexer Backend | vLLM project | 2026-11-20 확인 | https://github.com/vllm-project/vllm/blob/main/vllm/v1/attention/backends/mla/indexer.py | 인덱서용 K 캐시와 점수 계산 및 top-k 결합 경로 |
+| [S9] | GLM-5.3-Flash Serving Recipe | vLLM project | 2026-11-20 확인 | https://github.com/vllm-project/recipes/blob/main/models/zai-org/GLM-5.3-Flash.yaml | KPool 서버 실행에 필요한 장치별 배포 조건 |

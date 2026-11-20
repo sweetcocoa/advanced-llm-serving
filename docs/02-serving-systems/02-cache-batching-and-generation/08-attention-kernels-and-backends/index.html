@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>어텐션 커널과 백엔드: FlashAttention, FlashInfer, FlexAttention | 서빙 시스템 설계</title>
+  <meta name="description" content="같은 모델에서도 긴 prompt를 한 번에 읽을 때와 토큰 하나를 decode할 때는 쿼리 개수와 캐시 읽기 패턴이 다르다. 이 장은 softmax attention을 실행하는 커널, 이를 호출하는 API, 엔진이 선택하는 백엔드를 구분한 뒤 같은 입력으로 정확도와 성능을 비교한다. [S1][S5][S6][S8]">
+  <meta name="theme-color" content="#10182a">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Noto+Sans+KR:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../../../assets/style.css?v=20260814">
+</head>
+<body class="page-chapter" data-page-kind="chapter" data-page-id="attention-kernels-and-backends" data-root-prefix="../../../">
+  <div class="reading-progress" data-reading-progress></div>
+  <header class="site-header">
+    <a class="brand" href="../../../">
+      <span class="brand-kicker">GitHub Pages Study</span>
+      <strong>LLM Models + Serving Systems</strong>
+    </a>
+    <nav class="top-nav"><a class="top-nav-link" href="../../../01-llm-models/">LLM 모델 이론</a><a class="top-nav-link is-active" href="../../">서빙 시스템 설계</a><a class="top-nav-link" href="../../../03-system-design/">종합 시스템 설계</a></nav>
+    <div class="search-shell">
+      <input type="search" placeholder="챕터, 섹션, 트랙 검색" aria-label="검색" data-global-search>
+      <div class="search-results" data-search-results hidden></div>
+    </div>
+  </header>
+  <main class="page-frame">
+
+    <section class="hero">
+      <div class="hero-copy">
+        <p class="eyebrow">서빙 시스템 설계 / Cache, Batching, and Generation</p>
+        <h1>어텐션 커널과 백엔드: FlashAttention, FlashInfer, FlexAttention</h1>
+        <p class="hero-summary">같은 모델에서도 긴 prompt를 한 번에 읽을 때와 토큰 하나를 decode할 때는 쿼리 개수와 캐시 읽기 패턴이 다르다. 이 장은 softmax attention을 실행하는 커널, 이를 호출하는 API, 엔진이 선택하는 백엔드를 구분한 뒤 같은 입력으로 정확도와 성능을 비교한다. <sup class="citation-ref"><a href="#source-s1" title="FlashAttention | Dao et al. | 핵심 근거 | 타일링과 HBM 이동, 정확한 dense attention" aria-label="[S1] FlashAttention 출처로 이동" data-citation-role="핵심 근거">[S1]<span class="citation-popover" role="tooltip"><strong>[S1] FlashAttention</strong><span>핵심 근거</span><span>Dao et al.</span><em>타일링과 HBM 이동, 정확한 dense attention</em></span></a></sup><sup class="citation-ref"><a href="#source-s5" title="FlashInfer | Ye et al. | 핵심 근거 | paged KV와 서빙용 커널" aria-label="[S5] FlashInfer 출처로 이동" data-citation-role="핵심 근거">[S5]<span class="citation-popover" role="tooltip"><strong>[S5] FlashInfer</strong><span>핵심 근거</span><span>Ye et al.</span><em>paged KV와 서빙용 커널</em></span></a></sup><sup class="citation-ref"><a href="#source-s6" title="scaled dot product attention | PyTorch | 핵심 근거 | SDPA dispatch, 강제 백엔드 선택, causal 마스크" aria-label="[S6] scaled dot product attention 출처로 이동" data-citation-role="핵심 근거">[S6]<span class="citation-popover" role="tooltip"><strong>[S6] scaled dot product attention</strong><span>핵심 근거</span><span>PyTorch</span><em>SDPA dispatch, 강제 백엔드 선택, causal 마스크</em></span></a></sup><sup class="citation-ref"><a href="#source-s8" title="Attention Backend Feature Support | vLLM | 핵심 근거 | 백엔드 선택, 기능·장치·레이아웃 호환성" aria-label="[S8] Attention Backend Feature Support 출처로 이동" data-citation-role="핵심 근거">[S8]<span class="citation-popover" role="tooltip"><strong>[S8] Attention Backend Feature Support</strong><span>핵심 근거</span><span>vLLM</span><em>백엔드 선택, 기능·장치·레이아웃 호환성</em></span></a></sup></p>
+      </div>
+      <div class="hero-stats">
+        <div class="stat-card"><strong>20-30 min</strong><span>reading time</span></div>
+        <div class="stat-card"><strong>2026-11-20</strong><span>updated</span></div>
+        <div class="stat-card"><button class="progress-toggle" type="button" data-progress-toggle data-progress-id="attention-kernels-and-backends">완료로 표시</button></div>
+      </div>
+    </section>
+
+    <div class="page-layout">
+      <section class="page-main content-shell">
+
+    <article class="content-panel surface prose" data-reading-target>
+      <h1 id="어텐션-커널과-백엔드-flashattention-flashinfer-flexattention">어텐션 커널과 백엔드: FlashAttention, FlashInfer, FlexAttention</h1>
+<h2 id="수업-개요">수업 개요</h2>
+<p>같은 모델에서도 긴 prompt를 한 번에 읽을 때와 토큰 하나를 decode할 때는 쿼리 개수와 캐시 읽기 패턴이 다르다. 이 장은 softmax attention을 실행하는 커널, 이를 호출하는 API, 엔진이 선택하는 백엔드를 구분한 뒤 같은 입력으로 정확도와 성능을 비교한다. <sup class="citation-ref"><a href="#source-s1" title="FlashAttention | Dao et al. | 핵심 근거 | 타일링과 HBM 이동, 정확한 dense attention" aria-label="[S1] FlashAttention 출처로 이동" data-citation-role="핵심 근거">[S1]<span class="citation-popover" role="tooltip"><strong>[S1] FlashAttention</strong><span>핵심 근거</span><span>Dao et al.</span><em>타일링과 HBM 이동, 정확한 dense attention</em></span></a></sup><sup class="citation-ref"><a href="#source-s5" title="FlashInfer | Ye et al. | 핵심 근거 | paged KV와 서빙용 커널" aria-label="[S5] FlashInfer 출처로 이동" data-citation-role="핵심 근거">[S5]<span class="citation-popover" role="tooltip"><strong>[S5] FlashInfer</strong><span>핵심 근거</span><span>Ye et al.</span><em>paged KV와 서빙용 커널</em></span></a></sup><sup class="citation-ref"><a href="#source-s6" title="scaled dot product attention | PyTorch | 핵심 근거 | SDPA dispatch, 강제 백엔드 선택, causal 마스크" aria-label="[S6] scaled dot product attention 출처로 이동" data-citation-role="핵심 근거">[S6]<span class="citation-popover" role="tooltip"><strong>[S6] scaled dot product attention</strong><span>핵심 근거</span><span>PyTorch</span><em>SDPA dispatch, 강제 백엔드 선택, causal 마스크</em></span></a></sup><sup class="citation-ref"><a href="#source-s8" title="Attention Backend Feature Support | vLLM | 핵심 근거 | 백엔드 선택, 기능·장치·레이아웃 호환성" aria-label="[S8] Attention Backend Feature Support 출처로 이동" data-citation-role="핵심 근거">[S8]<span class="citation-popover" role="tooltip"><strong>[S8] Attention Backend Feature Support</strong><span>핵심 근거</span><span>vLLM</span><em>백엔드 선택, 기능·장치·레이아웃 호환성</em></span></a></sup></p>
+<h2 id="flashattention은-어디서-메모리를-아끼는가">FlashAttention은 어디서 메모리를 아끼는가</h2>
+<p>일반적인 기준 구현은 점수 행렬을 만든 뒤 softmax와 V 곱을 실행한다. FlashAttention은 Q와 KV를 타일로 나누고, softmax의 행별 최댓값과 정규화 합, 가중 출력 누산값을 갱신합니다. 다음 타일에서 더 큰 점수가 나오면 이전 누산값을 새 최댓값에 맞춰 재조정합니다. 전체 점수 행렬을 HBM에 써 두지 않고도 같은 dense softmax 결과를 수치 오차 범위에서 얻습니다. dense prefill의 쿼리–키 쌍 수는 여전히 길이의 제곱에 비례합니다. <sup class="citation-ref"><a href="#source-s1" title="FlashAttention | Dao et al. | 핵심 근거 | 타일링과 HBM 이동, 정확한 dense attention" aria-label="[S1] FlashAttention 출처로 이동" data-citation-role="핵심 근거">[S1]<span class="citation-popover" role="tooltip"><strong>[S1] FlashAttention</strong><span>핵심 근거</span><span>Dao et al.</span><em>타일링과 HBM 이동, 정확한 dense attention</em></span></a></sup></p>
+<ul><li><strong>FA2</strong>는 thread block과 warp 사이의 작업 분할을 개선한다. <sup class="citation-ref"><a href="#source-s2" title="FlashAttention 2 | Dao | 핵심 근거 | thread block과 warp의 작업 분할" aria-label="[S2] FlashAttention 2 출처로 이동" data-citation-role="핵심 근거">[S2]<span class="citation-popover" role="tooltip"><strong>[S2] FlashAttention 2</strong><span>핵심 근거</span><span>Dao</span><em>thread block과 warp의 작업 분할</em></span></a></sup></li><li><strong>FA3</strong>는 Hopper의 비동기 실행을 활용해 연산을 겹치고 저정밀도 경로를 다룬다. <sup class="citation-ref"><a href="#source-s3" title="FlashAttention 3 | Shah et al. | 핵심 근거 | Hopper의 비동기 실행과 저정밀 경로" aria-label="[S3] FlashAttention 3 출처로 이동" data-citation-role="핵심 근거">[S3]<span class="citation-popover" role="tooltip"><strong>[S3] FlashAttention 3</strong><span>핵심 근거</span><span>Shah et al.</span><em>Hopper의 비동기 실행과 저정밀 경로</em></span></a></sup></li><li><strong>FA4</strong>는 Blackwell에서 행렬 곱과 softmax의 처리량 차이를 고려해 파이프라인을 다시 설계한다. <sup class="citation-ref"><a href="#source-s4" title="FlashAttention 4 | Zadouri et al. | 핵심 근거 | Blackwell의 계산과 메모리 파이프라인" aria-label="[S4] FlashAttention 4 출처로 이동" data-citation-role="핵심 근거">[S4]<span class="citation-popover" role="tooltip"><strong>[S4] FlashAttention 4</strong><span>핵심 근거</span><span>Zadouri et al.</span><em>Blackwell의 계산과 메모리 파이프라인</em></span></a></sup></li></ul>
+<h2 id="코드에서-만나는-이름들">코드에서 만나는 이름들</h2>
+<div class="table-wrap"><table><thead><tr><th>이름</th><th>역할</th><th>확인할 조건</th></tr></thead><tbody><tr><td>PyTorch SDPA</td><td>표준 scaled dot-product attention API. 입력과 환경에 맞는 구현을 선택</td><td>mask, dtype, head dimension, 사용 가능한 커널 <sup class="citation-ref"><a href="#source-s6" title="scaled dot product attention | PyTorch | 핵심 근거 | SDPA dispatch, 강제 백엔드 선택, causal 마스크" aria-label="[S6] scaled dot product attention 출처로 이동" data-citation-role="핵심 근거">[S6]<span class="citation-popover" role="tooltip"><strong>[S6] scaled dot product attention</strong><span>핵심 근거</span><span>PyTorch</span><em>SDPA dispatch, 강제 백엔드 선택, causal 마스크</em></span></a></sup></td></tr><tr><td>FlexAttention</td><td>점수 변경 함수와 BlockMask를 전달할 수 있는 PyTorch API</td><td>고정 창처럼 통째로 건너뛸 블록을 표현할 수 있는지, 컴파일 비용 <sup class="citation-ref"><a href="#source-s7" title="FlexAttention | PyTorch | 핵심 근거 | score mod와 BlockMask API" aria-label="[S7] FlexAttention 출처로 이동" data-citation-role="핵심 근거">[S7]<span class="citation-popover" role="tooltip"><strong>[S7] FlexAttention</strong><span>핵심 근거</span><span>PyTorch</span><em>score mod와 BlockMask API</em></span></a></sup></td></tr><tr><td>FlashInfer</td><td>paged KV 등을 읽는 prefill·decode 커널을 제공하는 서빙 라이브러리</td><td>요청 길이 분포, KV 레이아웃, prefill·decode 경로 <sup class="citation-ref"><a href="#source-s5" title="FlashInfer | Ye et al. | 핵심 근거 | paged KV와 서빙용 커널" aria-label="[S5] FlashInfer 출처로 이동" data-citation-role="핵심 근거">[S5]<span class="citation-popover" role="tooltip"><strong>[S5] FlashInfer</strong><span>핵심 근거</span><span>Ye et al.</span><em>paged KV와 서빙용 커널</em></span></a></sup></td></tr><tr><td>vLLM attention backend</td><td>커널과 캐시 레이아웃을 모델 요청에 연결하는 엔진 경로</td><td>장치, dtype, KV block size, head dimension과 기능 지원표 <sup class="citation-ref"><a href="#source-s8" title="Attention Backend Feature Support | vLLM | 핵심 근거 | 백엔드 선택, 기능·장치·레이아웃 호환성" aria-label="[S8] Attention Backend Feature Support 출처로 이동" data-citation-role="핵심 근거">[S8]<span class="citation-popover" role="tooltip"><strong>[S8] Attention Backend Feature Support</strong><span>핵심 근거</span><span>vLLM</span><em>백엔드 선택, 기능·장치·레이아웃 호환성</em></span></a></sup></td></tr></tbody></table></div>
+<p><strong>학습자:</strong> FlexAttention으로 sliding window를 만들면 길이 증가에 따라 계산량도 바로 줄어드나요?</p>
+<p><strong>교수자:</strong> 점수 변경 함수에서 창 밖 점수만 가리는 것과 BlockMask로 빈 블록을 건너뛰는 것은 실행 경로가 다릅니다. 창 경계에 걸친 블록은 내부 원소를 추가로 가려야 합니다. 설정한 마스크를 먼저 짧은 입력으로 검증하고, 실제로 건너뛴 블록과 실행 시간을 확인하세요. <sup class="citation-ref"><a href="#source-s7" title="FlexAttention | PyTorch | 핵심 근거 | score mod와 BlockMask API" aria-label="[S7] FlexAttention 출처로 이동" data-citation-role="핵심 근거">[S7]<span class="citation-popover" role="tooltip"><strong>[S7] FlexAttention</strong><span>핵심 근거</span><span>PyTorch</span><em>score mod와 BlockMask API</em></span></a></sup></p>
+<h2 id="실습-1-동일한-q-k-v로-결과-맞춰-보기">실습 1. 동일한 Q, K, V로 결과 맞춰 보기</h2>
+<p>CUDA와 PyTorch SDPA Flash backend를 사용할 수 있는 환경에서 아래 코드를 실행한다. 짧은 causal self-attention을 FP32 math 결과와 비교하는 smoke test다. 허용 오차는 이 입력과 dtype을 위한 예시이며, 배포 모델의 정확도 기준은 별도로 정한다. 순수 GPU 커널 시간 비교에는 워밍업과 CUDA event를 사용한다. <sup class="citation-ref"><a href="#source-s6" title="scaled dot product attention | PyTorch | 핵심 근거 | SDPA dispatch, 강제 백엔드 선택, causal 마스크" aria-label="[S6] scaled dot product attention 출처로 이동" data-citation-role="핵심 근거">[S6]<span class="citation-popover" role="tooltip"><strong>[S6] scaled dot product attention</strong><span>핵심 근거</span><span>PyTorch</span><em>SDPA dispatch, 강제 백엔드 선택, causal 마스크</em></span></a></sup></p>
+<pre><code class="language-python">import torch
+from torch.nn.attention import SDPBackend, sdpa_kernel
+from torch.nn.functional import scaled_dot_product_attention
+
+torch.manual_seed(7)
+q, k, v = [
+    torch.randn(2, 8, 256, 64, device=&quot;cuda&quot;, dtype=torch.float16)
+    for _ in range(3)
+]
+
+with sdpa_kernel(SDPBackend.MATH):
+    expected = scaled_dot_product_attention(
+        q.float(), k.float(), v.float(), is_causal=True, dropout_p=0.0
+    )
+with sdpa_kernel(SDPBackend.FLASH_ATTENTION):
+    actual = scaled_dot_product_attention(
+        q, k, v, is_causal=True, dropout_p=0.0
+    )
+torch.testing.assert_close(actual.float(), expected, atol=2e-3, rtol=2e-2)</code></pre>
+<p>강제 선택이 실패하면 PyTorch가 보고하는 지원 조건을 확인한다. 이 코드는 정사각 causal 마스크를 쓰는 prefill 예시다. KV cache가 붙는 decode 검증에서는 실제 토큰 위치에 맞는 참조 범위를 별도로 확인한다. <sup class="citation-ref"><a href="#source-s6" title="scaled dot product attention | PyTorch | 핵심 근거 | SDPA dispatch, 강제 백엔드 선택, causal 마스크" aria-label="[S6] scaled dot product attention 출처로 이동" data-citation-role="핵심 근거">[S6]<span class="citation-popover" role="tooltip"><strong>[S6] scaled dot product attention</strong><span>핵심 근거</span><span>PyTorch</span><em>SDPA dispatch, 강제 백엔드 선택, causal 마스크</em></span></a></sup></p>
+<h2 id="실습-2-같은-체크포인트로-서빙-백엔드-비교하기">실습 2. 같은 체크포인트로 서빙 백엔드 비교하기</h2>
+<p>같은 GQA 체크포인트를 두 백엔드가 모두 지원하는 장비에서 비교한다. 설치한 vLLM 버전의 지원표를 기준으로 백엔드를 지정하고 실제 선택을 시작 로그에서 확인한다. 모델, dtype, KV dtype, page size, 출력 길이, 동시 요청 수를 고정한다. <sup class="citation-ref"><a href="#source-s8" title="Attention Backend Feature Support | vLLM | 핵심 근거 | 백엔드 선택, 기능·장치·레이아웃 호환성" aria-label="[S8] Attention Backend Feature Support 출처로 이동" data-citation-role="핵심 근거">[S8]<span class="citation-popover" role="tooltip"><strong>[S8] Attention Backend Feature Support</strong><span>핵심 근거</span><span>vLLM</span><em>백엔드 선택, 기능·장치·레이아웃 호환성</em></span></a></sup></p>
+<ul><li><strong>긴 prefill:</strong> 같은 길이 분포에서 워밍업 후 TTFT와 피크 메모리를 기록한다.</li><li><strong>다중 요청 decode:</strong> 같은 동시성에서 TPOT, 출력 토큰 처리량과 피크 메모리를 기록한다.</li><li><strong>정확도 확인:</strong> 고정된 입력에서 가능하면 logits나 logprobs를 허용 오차로 비교한다. 장문 생성이 달라지면 첫 차이가 나온 단계의 마스크와 출력 분포를 확인한다.</li></ul>
+<p><a href="../../../01-llm-models/01-autoregressive-transformers/03-attention-heads-and-kv-representations/">GQA 장</a>에서 구한 논리적 KV 용량은 이 실습의 기준선이다. <a href="../01-kv-cache-and-paged-attention/">PagedAttention 장</a>은 물리적 페이지 배치를, <a href="../06-long-context-serving-and-kv-memory/">Long-Context Serving 장</a>은 sparse indexer의 비용을 추적한다.</p>
+<h2 id="출처">출처</h2>
+<div class="table-wrap"><table><thead><tr><th>ID</th><th>출처</th><th>발행처</th><th>날짜</th><th>URL</th><th>사용 이유</th></tr></thead><tbody><tr id="source-s1"><td><sup class="citation-ref"><a href="#source-s1" title="FlashAttention | Dao et al. | 핵심 근거 | 타일링과 HBM 이동, 정확한 dense attention" aria-label="[S1] FlashAttention 출처로 이동" data-citation-role="핵심 근거">[S1]<span class="citation-popover" role="tooltip"><strong>[S1] FlashAttention</strong><span>핵심 근거</span><span>Dao et al.</span><em>타일링과 HBM 이동, 정확한 dense attention</em></span></a></sup><span class="source-role-badge">핵심 근거</span></td><td>FlashAttention</td><td>Dao et al.</td><td>2022</td><td><a href="https://arxiv.org/abs/2205.14135" target="_blank" rel="noreferrer">https://arxiv.org/abs/2205.14135</a></td><td>타일링과 HBM 이동, 정확한 dense attention</td></tr><tr id="source-s2"><td><sup class="citation-ref"><a href="#source-s2" title="FlashAttention 2 | Dao | 핵심 근거 | thread block과 warp의 작업 분할" aria-label="[S2] FlashAttention 2 출처로 이동" data-citation-role="핵심 근거">[S2]<span class="citation-popover" role="tooltip"><strong>[S2] FlashAttention 2</strong><span>핵심 근거</span><span>Dao</span><em>thread block과 warp의 작업 분할</em></span></a></sup><span class="source-role-badge">핵심 근거</span></td><td>FlashAttention-2</td><td>Dao</td><td>2023</td><td><a href="https://arxiv.org/abs/2307.08691" target="_blank" rel="noreferrer">https://arxiv.org/abs/2307.08691</a></td><td>thread block과 warp의 작업 분할</td></tr><tr id="source-s3"><td><sup class="citation-ref"><a href="#source-s3" title="FlashAttention 3 | Shah et al. | 핵심 근거 | Hopper의 비동기 실행과 저정밀 경로" aria-label="[S3] FlashAttention 3 출처로 이동" data-citation-role="핵심 근거">[S3]<span class="citation-popover" role="tooltip"><strong>[S3] FlashAttention 3</strong><span>핵심 근거</span><span>Shah et al.</span><em>Hopper의 비동기 실행과 저정밀 경로</em></span></a></sup><span class="source-role-badge">핵심 근거</span></td><td>FlashAttention-3</td><td>Shah et al.</td><td>2024</td><td><a href="https://arxiv.org/abs/2407.08608" target="_blank" rel="noreferrer">https://arxiv.org/abs/2407.08608</a></td><td>Hopper의 비동기 실행과 저정밀 경로</td></tr><tr id="source-s4"><td><sup class="citation-ref"><a href="#source-s4" title="FlashAttention 4 | Zadouri et al. | 핵심 근거 | Blackwell의 계산과 메모리 파이프라인" aria-label="[S4] FlashAttention 4 출처로 이동" data-citation-role="핵심 근거">[S4]<span class="citation-popover" role="tooltip"><strong>[S4] FlashAttention 4</strong><span>핵심 근거</span><span>Zadouri et al.</span><em>Blackwell의 계산과 메모리 파이프라인</em></span></a></sup><span class="source-role-badge">핵심 근거</span></td><td>FlashAttention-4</td><td>Zadouri et al.</td><td>2026</td><td><a href="https://arxiv.org/abs/2603.05451" target="_blank" rel="noreferrer">https://arxiv.org/abs/2603.05451</a></td><td>Blackwell의 계산과 메모리 파이프라인</td></tr><tr id="source-s5"><td><sup class="citation-ref"><a href="#source-s5" title="FlashInfer | Ye et al. | 핵심 근거 | paged KV와 서빙용 커널" aria-label="[S5] FlashInfer 출처로 이동" data-citation-role="핵심 근거">[S5]<span class="citation-popover" role="tooltip"><strong>[S5] FlashInfer</strong><span>핵심 근거</span><span>Ye et al.</span><em>paged KV와 서빙용 커널</em></span></a></sup><span class="source-role-badge">핵심 근거</span></td><td>FlashInfer</td><td>Ye et al.</td><td>2025</td><td><a href="https://arxiv.org/abs/2501.01005" target="_blank" rel="noreferrer">https://arxiv.org/abs/2501.01005</a></td><td>paged KV와 서빙용 커널</td></tr><tr id="source-s6"><td><sup class="citation-ref"><a href="#source-s6" title="scaled dot product attention | PyTorch | 핵심 근거 | SDPA dispatch, 강제 백엔드 선택, causal 마스크" aria-label="[S6] scaled dot product attention 출처로 이동" data-citation-role="핵심 근거">[S6]<span class="citation-popover" role="tooltip"><strong>[S6] scaled dot product attention</strong><span>핵심 근거</span><span>PyTorch</span><em>SDPA dispatch, 강제 백엔드 선택, causal 마스크</em></span></a></sup><span class="source-role-badge">핵심 근거</span></td><td>scaled_dot_product_attention</td><td>PyTorch</td><td>2026-11-20 확인</td><td><a href="https://docs.pytorch.org/docs/stable/generated/torch.nn.functional.scaled_dot_product_attention.html" target="_blank" rel="noreferrer">https://docs.pytorch.org/docs/stable/generated/torch.nn.functional.scaled_dot_product_attention.html</a></td><td>SDPA dispatch, 강제 백엔드 선택, causal 마스크</td></tr><tr id="source-s7"><td><sup class="citation-ref"><a href="#source-s7" title="FlexAttention | PyTorch | 핵심 근거 | score mod와 BlockMask API" aria-label="[S7] FlexAttention 출처로 이동" data-citation-role="핵심 근거">[S7]<span class="citation-popover" role="tooltip"><strong>[S7] FlexAttention</strong><span>핵심 근거</span><span>PyTorch</span><em>score mod와 BlockMask API</em></span></a></sup><span class="source-role-badge">핵심 근거</span></td><td>FlexAttention</td><td>PyTorch</td><td>2026-11-20 확인</td><td><a href="https://docs.pytorch.org/docs/stable/nn.attention.flex_attention.html" target="_blank" rel="noreferrer">https://docs.pytorch.org/docs/stable/nn.attention.flex_attention.html</a></td><td>score_mod와 BlockMask API</td></tr><tr id="source-s8"><td><sup class="citation-ref"><a href="#source-s8" title="Attention Backend Feature Support | vLLM | 핵심 근거 | 백엔드 선택, 기능·장치·레이아웃 호환성" aria-label="[S8] Attention Backend Feature Support 출처로 이동" data-citation-role="핵심 근거">[S8]<span class="citation-popover" role="tooltip"><strong>[S8] Attention Backend Feature Support</strong><span>핵심 근거</span><span>vLLM</span><em>백엔드 선택, 기능·장치·레이아웃 호환성</em></span></a></sup><span class="source-role-badge">핵심 근거</span></td><td>Attention Backend Feature Support</td><td>vLLM</td><td>2026-11-20 확인</td><td><a href="https://docs.vllm.ai/en/stable/design/attention_backends/" target="_blank" rel="noreferrer">https://docs.vllm.ai/en/stable/design/attention_backends/</a></td><td>백엔드 선택, 기능·장치·레이아웃 호환성</td></tr></tbody></table></div>
+    </article>
+    <section class="content-panel surface quiz-panel">
+      <div class="section-heading">
+        <div>
+          <p class="eyebrow">Quiz</p>
+          <h2>복습 문제</h2>
+        </div>
+      </div>
+      <div class="prose">
+        <h1 id="복습-퀴즈">복습 퀴즈</h1>
+<p>FlashAttention으로 바꾼 후 피크 메모리는 줄었지만 dense prefill에서 읽는 토큰 쌍의 수는 그대로였다. 두 결과를 설명하라. FlexAttention으로 sliding window를 시험한다면 무엇을 더 관찰할까?</p><details class="answer-key"><summary>정답 및 해설 보기</summary><h2 id="정답-및-해설">정답 및 해설</h2>
+<p>FlashAttention은 타일마다 누산하여 전체 점수 행렬을 HBM에 쓰는 일을 피한다. dense 마스크가 같으면 토큰 쌍의 수는 같다. Sliding window의 결과와 BlockMask가 실제로 건너뛴 블록을 각각 확인한다. <sup class="citation-ref">[S1]</sup><sup class="citation-ref">[S7]</sup></p></details>
+      </div>
+    </section>
+    <nav class="pager">
+      <a class="pager-link" href="../07-iterative-generation-serving/"><span>이전</span><strong>반복 생성 모델의 서빙과 런타임</strong></a>
+      <a class="pager-link" href="../../03-distributed-serving/01-disaggregated-prefill-decode/"><span>다음</span><strong>Disaggregated Prefill/Decode</strong></a>
+    </nav>
+
+      </section>
+      <aside class="page-sidebar">
+    <div class="sidebar-panel surface">
+      <p class="eyebrow">On This Page</p>
+      <div class="toc" data-toc>
+        <a class="toc-link" href="#수업-개요">수업 개요</a><a class="toc-link" href="#flashattention은-어디서-메모리를-아끼는가">FlashAttention은 어디서 메모리를 아끼는가</a><a class="toc-link" href="#코드에서-만나는-이름들">코드에서 만나는 이름들</a><a class="toc-link" href="#실습-1-동일한-q-k-v로-결과-맞춰-보기">실습 1. 동일한 Q, K, V로 결과 맞춰 보기</a><a class="toc-link" href="#실습-2-같은-체크포인트로-서빙-백엔드-비교하기">실습 2. 같은 체크포인트로 서빙 백엔드 비교하기</a><a class="toc-link" href="#출처">출처</a>
+      </div>
+    </div>
+    </aside>
+    </div>
+  </main>
+  <script type="module" src="../../../assets/app.js?v=20260814"></script>
+  <script type="module">
+    import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs';
+    mermaid.initialize({
+      startOnLoad: true,
+      theme: 'neutral',
+      securityLevel: 'loose',
+      flowchart: { useMaxWidth: false },
+      sequence: { useMaxWidth: false },
+      gantt: { useMaxWidth: false }
+    });
+  </script>
+  <script>
+    window.MathJax = {
+      tex: { inlineMath: [['$', '$'], ['\\(', '\\)']], displayMath: [['$$', '$$'], ['\\[', '\\]']] },
+      svg: { fontCache: 'global' }
+    };
+  </script>
+  <script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-svg.js" async></script>
+</body>
+</html>

@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Linear Attention과 Hybrid 모델: DeltaNet에서 Kimi Linear까지 | LLM 모델 이론</title>
+  <meta name="description" content="문서에 한 줄이 붙을 때마다 과거 위치의 목록도 길어지는 설계가 있고, 기존 요약 상태에 새 정보를 써 넣는 설계가 있다. causal linear attention의 기본형과 Gated DeltaNet, Kimi Linear를 따라가며 각 층이 과거에 접근하는 방식을 비교한다. [S1][S2][S3]">
+  <meta name="theme-color" content="#10182a">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Noto+Sans+KR:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../../../assets/style.css?v=20260814">
+</head>
+<body class="page-chapter" data-page-kind="chapter" data-page-id="linear-and-hybrid-attention" data-root-prefix="../../../">
+  <div class="reading-progress" data-reading-progress></div>
+  <header class="site-header">
+    <a class="brand" href="../../../">
+      <span class="brand-kicker">GitHub Pages Study</span>
+      <strong>LLM Models + Serving Systems</strong>
+    </a>
+    <nav class="top-nav"><a class="top-nav-link is-active" href="../../">LLM 모델 이론</a><a class="top-nav-link" href="../../../02-serving-systems/">서빙 시스템 설계</a><a class="top-nav-link" href="../../../03-system-design/">종합 시스템 설계</a></nav>
+    <div class="search-shell">
+      <input type="search" placeholder="챕터, 섹션, 트랙 검색" aria-label="검색" data-global-search>
+      <div class="search-results" data-search-results hidden></div>
+    </div>
+  </header>
+  <main class="page-frame">
+
+    <section class="hero">
+      <div class="hero-copy">
+        <p class="eyebrow">LLM 모델 이론 / Autoregressive Transformer</p>
+        <h1>Linear Attention과 Hybrid 모델: DeltaNet에서 Kimi Linear까지</h1>
+        <p class="hero-summary">문서에 한 줄이 붙을 때마다 과거 위치의 목록도 길어지는 설계가 있고, 기존 요약 상태에 새 정보를 써 넣는 설계가 있다. causal linear attention의 기본형과 Gated DeltaNet, Kimi Linear를 따라가며 각 층이 과거에 접근하는 방식을 비교한다. <sup class="citation-ref"><a href="#source-s1" title="Transformers are RNNs §3 | Katharopoulos et al. | 핵심 근거 | kernel feature map과 causal recurrence" aria-label="[S1] Transformers are RNNs §3 출처로 이동" data-citation-role="핵심 근거">[S1]<span class="citation-popover" role="tooltip"><strong>[S1] Transformers are RNNs §3</strong><span>핵심 근거</span><span>Katharopoulos et al.</span><em>kernel feature map과 causal recurrence</em></span></a></sup><sup class="citation-ref"><a href="#source-s2" title="Gated Delta Networks | Yang et al. | 핵심 근거 | gate와 delta rule이 맡는 서로 다른 상태 갱신 역할" aria-label="[S2] Gated Delta Networks 출처로 이동" data-citation-role="핵심 근거">[S2]<span class="citation-popover" role="tooltip"><strong>[S2] Gated Delta Networks</strong><span>핵심 근거</span><span>Yang et al.</span><em>gate와 delta rule이 맡는 서로 다른 상태 갱신 역할</em></span></a></sup><sup class="citation-ref"><a href="#source-s3" title="Kimi Linear | Moonshot AI | 핵심 근거 | KDA의 gate 설계와 MLA 혼합 모델" aria-label="[S3] Kimi Linear 출처로 이동" data-citation-role="핵심 근거">[S3]<span class="citation-popover" role="tooltip"><strong>[S3] Kimi Linear</strong><span>핵심 근거</span><span>Moonshot AI</span><em>KDA의 gate 설계와 MLA 혼합 모델</em></span></a></sup></p>
+      </div>
+      <div class="hero-stats">
+        <div class="stat-card"><strong>20-30 min</strong><span>reading time</span></div>
+        <div class="stat-card"><strong>2026-11-20</strong><span>updated</span></div>
+        <div class="stat-card"><button class="progress-toggle" type="button" data-progress-toggle data-progress-id="linear-and-hybrid-attention">완료로 표시</button></div>
+      </div>
+    </section>
+
+    <div class="page-layout">
+      <section class="page-main content-shell">
+
+    <article class="content-panel surface prose" data-reading-target>
+      <h1 id="linear-attention과-hybrid-모델-deltanet에서-kimi-linear까지">Linear Attention과 Hybrid 모델: DeltaNet에서 Kimi Linear까지</h1>
+<h2 id="수업-개요">수업 개요</h2>
+<p>문서에 한 줄이 붙을 때마다 과거 위치의 목록도 길어지는 설계가 있고, 기존 요약 상태에 새 정보를 써 넣는 설계가 있다. causal linear attention의 기본형과 Gated DeltaNet, Kimi Linear를 따라가며 각 층이 과거에 접근하는 방식을 비교한다. <sup class="citation-ref"><a href="#source-s1" title="Transformers are RNNs §3 | Katharopoulos et al. | 핵심 근거 | kernel feature map과 causal recurrence" aria-label="[S1] Transformers are RNNs §3 출처로 이동" data-citation-role="핵심 근거">[S1]<span class="citation-popover" role="tooltip"><strong>[S1] Transformers are RNNs §3</strong><span>핵심 근거</span><span>Katharopoulos et al.</span><em>kernel feature map과 causal recurrence</em></span></a></sup><sup class="citation-ref"><a href="#source-s2" title="Gated Delta Networks | Yang et al. | 핵심 근거 | gate와 delta rule이 맡는 서로 다른 상태 갱신 역할" aria-label="[S2] Gated Delta Networks 출처로 이동" data-citation-role="핵심 근거">[S2]<span class="citation-popover" role="tooltip"><strong>[S2] Gated Delta Networks</strong><span>핵심 근거</span><span>Yang et al.</span><em>gate와 delta rule이 맡는 서로 다른 상태 갱신 역할</em></span></a></sup><sup class="citation-ref"><a href="#source-s3" title="Kimi Linear | Moonshot AI | 핵심 근거 | KDA의 gate 설계와 MLA 혼합 모델" aria-label="[S3] Kimi Linear 출처로 이동" data-citation-role="핵심 근거">[S3]<span class="citation-popover" role="tooltip"><strong>[S3] Kimi Linear</strong><span>핵심 근거</span><span>Moonshot AI</span><em>KDA의 gate 설계와 MLA 혼합 모델</em></span></a></sup></p>
+<h2 id="토큰을-저장하는-대신-상태에-쓰기">토큰을 저장하는 대신 상태에 쓰기</h2>
+<p><strong>학습자:</strong> DSA처럼 과거 토큰 수천 개를 골라 읽는 대신, 처음부터 과거를 요약해 둘 수 있나요?</p>
+<p><strong>교수자:</strong> 기본 causal linear attention은 feature map을 적용한 key와 value의 외적을 누적하고, query feature로 상태를 읽습니다. 아래 식은 읽기 전에 현재 토큰을 포함하며 정규화 누산기까지 표시한 기본형입니다. feature 차원과 value 차원이 고정돼 있으면 층 상태 크기는 문맥 길이에 따라 증가하지 않습니다. <sup class="citation-ref"><a href="#source-s1" title="Transformers are RNNs §3 | Katharopoulos et al. | 핵심 근거 | kernel feature map과 causal recurrence" aria-label="[S1] Transformers are RNNs §3 출처로 이동" data-citation-role="핵심 근거">[S1]<span class="citation-popover" role="tooltip"><strong>[S1] Transformers are RNNs §3</strong><span>핵심 근거</span><span>Katharopoulos et al.</span><em>kernel feature map과 causal recurrence</em></span></a></sup></p>
+<div class="math-block">$$
+S_t=S_{t-1}+\phi(k_t)v_t^\top,\qquad
+z_t=z_{t-1}+\phi(k_t),\qquad
+y_t=\frac{\phi(q_t)^\top S_t}{\phi(q_t)^\top z_t}
+$$</div>
+<p><strong>교수자:</strong> 긴 문서에서 “37번 토큰만 읽어 보자”는 요구를 생각해 보세요. 위 상태에는 그 위치의 KV를 독립적으로 꺼내는 주소가 없습니다. 어떤 정보가 살아남는지는 학습한 상태 갱신과 읽기 방식에 달려 있습니다. 반면 DSA는 후보를 골라 특정 토큰 위치를 참조합니다. 여기서 linear는 고정 차원 기준으로 길이에 따른 계산 스케일링을 설명합니다. <sup class="citation-ref"><a href="#source-s1" title="Transformers are RNNs §3 | Katharopoulos et al. | 핵심 근거 | kernel feature map과 causal recurrence" aria-label="[S1] Transformers are RNNs §3 출처로 이동" data-citation-role="핵심 근거">[S1]<span class="citation-popover" role="tooltip"><strong>[S1] Transformers are RNNs §3</strong><span>핵심 근거</span><span>Katharopoulos et al.</span><em>kernel feature map과 causal recurrence</em></span></a></sup></p>
+<h2 id="단순-누적에서-선택적-갱신으로">단순 누적에서 선택적 갱신으로</h2>
+<ul><li><strong>Delta rule</strong>은 현재 상태의 key 연관 예측과 새 value의 차이를 사용해 갱신한다. 이미 기억에 있는 연관을 덮어쓰는 상황을 생각하면 단순 외적 누적과의 차이가 드러난다. Gated DeltaNet은 이전 상태를 얼마나 남길지 조절하는 gate와 delta 갱신을 결합한다. <sup class="citation-ref"><a href="#source-s2" title="Gated Delta Networks | Yang et al. | 핵심 근거 | gate와 delta rule이 맡는 서로 다른 상태 갱신 역할" aria-label="[S2] Gated Delta Networks 출처로 이동" data-citation-role="핵심 근거">[S2]<span class="citation-popover" role="tooltip"><strong>[S2] Gated Delta Networks</strong><span>핵심 근거</span><span>Yang et al.</span><em>gate와 delta rule이 맡는 서로 다른 상태 갱신 역할</em></span></a></sup></li><li><strong>Kimi Delta Attention(KDA)</strong>은 Gated DeltaNet 계열에 더 세분된 gate를 적용한다. Kimi Linear는 KDA 층과 MLA 층을 섞는다. 이 경우 KDA 층은 반복 상태를, MLA 층은 토큰별 cache를 유지하므로 모델 전체의 메모리 추정에는 두 비용이 모두 들어간다. <sup class="citation-ref"><a href="#source-s3" title="Kimi Linear | Moonshot AI | 핵심 근거 | KDA의 gate 설계와 MLA 혼합 모델" aria-label="[S3] Kimi Linear 출처로 이동" data-citation-role="핵심 근거">[S3]<span class="citation-popover" role="tooltip"><strong>[S3] Kimi Linear</strong><span>핵심 근거</span><span>Moonshot AI</span><em>KDA의 gate 설계와 MLA 혼합 모델</em></span></a></sup></li></ul>
+<h2 id="같은-계약서에서-무엇을-기억할까">같은 계약서에서 무엇을 기억할까</h2>
+<div class="table-wrap"><table><thead><tr><th>층의 방식</th><th>긴 문서의 앞부분에 접근하는 경로</th></tr></thead><tbody><tr><td>Sliding window</td><td>현재 위치의 창에 포함된 토큰을 직접 참조</td></tr><tr><td>DSA</td><td>현재 쿼리가 고른 과거 위치의 KV를 직접 참조</td></tr><tr><td>Causal linear attention</td><td>상태 갱신에 보존된 정보를 query로 읽음</td></tr><tr><td>KDA + MLA hybrid</td><td>층마다 반복 상태 또는 토큰별 KV를 사용</td></tr></tbody></table></div>
+<p>기존 <a href="../02-long-context-sparse-attention/">DSA 장</a>의 토큰 선택 예제와 함께 읽고, 정확한 문자열 회수와 문서 전체 요약처럼 성격이 다른 과제를 각각 평가해 보자. 고정 크기 상태라는 사실만으로 개별 과제의 품질이나 속도는 정해지지 않는다. <sup class="citation-ref"><a href="#source-s1" title="Transformers are RNNs §3 | Katharopoulos et al. | 핵심 근거 | kernel feature map과 causal recurrence" aria-label="[S1] Transformers are RNNs §3 출처로 이동" data-citation-role="핵심 근거">[S1]<span class="citation-popover" role="tooltip"><strong>[S1] Transformers are RNNs §3</strong><span>핵심 근거</span><span>Katharopoulos et al.</span><em>kernel feature map과 causal recurrence</em></span></a></sup><sup class="citation-ref"><a href="#source-s3" title="Kimi Linear | Moonshot AI | 핵심 근거 | KDA의 gate 설계와 MLA 혼합 모델" aria-label="[S3] Kimi Linear 출처로 이동" data-citation-role="핵심 근거">[S3]<span class="citation-popover" role="tooltip"><strong>[S3] Kimi Linear</strong><span>핵심 근거</span><span>Moonshot AI</span><em>KDA의 gate 설계와 MLA 혼합 모델</em></span></a></sup></p>
+<h2 id="출처">출처</h2>
+<div class="table-wrap"><table><thead><tr><th>ID</th><th>출처</th><th>발행처</th><th>날짜</th><th>URL</th><th>사용 이유</th></tr></thead><tbody><tr id="source-s1"><td><sup class="citation-ref"><a href="#source-s1" title="Transformers are RNNs §3 | Katharopoulos et al. | 핵심 근거 | kernel feature map과 causal recurrence" aria-label="[S1] Transformers are RNNs §3 출처로 이동" data-citation-role="핵심 근거">[S1]<span class="citation-popover" role="tooltip"><strong>[S1] Transformers are RNNs §3</strong><span>핵심 근거</span><span>Katharopoulos et al.</span><em>kernel feature map과 causal recurrence</em></span></a></sup><span class="source-role-badge">핵심 근거</span></td><td>Transformers are RNNs §3</td><td>Katharopoulos et al.</td><td>2020</td><td><a href="https://arxiv.org/abs/2006.16236" target="_blank" rel="noreferrer">https://arxiv.org/abs/2006.16236</a></td><td>kernel feature map과 causal recurrence</td></tr><tr id="source-s2"><td><sup class="citation-ref"><a href="#source-s2" title="Gated Delta Networks | Yang et al. | 핵심 근거 | gate와 delta rule이 맡는 서로 다른 상태 갱신 역할" aria-label="[S2] Gated Delta Networks 출처로 이동" data-citation-role="핵심 근거">[S2]<span class="citation-popover" role="tooltip"><strong>[S2] Gated Delta Networks</strong><span>핵심 근거</span><span>Yang et al.</span><em>gate와 delta rule이 맡는 서로 다른 상태 갱신 역할</em></span></a></sup><span class="source-role-badge">핵심 근거</span></td><td>Gated Delta Networks</td><td>Yang et al.</td><td>2024</td><td><a href="https://arxiv.org/abs/2412.06464" target="_blank" rel="noreferrer">https://arxiv.org/abs/2412.06464</a></td><td>gate와 delta rule이 맡는 서로 다른 상태 갱신 역할</td></tr><tr id="source-s3"><td><sup class="citation-ref"><a href="#source-s3" title="Kimi Linear | Moonshot AI | 핵심 근거 | KDA의 gate 설계와 MLA 혼합 모델" aria-label="[S3] Kimi Linear 출처로 이동" data-citation-role="핵심 근거">[S3]<span class="citation-popover" role="tooltip"><strong>[S3] Kimi Linear</strong><span>핵심 근거</span><span>Moonshot AI</span><em>KDA의 gate 설계와 MLA 혼합 모델</em></span></a></sup><span class="source-role-badge">핵심 근거</span></td><td>Kimi Linear</td><td>Moonshot AI</td><td>2025</td><td><a href="https://arxiv.org/abs/2510.26692" target="_blank" rel="noreferrer">https://arxiv.org/abs/2510.26692</a></td><td>KDA의 gate 설계와 MLA 혼합 모델</td></tr></tbody></table></div>
+    </article>
+    <section class="content-panel surface quiz-panel">
+      <div class="section-heading">
+        <div>
+          <p class="eyebrow">Quiz</p>
+          <h2>복습 문제</h2>
+        </div>
+      </div>
+      <div class="prose">
+        <h1 id="복습-퀴즈">복습 퀴즈</h1>
+<p>KDA 층이 고정 크기 상태를 쓴다는 이유로 Kimi Linear 전체의 cache 메모리를 문맥 길이와 무관하다고 추정해도 되는가?</p><details class="answer-key"><summary>정답 및 해설 보기</summary><h2 id="정답-및-해설">정답 및 해설</h2>
+<p>KDA 층의 반복 상태와 MLA 층의 토큰별 KV를 합산해야 한다. MLA 쪽 항목 수는 문맥이 길어지면 증가한다. <sup class="citation-ref">[S3]</sup></p></details>
+      </div>
+    </section>
+    <nav class="pager">
+      <a class="pager-link" href="../03-attention-heads-and-kv-representations/"><span>이전</span><strong>어텐션 헤드와 KV 표현: MHA, MQA, GQA, MLA</strong></a>
+      <a class="pager-link" href="../../02-mixture-of-experts/01-moe-architecture-and-conditional-computation/"><span>다음</span><strong>MoE Architecture and Conditional Computation</strong></a>
+    </nav>
+
+      </section>
+      <aside class="page-sidebar">
+    <div class="sidebar-panel surface">
+      <p class="eyebrow">On This Page</p>
+      <div class="toc" data-toc>
+        <a class="toc-link" href="#수업-개요">수업 개요</a><a class="toc-link" href="#토큰을-저장하는-대신-상태에-쓰기">토큰을 저장하는 대신 상태에 쓰기</a><a class="toc-link" href="#단순-누적에서-선택적-갱신으로">단순 누적에서 선택적 갱신으로</a><a class="toc-link" href="#같은-계약서에서-무엇을-기억할까">같은 계약서에서 무엇을 기억할까</a><a class="toc-link" href="#출처">출처</a>
+      </div>
+    </div>
+    </aside>
+    </div>
+  </main>
+  <script type="module" src="../../../assets/app.js?v=20260814"></script>
+  <script type="module">
+    import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs';
+    mermaid.initialize({
+      startOnLoad: true,
+      theme: 'neutral',
+      securityLevel: 'loose',
+      flowchart: { useMaxWidth: false },
+      sequence: { useMaxWidth: false },
+      gantt: { useMaxWidth: false }
+    });
+  </script>
+  <script>
+    window.MathJax = {
+      tex: { inlineMath: [['$', '$'], ['\\(', '\\)']], displayMath: [['$$', '$$'], ['\\[', '\\]']] },
+      svg: { fontCache: 'global' }
+    };
+  </script>
+  <script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-svg.js" async></script>
+</body>
+</html>

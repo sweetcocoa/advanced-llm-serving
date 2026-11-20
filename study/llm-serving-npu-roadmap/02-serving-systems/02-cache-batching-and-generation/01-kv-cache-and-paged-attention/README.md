@@ -19,6 +19,8 @@ source_count: 4
 ## 수업 개요
 이번 챕터는 "왜 서빙 엔진이 KV cache를 붙잡고 사는가"를 메모리 관점에서 해부하는 수업이다. decode 단계에서 과거 토큰의 key/value를 다시 계산하지 않기 위해 KV cache가 필요하고, 그 cache가 커질수록 이번에는 메모리 낭비와 fragmentation이 새 병목으로 등장한다. vLLM의 PagedAttention은 이 문제를 운영체제의 paging과 비슷한 방식으로 풀어, 시퀀스의 논리적 연속성과 물리 메모리의 연속성을 분리한다 [S1][S2]. 2026년 기준 최신 serving 엔진이 cache reuse와 cache placement를 별도 최적화 대상으로 다루는 이유도 여기서 이어진다 [S3][S4].
 
+이어 읽기: [어텐션 커널과 백엔드](../08-attention-kernels-and-backends/README.md)에서 paged KV를 읽는 백엔드와 동일한 입력을 비교한다.
+
 ## 학습 목표
 - KV cache가 decode 계산량을 줄이는 핵심 상태라는 점을 설명할 수 있다.
 - KV cache가 커질수록 왜 memory footprint가 곧 운영 제약이 되는지 설명할 수 있다.

@@ -30,6 +30,36 @@
     "searchText": "llm 모델 이론 autoregressive transformer transformer와 autoregressive language model gpt 계열 모델을 이해하려면 transformer라는 신경망 구조와 autoregressive라는 확률 모델링 방식을 분리해서 본 뒤 다시 결합해야 한다. transformer는 token 표현이 attention과 feed forward network를 통과하며 갱신되는 방법을 정한다. autoregressive language model은 문장 확률을 왼쪽에서 오른쪽 조건부 확률의 곱으로 분해한다. decoder only llm은 두 선택을 결합해, 주어진 prefix 다음에 올 token의 분포를 반복해서 예측한다 [s1][s2][s3]."
   },
   {
+    "id": "chapter:long-context-sparse-attention",
+    "kind": "chapter",
+    "track": "LLM 모델 이론",
+    "section": "Autoregressive Transformer",
+    "title": "긴 문맥을 읽는 방식: DSA, Lightning Indexer, KPool",
+    "summary": "긴 계약서 마지막에 “앞에서 정한 갱신 조건이 뭐였지?”라는 질문이 붙었다고 하자. 최근 토큰만 보는 창은 읽을 범위를 쉽게 정하지만, 조건이 문서 앞부분에 있으면 그 위치를 현재 층에서 직접 참조할 수 없다. DeepSeek Sparse Attention(DSA)은 쿼리마다 과거 후보를 점수화해 읽을 위치를 고른다. GLM 5.3 Flash의 KPool은 점수를 매길 후보를 토큰 그룹으로 묶고, DeepSeek V4의 CSA는 본 어텐션이 읽을 KV 항목까지 압축한다. [S1][S2][S3][S4][S5]",
+    "href": "01-llm-models/01-autoregressive-transformers/02-long-context-sparse-attention/",
+    "searchText": "llm 모델 이론 autoregressive transformer 긴 문맥을 읽는 방식: dsa, lightning indexer, kpool 긴 계약서 마지막에 “앞에서 정한 갱신 조건이 뭐였지?”라는 질문이 붙었다고 하자. 최근 토큰만 보는 창은 읽을 범위를 쉽게 정하지만, 조건이 문서 앞부분에 있으면 그 위치를 현재 층에서 직접 참조할 수 없다. deepseek sparse attention(dsa)은 쿼리마다 과거 후보를 점수화해 읽을 위치를 고른다. glm 5.3 flash의 kpool은 점수를 매길 후보를 토큰 그룹으로 묶고, deepseek v4의 csa는 본 어텐션이 읽을 kv 항목까지 압축한다. [s1][s2][s3][s4][s5]"
+  },
+  {
+    "id": "chapter:attention-heads-and-kv-representations",
+    "kind": "chapter",
+    "track": "LLM 모델 이론",
+    "section": "Autoregressive Transformer",
+    "title": "어텐션 헤드와 KV 표현: MHA, MQA, GQA, MLA",
+    "summary": "체크포인트에 query head가 32개라고 쓰여 있다. 이 숫자만으로는 토큰 하나를 추가할 때 KV cache가 얼마나 커지는지 계산할 수 없다. MHA, MQA, GQA는 몇 개의 query head가 K와 V를 공유할지 를 정한다. MLA는 이후 계산에 쓸 K와 V 정보를 어떤 표현으로 저장할지 바꾼다. [S1][S2][S3][S4]",
+    "href": "01-llm-models/01-autoregressive-transformers/03-attention-heads-and-kv-representations/",
+    "searchText": "llm 모델 이론 autoregressive transformer 어텐션 헤드와 kv 표현: mha, mqa, gqa, mla 체크포인트에 query head가 32개라고 쓰여 있다. 이 숫자만으로는 토큰 하나를 추가할 때 kv cache가 얼마나 커지는지 계산할 수 없다. mha, mqa, gqa는 몇 개의 query head가 k와 v를 공유할지 를 정한다. mla는 이후 계산에 쓸 k와 v 정보를 어떤 표현으로 저장할지 바꾼다. [s1][s2][s3][s4]"
+  },
+  {
+    "id": "chapter:linear-and-hybrid-attention",
+    "kind": "chapter",
+    "track": "LLM 모델 이론",
+    "section": "Autoregressive Transformer",
+    "title": "Linear Attention과 Hybrid 모델: DeltaNet에서 Kimi Linear까지",
+    "summary": "문서에 한 줄이 붙을 때마다 과거 위치의 목록도 길어지는 설계가 있고, 기존 요약 상태에 새 정보를 써 넣는 설계가 있다. causal linear attention의 기본형과 Gated DeltaNet, Kimi Linear를 따라가며 각 층이 과거에 접근하는 방식을 비교한다. [S1][S2][S3]",
+    "href": "01-llm-models/01-autoregressive-transformers/04-linear-and-hybrid-attention/",
+    "searchText": "llm 모델 이론 autoregressive transformer linear attention과 hybrid 모델: deltanet에서 kimi linear까지 문서에 한 줄이 붙을 때마다 과거 위치의 목록도 길어지는 설계가 있고, 기존 요약 상태에 새 정보를 써 넣는 설계가 있다. causal linear attention의 기본형과 gated deltanet, kimi linear를 따라가며 각 층이 과거에 접근하는 방식을 비교한다. [s1][s2][s3]"
+  },
+  {
     "id": "section:01-llm-models/02-mixture-of-experts",
     "kind": "section",
     "track": "LLM 모델 이론",
@@ -248,6 +278,16 @@
     "summary": "2026년 8월 14일 현재 diffusion LLM과 looped language model은 더 이상 모델 코드 한 파일로만 실행되는 연구 대상은 아닙니다. DiffusionGemma는 vLLM의 Model Runner V2와 ModelState 를 통해 native batched serving 경로에 들어왔고, vLLM 본체에는 fixed length canvas와 denoising step을 표현하는 일반 DiffusionConfig 및 dLLM serving metric도 추가됐습니다. SGLang은 LLaDA2.0/2.1 block diffusion 계열과 전용 scheduler, dynamic batching, CUDA graph, radix cache를 mainline에서 확장하고 있으며, LMDeploy는 SDAR를 지원 목록에 올리고 block length와 denoising 설정을 노출합니다. 반면 TensorRT LLM의 공식 모델 표에서 text dLLM 지원은 확인되지 않습니다. 그 문서의 diffusion 지원은 image/video generation beta이므로 text generation과 구분해야 합니다. [S1][S2][S3][S18][S19][S20][S21][S22][S23]",
     "href": "02-serving-systems/02-cache-batching-and-generation/07-iterative-generation-serving/",
     "searchText": "서빙 시스템 설계 cache, batching, and generation 반복 생성 모델의 서빙과 런타임 2026년 8월 14일 현재 diffusion llm과 looped language model은 더 이상 모델 코드 한 파일로만 실행되는 연구 대상은 아닙니다. diffusiongemma는 vllm의 model runner v2와 modelstate 를 통해 native batched serving 경로에 들어왔고, vllm 본체에는 fixed length canvas와 denoising step을 표현하는 일반 diffusionconfig 및 dllm serving metric도 추가됐습니다. sglang은 llada2.0/2.1 block diffusion 계열과 전용 scheduler, dynamic batching, cuda graph, radix cache를 mainline에서 확장하고 있으며, lmdeploy는 sdar를 지원 목록에 올리고 block length와 denoising 설정을 노출합니다. 반면 tensorrt llm의 공식 모델 표에서 text dllm 지원은 확인되지 않습니다. 그 문서의 diffusion 지원은 image/video generation beta이므로 text generation과 구분해야 합니다. [s1][s2][s3][s18][s19][s20][s21][s22][s23]"
+  },
+  {
+    "id": "chapter:attention-kernels-and-backends",
+    "kind": "chapter",
+    "track": "서빙 시스템 설계",
+    "section": "Cache, Batching, and Generation",
+    "title": "어텐션 커널과 백엔드: FlashAttention, FlashInfer, FlexAttention",
+    "summary": "같은 모델에서도 긴 prompt를 한 번에 읽을 때와 토큰 하나를 decode할 때는 쿼리 개수와 캐시 읽기 패턴이 다르다. 이 장은 softmax attention을 실행하는 커널, 이를 호출하는 API, 엔진이 선택하는 백엔드를 구분한 뒤 같은 입력으로 정확도와 성능을 비교한다. [S1][S5][S6][S8]",
+    "href": "02-serving-systems/02-cache-batching-and-generation/08-attention-kernels-and-backends/",
+    "searchText": "서빙 시스템 설계 cache, batching, and generation 어텐션 커널과 백엔드: flashattention, flashinfer, flexattention 같은 모델에서도 긴 prompt를 한 번에 읽을 때와 토큰 하나를 decode할 때는 쿼리 개수와 캐시 읽기 패턴이 다르다. 이 장은 softmax attention을 실행하는 커널, 이를 호출하는 api, 엔진이 선택하는 백엔드를 구분한 뒤 같은 입력으로 정확도와 성능을 비교한다. [s1][s5][s6][s8]"
   },
   {
     "id": "section:02-serving-systems/03-distributed-serving",
